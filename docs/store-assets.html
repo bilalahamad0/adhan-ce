@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Adhan Caster Pro — store screenshots</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .slide { display: none; width: 1280px; height: 800px; overflow: hidden; position: relative; }
+      body[data-slide="1"] #s1, body[data-slide="2"] #s2, body[data-slide="3"] #s3 { display: flex; }
+
+      /* ---- shared bits ---- */
+      .brandbg { background: radial-gradient(120% 120% at 15% 10%, #14a06f, #0a5c47 60%, #073324); }
+      .cap { position: absolute; top: 54px; left: 0; right: 0; text-align: center; color: #fff; }
+      .cap h2 { font-size: 40px; font-weight: 800; letter-spacing: .3px; }
+      .cap p { font-size: 19px; opacity: .9; margin-top: 8px; }
+
+      /* ---- slide 1: hero + popup ---- */
+      #s1 { align-items: center; padding: 0 90px; }
+      .hero-left { flex: 1; color: #fff; }
+      .hero-left .logo { font-size: 72px; }
+      .hero-left h1 { font-size: 60px; font-weight: 800; margin-top: 10px; }
+      .hero-left p { font-size: 22px; line-height: 1.5; opacity: .92; margin-top: 16px; max-width: 520px; }
+      .hero-left ul { list-style: none; margin-top: 26px; font-size: 19px; }
+      .hero-left li { margin: 12px 0; opacity: .95; }
+      .hero-right { width: 430px; display: flex; justify-content: center; }
+
+      /* popup mock (light) */
+      .popup { width: 360px; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 30px 70px rgba(0,0,0,.35); color: #15302a; }
+      .p-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: linear-gradient(135deg, #0f8a5f, #0a5c47); color: #fff; }
+      .p-head .pl { width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+      .p-head strong { font-size: 16px; display: block; }
+      .p-head span { font-size: 12px; opacity: .85; }
+      .p-next { text-align: center; padding: 20px 0 16px; border-bottom: 1px solid #e4ece9; }
+      .p-next .lab { font-size: 12px; letter-spacing: .6px; color: #6b8079; text-transform: uppercase; }
+      .p-next .nm { font-size: 30px; font-weight: 800; color: #0a5c47; }
+      .p-next .nm small { font-size: 17px; color: #15302a; font-weight: 700; }
+      .p-next .cd { font-size: 14px; color: #6b8079; margin-top: 2px; }
+      .p-row { display: flex; justify-content: space-between; padding: 11px 16px; font-size: 15px; }
+      .p-row.next { background: #e7f5ef; }
+      .p-row.next b, .p-row.next .t { color: #0a5c47; }
+      .p-row .ck { color: #0f8a5f; }
+      .p-row .t { color: #6b8079; }
+      .p-row.dim { opacity: .55; }
+
+      /* ---- slide 2: in-page pause ---- */
+      #s2 { background: #eef1f4; }
+      .browser { position: absolute; inset: 70px 70px 70px 70px; top: 150px; border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.18); background: #fff; }
+      .bbar { height: 44px; background: #d8dde3; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+      .bdot { width: 12px; height: 12px; border-radius: 50%; }
+      .r { background: #ff5f57; } .y { background: #febc2e; } .g { background: #28c840; }
+      .burl { flex: 1; height: 26px; background: #fff; border-radius: 13px; margin-left: 12px; }
+      .bbody { padding: 34px 40px; }
+      .bbody h3 { font-size: 26px; color: #1b2733; }
+      .vid { margin-top: 20px; width: 520px; height: 290px; border-radius: 12px; background: linear-gradient(160deg, #21304a, #0c1118); position: relative; }
+      .vid .lbl { position: absolute; top: 16px; left: 18px; color: #fff; font-weight: 700; }
+      .vid .pz { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 56px; color: #fff; opacity: .9; }
+      .corner { position: absolute; right: 26px; bottom: 26px; display: flex; align-items: center; gap: 12px; color: #fff; background: linear-gradient(135deg, #b4521f, #7c3312); padding: 14px 16px; border-radius: 14px; box-shadow: 0 14px 36px rgba(0,0,0,.3); }
+      .corner .ci { font-size: 26px; }
+      .corner b { font-size: 15px; }
+      .corner .s { font-size: 13px; opacity: .92; }
+      .corner button { border: 0; background: #fff; color: #7c3312; font-weight: 700; padding: 8px 14px; border-radius: 9px; font-size: 13px; }
+
+      /* ---- slide 3: focus screen ---- */
+      #s3 { background: radial-gradient(130% 130% at 50% 28%, rgba(15,138,95,.97), rgba(7,48,37,.99)); align-items: center; justify-content: center; }
+      .focus { text-align: center; color: #fff; }
+      .focus .cre { font-size: 96px; }
+      .focus .t { font-size: 15px; letter-spacing: 3px; text-transform: uppercase; opacity: .82; margin-top: 18px; }
+      .focus .nm { font-size: 76px; font-weight: 800; margin-top: 6px; }
+      .focus .tm { font-size: 26px; opacity: .9; margin-top: 4px; }
+      .focus .ms { font-size: 20px; opacity: .85; margin-top: 22px; }
+      .focus .au { font-size: 16px; opacity: .72; margin-top: 26px; }
+      .focus .btn { margin-top: 22px; display: inline-block; background: #fff; color: #0a5c47; font-weight: 800; font-size: 18px; padding: 16px 40px; border-radius: 12px; }
+      .focus .hint { font-size: 14px; opacity: .6; margin-top: 16px; }
+    </style>
+  </head>
+  <body data-slide="1">
+    <!-- Slide 1: hero + popup -->
+    <section class="slide brandbg" id="s1">
+      <div class="hero-left">
+        <div class="logo">🕌</div>
+        <h1>Adhan Caster Pro</h1>
+        <p>Upcoming prayer times with a live countdown — and your media pauses automatically across every Chrome tab at Adhan time.</p>
+        <ul>
+          <li>✓ Next prayer with a live countdown</li>
+          <li>✓ Auto-pause video &amp; audio in all tabs</li>
+          <li>✓ Optional full-screen prayer focus</li>
+        </ul>
+      </div>
+      <div class="hero-right">
+        <div class="popup">
+          <div class="p-head"><span class="pl">🌙</span><span><strong>Adhan Caster Pro</strong><span>Sunnyvale, California, United States</span></span></div>
+          <div class="p-next"><div class="lab">Next prayer</div><div class="nm">Maghrib <small>08:17 PM</small></div><div class="cd">in 2h 11m</div></div>
+          <div class="p-row dim"><span><span class="ck">✓</span> Fajr</span><span class="t">04:27 AM</span></div>
+          <div class="p-row dim"><span><span class="ck">✓</span> Dhuhr</span><span class="t">01:05 PM</span></div>
+          <div class="p-row dim"><span><span class="ck">✓</span> Asr</span><span class="t">04:56 PM</span></div>
+          <div class="p-row next"><b>Maghrib</b><span class="t">08:17 PM</span></div>
+          <div class="p-row"><span>Isha</span><span class="t">09:43 PM</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 2: in-page auto-pause -->
+    <section class="slide" id="s2">
+      <div class="cap" style="color:#15302a"><h2>Media pauses at prayer time</h2><p>Across every tab — then resumes when you're ready, or automatically.</p></div>
+      <div class="browser">
+        <div class="bbar"><span class="bdot r"></span><span class="bdot y"></span><span class="bdot g"></span><span class="burl"></span></div>
+        <div class="bbody">
+          <h3>Lecture 1 — Limits &amp; Continuity</h3>
+          <div class="vid"><span class="lbl">▶ Intro to Calculus</span><span class="pz">⏸</span></div>
+        </div>
+        <div class="corner"><span class="ci">🕌</span><span><b>Maghrib</b><div class="s">Auto-resumes in 4:58</div></span><button>Resume</button></div>
+      </div>
+    </section>
+
+    <!-- Slide 3: focus screen -->
+    <section class="slide" id="s3">
+      <div class="focus">
+        <div class="cre">🕌</div>
+        <div class="t">Time for prayer</div>
+        <div class="nm">Maghrib</div>
+        <div class="tm">08:17 PM</div>
+        <div class="ms">Media is paused. Take a moment for your prayer.</div>
+        <div class="au">Auto-resumes in 4:58</div>
+        <div class="btn">Resume</div>
+        <div class="hint">Press Esc to resume</div>
+      </div>
+    </section>
+
+    <script>
+      const s = new URLSearchParams(location.search).get('slide') || '1';
+      document.body.dataset.slide = s;
+    </script>
+  </body>
+</html>
