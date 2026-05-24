@@ -137,12 +137,47 @@ async function handlePrayerFire() {
   await armAlarms();
 }
 
+// Fallback entry point: content.js calls this when its own countdown hits zero
+// before the (possibly-delayed) ALARM_PRAYER fires. Records the pause centrally
+// and arms auto-resume so media never stays paused with no way back. Idempotent
+// — a no-op if a pause is already active, so the normal alarm path still owns
+// the notification and prayer-advance.
+async function handleFallbackPause({ prayer, time, focus }) {
+  const { settings, paused } = await getState();
+  if (!settings.enabled || paused.active) return;
+  const since = Date.now();
+  await chrome.storage.local.set({ paused: { active: true, prayer, time, since, focus: !!focus } });
+  await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: !!focus, since });
+  await setPausedBadge(true);
+  chrome.alarms.create(ALARM_RESUME, { when: since + settings.autoResumeMinutes * 60 * 1000 });
+}
+
 async function handleAutoResume() {
   const { paused } = await getState();
   if (!paused.active) return;
   await chrome.storage.local.set({ paused: { active: false } });
   await broadcast({ type: 'RESUME' });
   await setPausedBadge(false);
+}
+
+// On service-worker (re)start — including an extension reload/update that lands
+// *during* an Adhan — make sure an in-progress pause still ends. ALARM_RESUME
+// doesn't survive a reload, so re-arm it for the time that's left, or resume
+// immediately if the auto-resume window already elapsed. Idempotent: it always
+// targets the same absolute resume time (since + autoResumeMinutes), so it's
+// safe to call repeatedly (install, startup, periodic tick).
+async function reconcilePaused() {
+  const { settings, paused } = await getState();
+  if (!paused.active) return;
+  const mins = settings.autoResumeMinutes != null ? settings.autoResumeMinutes : 5;
+  const since = paused.since || Date.now();
+  const remaining = mins * 60 * 1000 - (Date.now() - since);
+  if (remaining > 0) {
+    chrome.alarms.create(ALARM_RESUME, { when: Date.now() + remaining });
+    await setPausedBadge(true);
+  } else {
+    await handleAutoResume();
+  }
 }
 
 async function resumeNow() {
@@ -202,15 +237,18 @@ async function injectExistingTabs() {
 
 // ---------- event wiring ----------
 chrome.runtime.onInstalled.addListener(async () => {
-  const { settings } = await chrome.storage.local.get('settings');
-  if (!settings) await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
-  await chrome.storage.local.set({ paused: { active: false } });
+  const stored = await chrome.storage.local.get(['settings', 'paused']);
+  if (!stored.settings) await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
+  if (!stored.paused) await chrome.storage.local.set({ paused: { active: false } });
   try {
     await fetchAndStoreSchedule();
   } catch (e) {
     console.warn('Adhan: initial schedule fetch failed', e);
   }
   await armAlarms();
+  // Don't blindly clear an in-progress pause: a reload/update mid-Adhan should
+  // keep media paused and still auto-resume.
+  await reconcilePaused();
   await injectExistingTabs();
 });
 
@@ -221,6 +259,7 @@ chrome.runtime.onStartup.addListener(async () => {
     console.warn('Adhan: startup refresh failed', e);
   }
   await armAlarms();
+  await reconcilePaused();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -229,6 +268,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   else if (alarm.name === ALARM_TICK) {
     refreshNext()
       .then(armAlarms)
+      .then(reconcilePaused)
       .catch((e) => console.warn('Adhan: tick failed', e));
   }
 });
@@ -260,6 +300,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         break;
       case 'FOCUS_NOW':
         await enableFocus();
+        sendResponse({ ok: true });
+        break;
+      case 'PRAYER_FALLBACK':
+        await handleFallbackPause(msg);
         sendResponse({ ok: true });
         break;
       case 'TEST_ADHAN':

@@ -7,11 +7,33 @@
   const DEFAULT_LEAD_SECONDS = 30; // heads-up window before Adhan (configurable)
   const isTop = window.top === window;
 
+  // A previous instance of this script may have been orphaned (extension
+  // reloaded/updated/disabled) leaving frozen overlays in the DOM that it can no
+  // longer control. Remove them so this fresh instance is the single source of
+  // truth, and restore scrolling in case the orphan left it locked.
+  if (isTop) {
+    document.getElementById('adhan-ccp-host')?.remove();
+    document.getElementById('adhan-ccp-focus-host')?.remove();
+    const de = document.documentElement;
+    if (de && 'adhanPrevOverflow' in de.dataset) {
+      de.style.overflow = de.dataset.adhanPrevOverflow || '';
+      delete de.dataset.adhanPrevOverflow;
+    }
+  }
+
+  // Claim this frame for the newest instance. If another instance loads later
+  // (an install-time injection race, or re-injection after a reload), the older
+  // one sees the token change on its next tick and tears down — so exactly one
+  // instance is ever active per frame.
+  const instanceId = `${Date.now()}.${Math.random()}`;
+  window.__adhanCasterInstance = instanceId;
+
   let state = { settings: null, nextPrayer: null, paused: { active: false } };
   let localPaused = false;
   let pausedEls = [];
   let currentPrayer = null;
   let lastHandledTs = 0;
+  let tickHandle = null;
 
   // ---- UI (shadow DOM, top frame only) ----
   let host = null;
@@ -277,7 +299,34 @@
   }
 
   // ---- ticking + sync ----
+  // Detect an invalidated extension context (reload / update / disable). An
+  // orphaned content script keeps running its page-side timer but can no longer
+  // talk to the extension, so it must tear its UI down instead of freezing it
+  // on screen (which is what made stale overlays linger forever).
+  function contextAlive() {
+    try {
+      return !!(chrome.runtime && chrome.runtime.id);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function teardown() {
+    try { if (host) host.remove(); } catch (_) {}
+    try { if (fhost) fhost.remove(); } catch (_) {}
+    lockScroll(false);
+    if (tickHandle) {
+      clearInterval(tickHandle);
+      tickHandle = null;
+    }
+  }
+
   function tick() {
+    // Yield if the extension context died or a newer instance took over.
+    if (!contextAlive() || window.__adhanCasterInstance !== instanceId) {
+      teardown();
+      return;
+    }
     const now = Date.now();
     const np = state.nextPrayer;
     const alreadyPaused = localPaused || (state.paused && state.paused.active);
@@ -289,6 +338,15 @@
       // immediately, without the corner "Resume" card flashing first.
       const focus = !!(state.settings && state.settings.focusMode);
       state.paused = { active: true, prayer: np.name, time: np.time, focus, since: now };
+      // The background alarm can be delayed while the MV3 service worker is
+      // asleep. Tell the background to record the pause and arm auto-resume so
+      // media can't stay paused forever if handlePrayerFire() never ran. Top
+      // frame only — the background broadcasts the pause to the other frames.
+      if (isTop) {
+        chrome.runtime
+          .sendMessage({ type: 'PRAYER_FALLBACK', prayer: np.name, time: np.time, focus })
+          .catch(() => {});
+      }
     }
     render();
   }
@@ -367,5 +425,5 @@
   }
 
   loadState();
-  setInterval(tick, 1000);
+  tickHandle = setInterval(tick, 1000);
 })();
