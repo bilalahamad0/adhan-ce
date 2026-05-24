@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — Adhan Caster Pro</title>
+    <meta
+      name="description"
+      content="Privacy policy for the Adhan Caster Pro Chrome extension: what data it uses, what is sent to third parties, and what is never collected."
+    />
+    <style>
+      :root {
+        --green: #0a5c47;
+        --green-light: #0f8a5f;
+        --ink: #15302a;
+        --muted: #5d716b;
+        --line: #e2ebe7;
+        --bg: #f6f9f8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        line-height: 1.6;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 0 22px 80px; }
+      header {
+        background: linear-gradient(135deg, var(--green-light), var(--green));
+        color: #fff;
+        padding: 44px 22px 36px;
+      }
+      header .inner { max-width: 760px; margin: 0 auto; }
+      header .logo { font-size: 44px; line-height: 1; }
+      header h1 { font-size: 30px; font-weight: 800; margin: 12px 0 4px; letter-spacing: 0.2px; }
+      header p { margin: 0; opacity: 0.92; font-size: 15px; }
+      .updated { margin-top: 14px; font-size: 13px; opacity: 0.85; }
+      h2 {
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--green);
+        margin: 34px 0 8px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      h2:first-of-type { border-top: 0; padding-top: 0; }
+      p, li { font-size: 15.5px; }
+      a { color: var(--green-light); }
+      ul { padding-left: 22px; }
+      li { margin: 6px 0; }
+      .lead {
+        font-size: 16.5px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--green-light);
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin-top: 26px;
+      }
+      table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14.5px; }
+      th, td { text-align: left; padding: 10px 12px; border: 1px solid var(--line); vertical-align: top; }
+      th { background: #eef5f2; color: var(--green); font-weight: 700; }
+      code { background: #eef2f1; padding: 1px 6px; border-radius: 5px; font-size: 0.9em; }
+      .muted { color: var(--muted); }
+      footer { margin-top: 40px; font-size: 13px; color: var(--muted); text-align: center; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="inner">
+        <div class="logo">🕌</div>
+        <h1>Privacy Policy — Adhan Caster Pro</h1>
+        <p>Live prayer-time countdown with automatic cross-tab media pausing.</p>
+        <div class="updated">Last updated: May 24, 2026</div>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <p class="lead">
+        Adhan Caster Pro is built to be privacy-friendly. It does <strong>not</strong> use analytics or
+        trackers, does <strong>not</strong> require an account, and does <strong>not</strong> sell or share
+        your data. Your settings stay on your own device. The only information sent off your device is the
+        location you choose (a city name) and the text you type into the location search — used solely to
+        look up prayer times and resolve places.
+      </p>
+
+      <h2>Who this applies to</h2>
+      <p>
+        This policy covers the <strong>Adhan Caster Pro</strong> Chrome extension ("the extension"). It is a
+        standalone browser extension published on the Chrome Web Store.
+      </p>
+
+      <h2>Information the extension uses</h2>
+      <p>The extension works with a small amount of data, all of it tied to its core features:</p>
+      <table>
+        <thead>
+          <tr><th>Data</th><th>Why it's used</th><th>Where it lives</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Your chosen location (city, region/state, country, and the coordinates of the place you pick)</td>
+            <td>To fetch the correct daily prayer times and display them.</td>
+            <td>Stored locally on your device; the city/region/country are sent to the prayer-times API (see below).</td>
+          </tr>
+          <tr>
+            <td>Location search text you type</td>
+            <td>To find and resolve real places while you set your location.</td>
+            <td>Sent to the Open-Meteo geocoding API as you type (see below); not otherwise stored.</td>
+          </tr>
+          <tr>
+            <td>Your preferences (enable toggle, heads-up lead time, auto-resume delay, focus-mode toggle)</td>
+            <td>To make the extension behave the way you configured it.</td>
+            <td>Stored locally on your device only.</td>
+          </tr>
+          <tr>
+            <td>The fetched prayer schedule and current pause state</td>
+            <td>To show the countdown and pause/resume media at prayer time.</td>
+            <td>Stored locally on your device only.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted">
+        Local data is held in your browser's extension storage (<code>chrome.storage.local</code>) and never
+        leaves your device except as described in "Third-party services" below.
+      </p>
+
+      <h2>Third-party services</h2>
+      <p>To do its job, the extension makes requests to two external services:</p>
+      <ul>
+        <li>
+          <strong>Prayer-times API</strong> (<code>adhan-api-mauve.vercel.app</code>) — receives the
+          <em>city, region/state, and country</em> you selected in order to return that location's prayer
+          times. No personal identifiers are sent.
+        </li>
+        <li>
+          <strong>Open-Meteo geocoding API</strong>
+          (<code>geocoding-api.open-meteo.com</code>, see the
+          <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener">Open-Meteo terms &amp; privacy</a>)
+          — receives the <em>text you type</em> in the location search to return matching places and their
+          coordinates.
+        </li>
+      </ul>
+      <p>
+        As with any web request, these services automatically receive standard technical metadata (such as
+        your IP address and request time). The extension itself does not attach any identifier to these
+        requests. Data handling by these third parties is governed by their own policies.
+      </p>
+
+      <h2>What the extension does NOT do</h2>
+      <ul>
+        <li>It does <strong>not</strong> collect names, emails, passwords, or any personally identifying information.</li>
+        <li>It does <strong>not</strong> track your browsing history, and it does <strong>not</strong> read, store, or transmit the content of the pages you visit.</li>
+        <li>It does <strong>not</strong> use cookies, analytics, advertising, or fingerprinting.</li>
+        <li>It does <strong>not</strong> sell, rent, or share your data with anyone for marketing.</li>
+      </ul>
+      <p>
+        The extension's content script interacts with a page only to find <code>&lt;video&gt;</code> and
+        <code>&lt;audio&gt;</code> elements so it can pause and resume them at prayer time. It does not inspect
+        or send page content anywhere.
+      </p>
+
+      <h2>Permissions and why they're needed</h2>
+      <table>
+        <thead>
+          <tr><th>Permission</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>storage</code></td><td>Save your settings and the prayer schedule locally.</td></tr>
+          <tr><td><code>alarms</code></td><td>Trigger the countdown and pause exactly at prayer time.</td></tr>
+          <tr><td><code>notifications</code></td><td>Show the desktop notification when it's time to pray.</td></tr>
+          <tr><td><code>scripting</code></td><td>Insert the pause/countdown logic into pages that are already open when you install or update.</td></tr>
+          <tr><td><code>tabs</code></td><td>Send the pause/resume signal to your open tabs.</td></tr>
+          <tr><td>Access to websites (<code>http://*/*</code>, <code>https://*/*</code>)</td><td>Required so media can be paused in <em>any</em> tab at prayer time — the extension's core feature.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Data retention and deletion</h2>
+      <p>
+        All settings and schedule data live on your device. You can clear your saved location and preferences
+        at any time from the extension's settings, or remove everything by uninstalling the extension from
+        <code>chrome://extensions</code>. The developer holds no server-side copy of your data.
+      </p>
+
+      <h2>Children's privacy</h2>
+      <p>
+        The extension is not directed at children and does not knowingly collect any information from
+        children.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        If this policy changes, the updated version will be posted at this URL with a new "Last updated" date.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about this policy or the extension? Open an issue at
+        <a href="https://github.com/bilalahamad0/adhan-ce/issues" target="_blank" rel="noopener">github.com/bilalahamad0/adhan-ce</a>
+        or email <a href="mailto:bilalahamad0@gmail.com">bilalahamad0@gmail.com</a>.
+      </p>
+
+      <footer>Adhan Caster Pro · Privacy Policy</footer>
+    </div>
+  </body>
+</html>
