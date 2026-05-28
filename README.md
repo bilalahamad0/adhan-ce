@@ -29,6 +29,8 @@ npm test         # unit + manifest qualification tests
 npm run pack     # runs the tests, then zips a clean build → adhan-caster-pro-<version>.zip
 ```
 
+To publish a new version to the Chrome Web Store, see [RELEASING.md](RELEASING.md).
+
 ## Load it (unpacked)
 
 1. Open `chrome://extensions` in Chrome.
