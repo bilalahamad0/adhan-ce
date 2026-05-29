@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Adhan Caster Pro",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Live countdown to the next Adhan and automatic pausing of media in every Chrome tab at prayer time.",
   "permissions": ["storage", "alarms", "notifications", "scripting", "tabs"],
   "host_permissions": [
@@ -42,7 +42,7 @@
         "default": "Ctrl+Shift+Y",
         "mac": "Command+Shift+Y"
       },
-      "description": "Toggle the prayer focus screen during Adhan"
+      "description": "Toggle the prayer focus fullscreen during Adhan"
     }
   }
 }

@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
   city: 'Sunnyvale',
   autoResumeMinutes: 5,
   leadSeconds: 30,
-  focusMode: false,
+  focusMode: true,
 };
 
 const ALARM_PRAYER = 'adhan-prayer-fire';
@@ -143,13 +143,28 @@ async function handlePrayerFire() {
 // — a no-op if a pause is already active, so the normal alarm path still owns
 // the notification and prayer-advance.
 async function handleFallbackPause({ prayer, time, focus }) {
-  const { settings, paused } = await getState();
+  const { settings, paused, nextPrayer } = await getState();
   if (!settings.enabled || paused.active) return;
   const since = Date.now();
   await chrome.storage.local.set({ paused: { active: true, prayer, time, since, focus: !!focus } });
   await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: !!focus, since });
   await setPausedBadge(true);
   chrome.alarms.create(ALARM_RESUME, { when: since + settings.autoResumeMinutes * 60 * 1000 });
+
+  // Advance nextPrayer past the one that just fired, mirroring handlePrayerFire.
+  // Without this, the just-fired prayer stays as nextPrayer; after Resume, the
+  // per-tab 90-second fallback window in content.js can re-pause every tab that
+  // received PRAYER_NOW via broadcast (their lastHandledTs was never set), and
+  // each re-pause re-broadcasts PRAYER_NOW back to all tabs — including the one
+  // that just clicked Resume. Advancing here puts np.ts in the future so the
+  // fallback condition `now >= np.ts` can't re-trigger.
+  const firedTs = (nextPrayer && nextPrayer.ts) || since;
+  const { schedule } = await chrome.storage.local.get('schedule');
+  if (schedule) {
+    const next = computeNext(schedule.prayers, firedTs + 1000);
+    await chrome.storage.local.set({ nextPrayer: next });
+  }
+  await armAlarms();
 }
 
 async function handleAutoResume() {
