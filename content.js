@@ -330,6 +330,32 @@
     const now = Date.now();
     const np = state.nextPrayer;
     const alreadyPaused = localPaused || (state.paused && state.paused.active);
+
+    // Self-healing auto-resume. The corner card stays on screen for as long as
+    // state.paused.active is true; normally the background's ALARM_RESUME flips
+    // it off after autoResumeMinutes. But the MV3 service worker can be evicted
+    // and alarms have been observed to silently never fire, leaving the card
+    // pinned forever. This client-side timeout makes the active tab self-resume
+    // when the window has elapsed and notifies the background so the central
+    // state + other tabs catch up via the RESUME broadcast.
+    if (alreadyPaused) {
+      const mins = state.settings && state.settings.autoResumeMinutes;
+      const since = state.paused && state.paused.since;
+      if (mins != null && since && now >= since + mins * 60000) {
+        resumeMedia();
+        // Pin lastHandledTs so the fallback block below can't re-pause for the
+        // prayer we just timed out of.
+        if (np && np.ts) lastHandledTs = Math.max(lastHandledTs, np.ts);
+        state.paused = { active: false };
+        hideFocusUI();
+        render();
+        if (isTop) {
+          chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {});
+        }
+        return;
+      }
+    }
+
     // Second-accurate fallback in case the background alarm/message is delayed.
     if (!alreadyPaused && np && now >= np.ts && now - np.ts < 90000 && lastHandledTs !== np.ts) {
       lastHandledTs = np.ts;
@@ -365,10 +391,19 @@
     if (changes.nextPrayer) state.nextPrayer = changes.nextPrayer.newValue || null;
     if (changes.settings) state.settings = changes.settings.newValue || null;
     if (changes.paused) {
+      const wasActive = changes.paused.oldValue && changes.paused.oldValue.active;
       state.paused = changes.paused.newValue || { active: false };
       if (state.paused.active && !localPaused) pauseMediaFor(state.paused.prayer);
       else if (!state.paused.active && localPaused) resumeMedia();
-      if (!state.paused.active) hideFocusUI();
+      if (!state.paused.active) {
+        hideFocusUI();
+        // When a pause ends (auto-resume or explicit Resume from any tab/popup),
+        // pin lastHandledTs to the current prayer so the 90-second fallback in
+        // tick() can't re-pause this tab for the prayer we just resumed from.
+        if (wasActive && state.nextPrayer && state.nextPrayer.ts) {
+          lastHandledTs = Math.max(lastHandledTs, state.nextPrayer.ts);
+        }
+      }
     }
     render();
   });
@@ -378,6 +413,12 @@
     if (msg.type === 'PRAYER_NOW') {
       pauseMediaFor(msg.prayer);
       state.paused = { active: true, prayer: msg.prayer, time: msg.time, focus: !!msg.focus, since: msg.since };
+      // Treat the broadcast as authoritative handling of this prayer so the
+      // 90-second fallback in tick() can't re-fire on tabs that didn't trigger
+      // the fallback themselves.
+      if (state.nextPrayer && state.nextPrayer.ts) {
+        lastHandledTs = Math.max(lastHandledTs, state.nextPrayer.ts);
+      }
       render();
     } else if (msg.type === 'FOCUS_ON') {
       const prev = state.paused || {};
@@ -395,6 +436,11 @@
       render();
     } else if (msg.type === 'RESUME') {
       resumeMedia();
+      // Pin lastHandledTs so the per-tab fallback in tick() can't re-pause for
+      // the just-resumed prayer within its 90s window.
+      if (state.nextPrayer && state.nextPrayer.ts) {
+        lastHandledTs = Math.max(lastHandledTs, state.nextPrayer.ts);
+      }
       state.paused = { active: false };
       hideFocusUI();
       render();
