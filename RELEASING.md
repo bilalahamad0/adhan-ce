@@ -6,6 +6,16 @@ How to publish a new version to the Chrome Web Store.
 > `.crx` signed with the project's verified-uploads private key. Plain `.zip`
 > uploads will be rejected.
 
+There are two release paths:
+
+- **[Automated (default)](#automated-release-via-github-actions)** — push a tag,
+  GitHub Actions builds + attaches the signed CRX to a draft release. Requires
+  one-time setup of the `CRX_PRIVATE_KEY_B64` secret (see
+  [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md)).
+- **[Manual fallback](#manual-fallback-pack-locally)** — pack on your own
+  machine with Chrome's GUI or `npm run pack:crx`. Use when CI is broken or
+  the key secret isn't configured.
+
 ## Prerequisites (one-time)
 
 You need the verified-uploads private key: `adhan-caster-pro-private.pem`.
@@ -17,14 +27,16 @@ You need the verified-uploads private key: `adhan-caster-pro-private.pem`.
   Chrome Web Store support escalation with no guaranteed outcome. Back it
   up in at least two places before doing anything else.
 
-## Release steps
+## Automated release via GitHub Actions
 
 ### 1. Bump the version
 
-Update `version` in **both** files (they should stay in sync):
+Update `version` in **all three** files (they must stay in sync — the release
+workflow's tag-vs-manifest check fails fast if they drift):
 
-- `manifest.json` — the source of truth for the extension
-- `package.json` — kept in sync for npm tooling
+- `manifest.json` — source of truth for the extension
+- `package.json` — npm tooling
+- `package-lock.json` — both top-level `version` and `packages."".version`
 
 Use [semver](https://semver.org/): patch for bugfixes, minor for new
 features, major for breaking changes.
@@ -43,39 +55,57 @@ mistakes (missing icons, bad permissions, etc.).
 Open a PR, get it reviewed, merge. Tag the merge commit:
 
 ```bash
-git tag v1.6.2
-git push origin v1.6.2
+git tag v1.6.4 <merge-commit-sha>
+git push origin v1.6.4
 ```
 
-### 4. Pack the signed CRX
+Pushing the tag fires the [`Release` workflow](.github/workflows/release.yml).
+It runs tests, verifies the tag matches `manifest.json`, packs a signed CRX,
+and attaches it to a **draft** GitHub Release named after the tag.
 
-In Chrome:
+If anything fails, the workflow surfaces the error in the run summary —
+fix and re-push (`git tag -d v1.6.4 && git push --delete origin v1.6.4 && git tag v1.6.4 <sha> && git push origin v1.6.4`).
 
-1. Open `chrome://extensions`
-2. Toggle **Developer mode** on (top right)
-3. Click **Pack extension**
-4. **Extension root directory**: the repo folder
-   (`/path/to/adhan-ce`)
-5. **Private key file**: path to `adhan-caster-pro-private.pem`
-6. Click **Pack extension**
+### 4. Publish the release + upload to Chrome Web Store
 
-This produces `adhan-ce.crx` next to the repo folder. Verify the file
-exists and is non-empty.
+1. **Releases** tab → draft `v1.6.4` → review the auto-generated notes → **Publish**
+2. Download `adhan-caster-pro-1.6.4.crx` from the release's attached assets
+3. [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster Pro → **Package** → **Upload new package** → pick the CRX → **Submit for review**
 
-**Do not** use the auto-generated `.pem` Chrome offers when no key is
-provided — that's a fresh keypair and will fail signature verification
-against the registered public key.
+## Manual fallback (pack locally)
 
-### 5. Upload to the Chrome Web Store
+Use when GitHub Actions is down, or you need to test a build before tagging.
 
-1. Go to the [Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-2. Open the Adhan Caster Pro listing → **Package**
-3. Click **Upload new package**
-4. Select the `.crx` from step 4
-5. If the upload succeeds, the Draft column updates to the new version
-6. Click **Submit for review** (top right)
+### Option A — `npm run pack:crx` (recommended)
 
-### 6. Wait for review
+```bash
+npm ci
+npm run pack:crx /path/to/adhan-caster-pro-private.pem
+```
+
+Drops `adhan-caster-pro-<manifest.version>.crx` at the repo root. Same
+[`scripts/pack-crx.mjs`](scripts/pack-crx.mjs) the CI workflow uses, so the
+output is byte-identical to what CI would produce.
+
+### Option B — Chrome's "Pack extension" GUI
+
+1. `chrome://extensions` → **Developer mode** on (top right)
+2. **Pack extension**
+3. **Extension root directory**: the repo folder (`/path/to/adhan-ce`)
+4. **Private key file**: path to `adhan-caster-pro-private.pem`
+5. **Pack extension**
+
+Produces `adhan-ce.crx` next to the repo folder. **Do not** use the
+auto-generated `.pem` Chrome offers when no key is provided — that's a fresh
+keypair and will fail signature verification against the registered public
+key.
+
+### Upload to the Chrome Web Store
+
+Same as [step 4 above](#4-publish-the-release--upload-to-chrome-web-store) —
+upload the CRX through the Developer Dashboard.
+
+## Wait for review
 
 - Typical turnaround: a few hours to ~3 days.
 - Because the extension declares broad host permissions
@@ -83,7 +113,7 @@ against the registered public key.
   the longer end.
 - You'll get an email on approval or rejection.
 
-### 7. After approval
+## After approval
 
 - The new version replaces the published one for all users automatically.
 - Verify the listing shows the new version number.
@@ -93,10 +123,12 @@ against the registered public key.
 
 | Error | Cause | Fix |
 | --- | --- | --- |
-| "Invalid version number in manifest" | New version ≤ published version | Bump `manifest.json` and `package.json` higher |
+| "Invalid version number in manifest" | New version ≤ published version | Bump `manifest.json`, `package.json`, and `package-lock.json` higher |
 | "CRX signature doesn't match" | Packed with the wrong `.pem` | Re-pack with `adhan-caster-pro-private.pem` |
-| "Invalid CRX format" | Wrong packer / corrupted file | Re-pack via Chrome's Pack extension (CRX3) |
+| "Invalid CRX format" | Wrong packer / corrupted file | Re-pack via `npm run pack:crx` or Chrome's GUI |
 | Upload only accepts ZIP | Verified CRX uploads not opted in | Already opted in on this listing — should not happen |
+| CI: "Tag … does not match manifest.json version …" | Tag pushed before version bump landed on main | Delete the tag, land the bump, re-tag the merge commit |
+| CI: "Required secret CRX_PRIVATE_KEY_B64 is not set" | One-time setup skipped | Follow [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) |
 
 ## Key rotation (emergency only)
 
@@ -108,3 +140,5 @@ If the private key is lost or compromised:
    to opt out of Verified CRX uploads on the listing.
 3. Once opted out, opt back in with the new public key.
 4. Update the backup locations documented in this file.
+5. Re-encode the new key and update the `CRX_PRIVATE_KEY_B64` secret (see
+   [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Rotating the secret").
