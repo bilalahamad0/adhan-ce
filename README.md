@@ -9,6 +9,8 @@ It's a standalone Chrome extension. It fetches prayer times from the public
 (`adhan-api-mauve.vercel.app`) and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
+**[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=item-share-cb)**
+
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 
 ## Features
