@@ -1,0 +1,111 @@
+name: Release
+
+# Builds a signed CRX when a v*.*.* tag is pushed and attaches it to a draft
+# GitHub Release. Also supports manual workflow_dispatch runs that produce the
+# CRX as a workflow artifact only (no release) — useful for dry-runs.
+#
+# Required repo secret:
+#   CRX_PRIVATE_KEY_B64 — base64-encoded contents of adhan-caster-pro-private.pem.
+#                         See .github/RELEASE_SETUP.md for one-time setup.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit to build (defaults to current branch HEAD). No release is created on manual dispatch — CRX is uploaded as a workflow artifact only.'
+        required: false
+
+permissions:
+  contents: write  # needed for the release step to create draft releases
+
+jobs:
+  release:
+    name: Build & attach CRX
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run jest tests
+        run: npm test
+
+      - name: Verify tag matches manifest version (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match manifest.json version $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "Tag ↔ manifest match: $MANIFEST_VERSION"
+
+      - name: Compute output paths
+        id: ver
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./manifest.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "crx_path=adhan-caster-pro-$VERSION.crx" >> "$GITHUB_OUTPUT"
+
+      - name: Decode private key
+        env:
+          CRX_PRIVATE_KEY_B64: ${{ secrets.CRX_PRIVATE_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRX_PRIVATE_KEY_B64:-}" ]; then
+            echo "::error::Required secret CRX_PRIVATE_KEY_B64 is not set."
+            echo "::error::See .github/RELEASE_SETUP.md to configure it once."
+            exit 1
+          fi
+          printf '%s' "$CRX_PRIVATE_KEY_B64" | base64 -d > key.pem
+          chmod 600 key.pem
+          # Sanity check: decoded bytes look like a PEM
+          if ! head -1 key.pem | grep -q "BEGIN"; then
+            echo "::error::Decoded CRX_PRIVATE_KEY_B64 does not look like a PEM file."
+            echo "::error::Re-encode with: base64 -i adhan-caster-pro-private.pem | pbcopy"
+            exit 1
+          fi
+
+      - name: Pack signed CRX
+        run: |
+          set -euo pipefail
+          node scripts/pack-crx.mjs key.pem "${{ steps.ver.outputs.crx_path }}"
+          ls -la "${{ steps.ver.outputs.crx_path }}"
+
+      - name: Upload CRX as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.crx_path }}
+          path: ${{ steps.ver.outputs.crx_path }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Create draft GitHub Release with CRX attached (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.ver.outputs.crx_path }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          name: ${{ github.ref_name }}
+
+      - name: Wipe private key from runner
+        if: always()
+        run: rm -f key.pem
