@@ -4,6 +4,8 @@ import {
   buildPrayers,
   computeNext,
   formatCountdown,
+  isStaleFire,
+  STALE_FIRE_MS,
   PRAYER_ORDER,
   DAY_MS,
 } from '../lib/schedule.js';
@@ -72,6 +74,23 @@ describe('computeNext', () => {
   });
   it('returns null for an empty schedule', () => {
     expect(computeNext([], Date.now())).toBeNull();
+  });
+});
+
+describe('isStaleFire', () => {
+  const t = 1_700_000_000_000; // fixed reference instant
+  it('treats an on-time or slightly-late fire as fresh', () => {
+    expect(isStaleFire(t, t)).toBe(false); // exactly on time
+    expect(isStaleFire(t, t + 1000)).toBe(false); // 1s late
+    expect(isStaleFire(t, t + STALE_FIRE_MS - 1)).toBe(false); // just under the bound
+  });
+  it('treats a fire well past its scheduled time as stale (device woke from sleep)', () => {
+    expect(isStaleFire(t, t + STALE_FIRE_MS)).toBe(true); // at the bound
+    expect(isStaleFire(t, t + 11 * 60 * 1000)).toBe(true); // reported 11-min sleep
+  });
+  it('honors a custom grace window', () => {
+    expect(isStaleFire(0, 5000, 10000)).toBe(false);
+    expect(isStaleFire(0, 15000, 10000)).toBe(true);
   });
 });
 

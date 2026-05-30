@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, computeNext, buildPrayers } from './lib/schedule.js';
+import { ymd, computeNext, buildPrayers, isStaleFire } from './lib/schedule.js';
 
 const API_BASE = 'https://adhan-api-mauve.vercel.app/api/prayerTimes';
 
@@ -107,6 +107,25 @@ async function handlePrayerFire() {
   if (!settings.enabled || !nextPrayer) return;
 
   const firedTs = nextPrayer.ts;
+
+  // The alarm fired well after prayer time — almost always because the device
+  // was asleep at prayer time and Chrome only delivered the (missed) alarm on
+  // wake. Interrupting the user now with a frozen, full-screen focus overlay and
+  // a fresh auto-resume countdown for a moment that has clearly passed is bad UX,
+  // so treat it as missed: skip the pause/notification/focus/auto-resume, jump
+  // nextPrayer to the next upcoming one, and re-arm. (computeNext from now, not
+  // firedTs, so a long sleep across several prayers lands on a future one rather
+  // than firing a burst of catch-up alarms.) Test fires are scheduled for "now",
+  // so they're never stale.
+  if (!nextPrayer.test && isStaleFire(firedTs)) {
+    const { schedule } = await chrome.storage.local.get('schedule');
+    if (schedule) {
+      await chrome.storage.local.set({ nextPrayer: computeNext(schedule.prayers, Date.now()) });
+    }
+    await armAlarms();
+    return;
+  }
+
   const focus = settings.focusMode === true;
   const paused = { active: true, prayer: nextPrayer.name, time: nextPrayer.time, since: Date.now(), focus };
   await chrome.storage.local.set({ paused });
