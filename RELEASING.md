@@ -66,11 +66,25 @@ and attaches it to a **draft** GitHub Release named after the tag.
 If anything fails, the workflow surfaces the error in the run summary —
 fix and re-push (`git tag -d v1.6.4 && git push --delete origin v1.6.4 && git tag v1.6.4 <sha> && git push origin v1.6.4`).
 
-### 4. Publish the release + upload to Chrome Web Store
+### 4. Chrome Web Store submission
+
+**If the CWS OAuth secrets are configured** (see
+[`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Automating CWS
+submission"), the tag push already did this: the workflow uploaded the signed
+CRX and **submitted it for review** automatically. Check the run's "Submit to
+Chrome Web Store" step for the confirmation, then just review/publish the draft
+GitHub Release notes. Skip to [Wait for review](#wait-for-review).
+
+**Otherwise, submit manually:**
 
 1. **Releases** tab → draft `v1.6.4` → review the auto-generated notes → **Publish**
 2. Download `adhan-caster-pro-1.6.4.crx` from the release's attached assets
 3. [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster Pro → **Package** → **Upload new package** → pick the CRX → **Submit for review**
+
+   Or from your machine, with the OAuth `.env` set up:
+   ```bash
+   npm run submit:cws -- adhan-caster-pro-1.6.4.crx
+   ```
 
 ## Manual fallback (pack locally)
 

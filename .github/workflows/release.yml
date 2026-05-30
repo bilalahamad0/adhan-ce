@@ -106,6 +106,26 @@ jobs:
           fail_on_unmatched_files: true
           name: ${{ github.ref_name }}
 
+      # Upload the signed CRX to the Chrome Web Store and submit it for review.
+      # Tag pushes only. No-ops (and leaves the release succeeding) when the
+      # OAuth secrets aren't configured, so the build/sign/release pipeline keeps
+      # working even before — or without — store automation set up. See
+      # .github/RELEASE_SETUP.md → "Automating CWS submission" for the secrets.
+      - name: Submit to Chrome Web Store (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CWS_CLIENT_ID:-}" ] || [ -z "${CWS_CLIENT_SECRET:-}" ] || [ -z "${CWS_REFRESH_TOKEN:-}" ]; then
+            echo "::notice::CWS OAuth secrets not set — skipping store submission. The signed CRX is on the GitHub Release; upload it manually, or configure the secrets (see .github/RELEASE_SETUP.md) to automate this."
+            exit 0
+          fi
+          node scripts/submit-cws.mjs "${{ steps.ver.outputs.crx_path }}"
+
       - name: Wipe private key from runner
         if: always()
         run: rm -f key.pem
