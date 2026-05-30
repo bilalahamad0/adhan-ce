@@ -5,6 +5,10 @@
 
 (() => {
   const DEFAULT_LEAD_SECONDS = 30; // heads-up window before Adhan (configurable)
+  // How late the per-tab fallback pause may trigger. Past this the prayer moment
+  // has clearly passed (e.g. the device slept through it), so we don't pause on
+  // wake. Mirrors STALE_FIRE_MS in lib/schedule.js — keep the two in sync.
+  const STALE_FIRE_MS = 90 * 1000;
   const isTop = window.top === window;
 
   // A previous instance of this script may have been orphaned (extension
@@ -357,7 +361,7 @@
     }
 
     // Second-accurate fallback in case the background alarm/message is delayed.
-    if (!alreadyPaused && np && now >= np.ts && now - np.ts < 90000 && lastHandledTs !== np.ts) {
+    if (!alreadyPaused && np && now >= np.ts && now - np.ts < STALE_FIRE_MS && lastHandledTs !== np.ts) {
       lastHandledTs = np.ts;
       pauseMediaFor(np.name);
       // Carry focus intent from settings so the full-screen focus takes over

@@ -104,6 +104,15 @@ fallback notify the background, which records the pause centrally and arms the
 resume timer — plus a `reconcilePaused()` pass on startup that re-arms (or
 immediately fires) resume for any pause already in progress.
 
+The flip side of a late alarm is a *stale* one. When the device sleeps through
+prayer time, Chrome doesn't run the alarm on schedule — it delivers the missed
+alarm on wake, sometimes many minutes later. Acting on it then meant waking the
+laptop to a frozen, full-screen focus overlay and a fresh auto-resume countdown
+for a prayer whose moment had already passed. So both fire paths now ignore a
+fire delivered more than `STALE_FIRE_MS` (90s) past its scheduled time: the
+background treats it as **missed** — no pause, just advance to the next prayer —
+and the content-script fallback already bounds itself to the same window.
+
 ### 3. When a content script becomes a ghost
 
 Reload or update an extension and any content script already running in an open
