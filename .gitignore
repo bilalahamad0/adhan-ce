@@ -3,4 +3,6 @@ coverage/
 *.zip
 *.crx
 *.pem
+.env
+.env.local
 .DS_Store

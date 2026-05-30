@@ -63,13 +63,80 @@ If the private key is rotated (see "Key rotation" in [RELEASING.md](../RELEASING
 2. Edit the existing `CRX_PRIVATE_KEY_B64` secret with the new value
 3. No workflow changes needed
 
+## Automating CWS submission (optional)
+
+By default the workflow stops at a signed CRX on a draft GitHub Release, and you
+upload it through the dashboard. If you set the four secrets below, the workflow
+will instead **upload the CRX to the Chrome Web Store and submit it for review
+automatically** on every tag push. (Verified CRX uploads is fully compatible
+with the API: the upload must be the signed CRX, which is exactly what this
+pipeline produces.)
+
+If these secrets are absent, the step **no-ops** — the build/sign/release still
+runs, you just submit manually. So you can configure this whenever you like.
+
+### One-time OAuth setup
+
+You need an OAuth2 client and a long-lived refresh token scoped to the Chrome
+Web Store API, generated while signed in as the developer-account owner.
+
+1. **Enable the API.** In the [Google Cloud Console](https://console.cloud.google.com/),
+   create (or pick) a project → **APIs & Services → Library** → enable
+   **Chrome Web Store API**.
+2. **Configure the consent screen.** **APIs & Services → OAuth consent screen** →
+   External → fill the minimum fields → add your Google account as a **Test user**
+   (a test-mode app is fine; tokens for test users don't expire as quickly and
+   this is a personal tool).
+3. **Create the client.** **Credentials → Create credentials → OAuth client ID** →
+   **Web application**. Under **Authorized redirect URIs** add
+   `https://developers.google.com/oauthplayground`. Save the **client ID** and
+   **client secret**.
+4. **Mint a refresh token.** Open the
+   [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/) →
+   gear icon (top right) → check **Use your own OAuth credentials** → paste the
+   client ID + secret. In the left scope box enter
+   `https://www.googleapis.com/auth/chromewebstore` → **Authorize APIs** → sign
+   in as the developer account → **Exchange authorization code for tokens**.
+   Copy the **refresh token**.
+
+### Add the secrets
+
+**Settings → Secrets and variables → Actions → New repository secret**, three
+required + one optional:
+
+| Secret | Value |
+| --- | --- |
+| `CWS_CLIENT_ID` | OAuth client ID from step 3 |
+| `CWS_CLIENT_SECRET` | OAuth client secret from step 3 |
+| `CWS_REFRESH_TOKEN` | Refresh token from step 4 |
+| `CWS_EXTENSION_ID` | _(optional)_ item ID — defaults to the published Adhan Caster Pro ID |
+
+### Test it without cutting a release
+
+Locally, copy `.env.example` → `.env`, fill in the same four values, then:
+
+```bash
+npm run submit:cws -- adhan-caster-pro-<version>.crx --dry-run   # validate, no network
+npm run submit:cws -- adhan-caster-pro-<version>.crx --no-publish # upload only, you submit in the dashboard
+npm run submit:cws -- adhan-caster-pro-<version>.crx              # upload + submit for review
+```
+
+`.env` is gitignored. A refresh token is as sensitive as a password — anyone
+with it can publish to your listing.
+
+### If the refresh token stops working
+
+Refresh tokens can be revoked or (for a test-mode consent screen) expire. The
+script fails with `OAuth token refresh failed (HTTP 401)`. Regenerate it
+(step 4) and update the `CWS_REFRESH_TOKEN` secret. No code change needed.
+
 ## What the workflow does NOT do
 
-- **It does not upload to the Chrome Web Store.** That step still happens
-  through the dashboard. Verified CRX uploads makes API-based uploads
-  fragile; we'd rather keep the human approval gate.
 - **It does not publish the GitHub Release.** Releases are created as drafts
   so the auto-generated notes can be reviewed first.
 - **It does not bump versions.** Version bumps still happen in a PR before
   the tag is pushed. The workflow only verifies that the tag matches the
   manifest version and fails fast if they disagree.
+- **CWS submission is opt-in.** Without the OAuth secrets above, it does not
+  touch the Chrome Web Store — the signed CRX is on the GitHub Release for a
+  manual dashboard upload.
