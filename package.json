@@ -1,6 +1,6 @@
 {
   "name": "adhan-caster-pro",
-  "version": "1.6.5",
+  "version": "1.6.6",
   "description": "Chrome extension — upcoming Islamic prayer times with a live countdown that auto-pauses media in every tab at Adhan time.",
   "type": "module",
   "private": true,
