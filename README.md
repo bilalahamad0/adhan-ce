@@ -53,6 +53,11 @@ It's ~30s because `chrome.alarms` clamps shorter delays. The OS must allow notif
 
 ## How it works
 
+For an interactive, animated tour — the component map, the message/data flow,
+and the full Adhan event lifecycle step by step — open
+**[docs/architecture.html](docs/architecture.html)** in a browser. The table
+below is the same architecture in words.
+
 | Piece | Responsibility |
 | :--- | :--- |
 | `background.js` (module service worker) | Fetches the schedule, parses prayer times into timestamps, arms `chrome.alarms`, fires the desktop notification + broadcasts the cross-tab pause, and arms auto-resume. |
