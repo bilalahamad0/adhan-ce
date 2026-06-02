@@ -18,6 +18,6 @@ rm -f "$OUT"
   manifest.json background.js content.js content.css \
   popup.html popup.js popup.css \
   icons/icon16.png icons/icon48.png icons/icon128.png \
-  lib )
+  lib locales )
 
 echo "✓ Qualified and packaged: $OUT"

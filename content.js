@@ -46,6 +46,70 @@
   let fels = null;
   let focusLocked = false;
 
+  // ---- i18n ----
+  // The catalog comes from the background (GET_I18N). An inline English map is the
+  // fallback so overlays always have text even before the round-trip / if it fails,
+  // i.e. English behavior is unchanged when no translation is loaded.
+  const I18N_EN = {
+    prayer_generic: 'Prayer',
+    time_for_prayer: 'Time for prayer',
+    media_paused_msg: 'Media is paused. Take a moment for your prayer.',
+    press_esc: 'Press Esc to resume',
+    resume: 'Resume',
+    prayer_adhan: '{prayer} Adhan',
+    starting_in: 'Starting in {secs}s',
+    starting_now: 'Starting now…',
+    auto_resumes_in: 'Auto-resumes in {time}',
+    adhan_paused: 'Adhan time · media paused',
+    prayer_Fajr: 'Fajr',
+    prayer_Dhuhr: 'Dhuhr',
+    prayer_Asr: 'Asr',
+    prayer_Maghrib: 'Maghrib',
+    prayer_Isha: 'Isha',
+  };
+  let MSG = I18N_EN;
+  let DIR = 'ltr';
+  function ti(key, params) {
+    let s = key in MSG ? MSG[key] : key in I18N_EN ? I18N_EN[key] : key;
+    if (params) s = String(s).replace(/\{(\w+)\}/g, (m, k) => (k in params ? String(params[k]) : m));
+    return s;
+  }
+  function prayerLabel(name) {
+    return name ? ti('prayer_' + name) : ti('prayer_generic');
+  }
+  // Shadow DOM resets direction to LTR (:host { all: initial }) and RTL does not
+  // inherit across the boundary, so set dir explicitly on the overlay wrappers and
+  // flip the corner card to the opposite side for RTL.
+  function applyHostDir() {
+    if (host) {
+      host.style.setProperty(DIR === 'rtl' ? 'left' : 'right', '16px', 'important');
+      host.style.setProperty(DIR === 'rtl' ? 'right' : 'left', 'auto', 'important');
+    }
+    if (els) els.card.setAttribute('dir', DIR);
+    if (fels) fels.scrim.setAttribute('dir', DIR);
+  }
+  function applyOverlayI18n() {
+    if (els) els.resume.textContent = ti('resume');
+    if (fels) {
+      if (fels.ftitle) fels.ftitle.textContent = ti('time_for_prayer');
+      if (fels.fmsg) fels.fmsg.textContent = ti('media_paused_msg');
+      if (fels.fhint) fels.fhint.textContent = ti('press_esc');
+      fels.fresume.textContent = ti('resume');
+    }
+  }
+  function loadI18n() {
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_I18N' }, (resp) => {
+        if (chrome.runtime.lastError || !resp) return;
+        MSG = resp.messages || I18N_EN;
+        DIR = resp.dir || 'ltr';
+        applyOverlayI18n();
+        applyHostDir();
+        render();
+      });
+    } catch (_) {}
+  }
+
   function fmtMMSS(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -81,7 +145,7 @@
         .card {
           display: flex; align-items: center; gap: 11px;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          font-size: 13px; line-height: 1.3; color: #fff; text-align: left;
+          font-size: 13px; line-height: 1.3; color: #fff; text-align: start;
           background: linear-gradient(135deg, #0f8a5f, #0a5c47);
           padding: 11px 13px; border-radius: 13px; min-width: 192px; max-width: 300px;
           box-shadow: 0 10px 30px rgba(0,0,0,.30); border: 1px solid rgba(255,255,255,.15);
@@ -124,6 +188,8 @@
       resume: root.querySelector('#resume'),
     };
     els.resume.addEventListener('click', onResumeClick);
+    applyOverlayI18n();
+    applyHostDir();
   }
 
   function hideUI() {
@@ -150,7 +216,22 @@
         }
         .scrim.show { opacity: 1; pointer-events: auto; }
         .panel { text-align: center; color: #fff; padding: 28px; max-width: 460px; }
-        .crescent { font-size: 58px; line-height: 1; }
+        .scrim.show .panel { animation: ccpRise .55s cubic-bezier(.2, .7, .2, 1) both; }
+        .crescent-wrap { position: relative; display: inline-block; }
+        .glow {
+          position: absolute; top: 50%; left: 50%; width: 150px; height: 150px; pointer-events: none;
+          transform: translate(-50%, -50%); border-radius: 50%;
+          background: radial-gradient(circle, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0) 70%);
+          animation: ccpGlow 6s ease-in-out infinite;
+        }
+        .crescent { position: relative; display: inline-block; font-size: 58px; line-height: 1; animation: ccpBreathe 5s ease-in-out infinite; }
+        @keyframes ccpBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+        @keyframes ccpGlow { 0%, 100% { opacity: .3; transform: translate(-50%, -50%) scale(.9); } 50% { opacity: .65; transform: translate(-50%, -50%) scale(1.3); } }
+        @keyframes ccpRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+          .crescent, .glow { animation: none !important; }
+          .scrim.show .panel { animation: none !important; }
+        }
         .ftitle { font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; opacity: .8; margin-top: 16px; }
         .fname { font-size: 42px; font-weight: 800; margin-top: 4px; }
         .ftime { font-size: 17px; opacity: .9; margin-top: 2px; }
@@ -165,25 +246,30 @@
       </style>
       <div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-label="Prayer focus">
         <div class="panel">
-          <div class="crescent">🕌</div>
-          <div class="ftitle">Time for prayer</div>
+          <div class="crescent-wrap"><span class="glow"></span><span class="crescent">🕌</span></div>
+          <div class="ftitle" id="ftitle">Time for prayer</div>
           <div class="fname" id="fname">Prayer</div>
           <div class="ftime" id="ftime"></div>
-          <div class="fmsg">Media is paused. Take a moment for your prayer.</div>
+          <div class="fmsg" id="fmsg">Media is paused. Take a moment for your prayer.</div>
           <div class="fauto" id="fauto"></div>
           <button class="fresume" id="fresume">Resume</button>
-          <div class="fhint">Press Esc to resume</div>
+          <div class="fhint" id="fhint">Press Esc to resume</div>
         </div>
       </div>`;
     (document.documentElement || document.body).appendChild(fhost);
     fels = {
       scrim: root.querySelector('#scrim'),
+      ftitle: root.querySelector('#ftitle'),
       fname: root.querySelector('#fname'),
       ftime: root.querySelector('#ftime'),
+      fmsg: root.querySelector('#fmsg'),
       fauto: root.querySelector('#fauto'),
       fresume: root.querySelector('#fresume'),
+      fhint: root.querySelector('#fhint'),
     };
     fels.fresume.addEventListener('click', onFocusResume);
+    applyOverlayI18n();
+    applyHostDir();
   }
 
   function hideFocusUI() {
@@ -225,12 +311,12 @@
     if (mode === 'focus' && !document.hidden) {
       hideUI();
       ensureFocusUI();
-      fels.fname.textContent = (state.paused && state.paused.prayer) || (np && np.name) || 'Prayer';
+      fels.fname.textContent = prayerLabel((state.paused && state.paused.prayer) || (np && np.name));
       fels.ftime.textContent = (state.paused && state.paused.time) || '';
       const mins = state.settings && state.settings.autoResumeMinutes;
       const since = state.paused && state.paused.since;
       const rem = mins != null && since ? since + mins * 60000 - now : -1;
-      fels.fauto.textContent = rem > 0 ? `Auto-resumes in ${fmtMMSS(rem)}` : '';
+      fels.fauto.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : '';
       fels.scrim.classList.add('show');
       lockScroll(true);
       return;
@@ -244,22 +330,22 @@
     ensureUI();
 
     if (mode === 'paused') {
-      const name = currentPrayer || (state.paused && state.paused.prayer) || (np && np.name) || 'Prayer';
+      const name = prayerLabel(currentPrayer || (state.paused && state.paused.prayer) || (np && np.name));
       const mins = state.settings && state.settings.autoResumeMinutes;
       const since = state.paused && state.paused.since;
       const rem = mins && since ? since + mins * 60000 - now : -1;
       els.card.classList.add('paused');
       els.icon.textContent = '🕌';
       els.title.textContent = name;
-      els.sub.textContent = rem > 0 ? `Auto-resumes in ${fmtMMSS(rem)}` : 'Adhan time · media paused';
+      els.sub.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : ti('adhan_paused');
       els.sub.classList.remove('pulse');
       els.bar.style.display = 'none';
       els.resume.hidden = false;
     } else {
       els.card.classList.remove('paused');
       els.icon.textContent = '🕌';
-      els.title.textContent = `${np.name} Adhan`;
-      els.sub.textContent = secs > 0 ? `Starting in ${secs}s` : 'Starting now…';
+      els.title.textContent = ti('prayer_adhan', { prayer: prayerLabel(np.name) });
+      els.sub.textContent = secs > 0 ? ti('starting_in', { secs }) : ti('starting_now');
       els.sub.classList.toggle('pulse', secs <= 0);
       els.bar.style.display = '';
       els.barfill.style.width = `${Math.min(100, (secs / maxSecs) * 100)}%`;
@@ -392,6 +478,7 @@
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    if (changes.lang && isTop) loadI18n();
     if (changes.nextPrayer) state.nextPrayer = changes.nextPrayer.newValue || null;
     if (changes.settings) state.settings = changes.settings.newValue || null;
     if (changes.paused) {
@@ -475,5 +562,6 @@
   }
 
   loadState();
+  if (isTop) loadI18n();
   tickHandle = setInterval(tick, 1000);
 })();
