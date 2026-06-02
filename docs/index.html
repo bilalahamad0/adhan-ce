@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Primary SEO -->
+<title>Adhan Caster — Muslim Prayer Times Chrome Extension that Auto-Pauses Media</title>
+<meta name="description" content="Free Chrome extension showing Muslim prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha) with a live Adhan countdown — and it auto-pauses video & audio in every tab at salah. No ads, no tracking, open source.">
+<meta name="keywords" content="adhan, azan, muslim prayer times, prayer times chrome extension, salah, namaz, prayer reminder, islamic, adhan extension, prayer countdown, fajr dhuhr asr maghrib isha">
+<meta name="author" content="Bilal Ahamad">
+<meta name="theme-color" content="#0f7a52">
+<link rel="canonical" href="https://bilalahamad0.github.io/adhan-ce/">
+<link rel="icon" type="image/png" href="icon128.png">
+<link rel="apple-touch-icon" href="icon128.png">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Adhan Caster">
+<meta property="og:title" content="Adhan Caster — Muslim Prayer Times that Auto-Pause Your Browser">
+<meta property="og:description" content="The moment the Adhan starts, every tab's video & audio pauses automatically. Free, open source, privacy-first.">
+<meta property="og:url" content="https://bilalahamad0.github.io/adhan-ce/">
+<meta property="og:image" content="https://bilalahamad0.github.io/adhan-ce/store/screenshot-1.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="800">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Adhan Caster — Muslim Prayer Times that Auto-Pause Your Browser">
+<meta name="twitter:description" content="The moment the Adhan starts, every tab's video & audio pauses automatically. Free, open source, privacy-first.">
+<meta name="twitter:image" content="https://bilalahamad0.github.io/adhan-ce/store/screenshot-1.png">
+
+<!-- Structured data: SoftwareApplication -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Adhan Caster",
+  "applicationCategory": "BrowserApplication",
+  "operatingSystem": "Chrome, Microsoft Edge",
+  "description": "Free Chrome extension that shows Muslim prayer times with a live Adhan countdown and automatically pauses video and audio in every browser tab at prayer time.",
+  "url": "https://bilalahamad0.github.io/adhan-ce/",
+  "downloadUrl": "https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia",
+  "softwareVersion": "1.6.6",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Bilal Ahamad" }
+}
+</script>
+
+<!-- Structured data: FAQ (eligible for rich results) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "Is Adhan Caster free?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Adhan Caster is completely free and open source. There are no ads, no subscriptions, and no account required." } },
+    { "@type": "Question", "name": "Does it really pause video and audio in every tab?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The instant the Adhan begins, it pauses any playing video or audio across all of your open Chrome tabs, then resumes with one click or automatically after a delay you choose." } },
+    { "@type": "Question", "name": "Is my location or data tracked?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. There is no analytics and no tracking. Your settings and location stay on your device. The only data sent off-device is the city name needed to look up prayer times." } },
+    { "@type": "Question", "name": "Which prayer times does it show?",
+      "acceptedAnswer": { "@type": "Answer", "text": "All five daily prayers: Fajr, Dhuhr, Asr, Maghrib, and Isha, with a live countdown to the next one." } }
+  ]
+}
+</script>
+
+<style>
+  :root{
+    --green:#0f7a52; --green-dark:#0b5e3f; --green-light:#e8f5ee;
+    --ink:#13241d; --muted:#5b6b63; --bg:#ffffff; --card:#f6faf8; --line:#e2ece7;
+    --radius:16px; --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--green-dark)}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+  .btn{display:inline-block;padding:14px 26px;border-radius:999px;font-weight:700;text-decoration:none;text-align:center;transition:transform .08s ease,box-shadow .2s ease}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:var(--green);color:#fff;box-shadow:0 8px 22px rgba(15,122,82,.28)}
+  .btn-primary:hover{background:var(--green-dark);box-shadow:0 10px 28px rgba(15,122,82,.36)}
+  .btn-ghost{background:#fff;color:var(--green-dark);border:1.5px solid var(--line)}
+
+  /* Header */
+  header.nav{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.86);backdrop-filter:saturate(160%) blur(10px);border-bottom:1px solid var(--line)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--ink);text-decoration:none}
+  .brand img{width:30px;height:30px;border-radius:8px}
+  .nav-links{display:flex;align-items:center;gap:22px}
+  .nav-links a{color:var(--muted);text-decoration:none;font-weight:600;font-size:15px}
+  .nav-links a:hover{color:var(--ink)}
+  .nav-cta{padding:10px 18px;font-size:14px}
+  @media(max-width:720px){.nav-links a:not(.nav-cta){display:none}}
+
+  /* Hero */
+  .hero{background:linear-gradient(180deg,var(--green-light),#fff);padding:72px 0 56px;text-align:center}
+  .badge{display:inline-block;background:#fff;border:1px solid var(--line);color:var(--green-dark);font-weight:700;font-size:13px;padding:6px 14px;border-radius:999px;margin-bottom:22px}
+  .hero h1{font-size:clamp(32px,5vw,52px);line-height:1.1;margin:0 0 18px;letter-spacing:-.02em}
+  .hero h1 .hl{color:var(--green)}
+  .hero p.sub{font-size:clamp(17px,2.4vw,21px);color:var(--muted);max-width:680px;margin:0 auto 30px}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .trust{margin-top:22px;color:var(--muted);font-size:14px;font-weight:600}
+  .trust span{margin:0 8px;white-space:nowrap}
+  .hero-shot{max-width:920px;margin:46px auto 0;border-radius:var(--radius);overflow:hidden;box-shadow:0 30px 70px rgba(11,94,63,.18);border:1px solid var(--line)}
+  .hero-shot img{display:block;width:100%;height:auto}
+
+  /* Sections */
+  section{padding:64px 0}
+  h2{font-size:clamp(26px,3.4vw,36px);text-align:center;margin:0 0 12px;letter-spacing:-.02em}
+  .lead{text-align:center;color:var(--muted);max-width:620px;margin:0 auto 44px;font-size:17px}
+
+  /* Features */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  @media(max-width:840px){.grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
+  .card .ico{font-size:26px;margin-bottom:12px}
+  .card h3{margin:0 0 8px;font-size:18px}
+  .card p{margin:0;color:var(--muted);font-size:15px}
+
+  /* Steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;counter-reset:step}
+  @media(max-width:720px){.steps{grid-template-columns:1fr}}
+  .step{position:relative;padding:26px;background:#fff;border:1px solid var(--line);border-radius:var(--radius)}
+  .step::before{counter-increment:step;content:counter(step);display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;font-weight:800;margin-bottom:14px}
+  .step h3{margin:0 0 6px;font-size:18px}
+  .step p{margin:0;color:var(--muted);font-size:15px}
+
+  /* Shots */
+  .shots{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media(max-width:840px){.shots{grid-template-columns:1fr}}
+  .shots figure{margin:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#fff}
+  .shots img{display:block;width:100%;height:auto}
+  .shots figcaption{padding:14px 16px;font-size:14px;color:var(--muted);font-weight:600}
+
+  /* Privacy band */
+  .band{background:var(--green-dark);color:#dff3e9}
+  .band h2{color:#fff}
+  .band .lead{color:#bfe6d4}
+  .priv{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;text-align:center}
+  @media(max-width:760px){.priv{grid-template-columns:1fr 1fr}}
+  .priv div{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:22px 14px}
+  .priv .big{font-size:22px;font-weight:800;color:#fff;display:block;margin-bottom:4px}
+
+  /* FAQ */
+  .faq details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 20px;margin-bottom:12px}
+  .faq summary{cursor:pointer;font-weight:700;padding:18px 0;list-style:none;font-size:17px}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::after{content:"+";float:right;color:var(--green);font-weight:800}
+  .faq details[open] summary::after{content:"–"}
+  .faq p{margin:0 0 18px;color:var(--muted)}
+
+  /* Final CTA */
+  .final{text-align:center;background:linear-gradient(180deg,#fff,var(--green-light));padding:72px 0}
+  .final h2{margin-bottom:10px}
+
+  footer{border-top:1px solid var(--line);padding:34px 0;color:var(--muted);font-size:14px}
+  .foot-inner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+  footer a{color:var(--muted);text-decoration:none;margin-left:18px}
+  footer a:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/adhan-ce/"><img src="icon128.png" alt="Adhan Caster logo">Adhan Caster</a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#faq">FAQ</a>
+      <a class="btn btn-primary nav-cta" href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=nav">Add to Chrome</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <span class="badge">🕌 Free &amp; open source · Privacy-first</span>
+      <h1>Never miss a prayer<br>because you were <span class="hl">mid-scroll</span>.</h1>
+      <p class="sub">Adhan Caster shows your <strong>Muslim prayer times</strong> with a live countdown — and the moment the <strong>Adhan</strong> begins, it automatically pauses video &amp; audio in <strong>every Chrome tab</strong>.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=hero">Add to Chrome — it's free</a>
+        <a class="btn btn-ghost" href="https://github.com/bilalahamad0/adhan-ce">View source on GitHub</a>
+      </div>
+      <p class="trust"><span>✓ No ads</span><span>✓ No account</span><span>✓ No tracking</span><span>✓ Manifest V3</span></p>
+      <div class="hero-shot">
+        <img src="store/screenshot-1.png" alt="Adhan Caster showing the five daily prayer times with a live countdown to the next salah" width="1280" height="800" loading="eager">
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Built so the Adhan always comes first</h2>
+      <p class="lead">Everything you need to pray on time without babysitting a clock or a browser tab.</p>
+      <div class="grid">
+        <div class="card"><div class="ico">⏱️</div><h3>Live prayer countdown</h3><p>All five daily prayers — Fajr, Dhuhr, Asr, Maghrib, Isha — with a second-accurate countdown to the next one.</p></div>
+        <div class="card"><div class="ico">⏸️</div><h3>Auto-pause every tab</h3><p>The instant the Adhan starts, video and audio across all your open tabs pause automatically — even cross-origin iframes.</p></div>
+        <div class="card"><div class="ico">▶️</div><h3>One-click resume</h3><p>Resume playback whenever you're back, or let it auto-resume after a delay you set. You stay in control.</p></div>
+        <div class="card"><div class="ico">🔔</div><h3>Heads-up countdown</h3><p>An in-page nudge 15, 30, or 60 seconds before the Adhan — your choice — so you're never caught off guard.</p></div>
+        <div class="card"><div class="ico">🧘</div><h3>Prayer Focus screen</h3><p>An optional full-screen focus mode during the Adhan. Toggle with Ctrl/Cmd+Shift+Y; dismiss with Resume or Esc.</p></div>
+        <div class="card"><div class="ico">🌍</div><h3>Accurate for your city</h3><p>Search any city worldwide; prayer times are calculated for your exact location. No GPS permissions needed.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" style="background:var(--card)">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="lead">Set it once. It runs quietly in the background, five times a day.</p>
+      <div class="steps">
+        <div class="step"><h3>Pick your city</h3><p>Search and select your location. Adhan Caster fetches the day's prayer schedule and starts the countdown.</p></div>
+        <div class="step"><h3>Keep browsing</h3><p>Work, study, watch lectures, listen to music. A heads-up appears shortly before each prayer.</p></div>
+        <div class="step"><h3>The Adhan pauses everything</h3><p>Media stops across all tabs so you can pray. Resume with one click — or let it auto-resume for you.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>See it in action</h2>
+      <p class="lead">Clean, distraction-free, and right where you already are — your browser.</p>
+      <div class="shots">
+        <figure><img src="store/screenshot-1.png" alt="All five prayer times with a live countdown to the next salah" width="1280" height="800" loading="lazy"><figcaption>All five prayer times with a live countdown.</figcaption></figure>
+        <figure><img src="store/screenshot-2.png" alt="Media in a browser tab paused automatically at Adhan time with a corner countdown" width="1280" height="800" loading="lazy"><figcaption>The Adhan starts — your tabs pause automatically.</figcaption></figure>
+        <figure><img src="store/screenshot-3.png" alt="Full-screen Prayer Focus mode shown during the Adhan" width="1280" height="800" loading="lazy"><figcaption>Optional full-screen Prayer Focus.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <h2>Your worship is private. So is your data.</h2>
+      <p class="lead">No business model hiding in the background. Adhan Caster collects nothing.</p>
+      <div class="priv">
+        <div><span class="big">0</span>trackers or analytics</div>
+        <div><span class="big">0</span>ads, ever</div>
+        <div><span class="big">0</span>accounts or sign-ins</div>
+        <div><span class="big">100%</span>on-device storage</div>
+      </div>
+      <p class="lead" style="margin:34px auto 0;font-size:15px">The only data that leaves your device is the city name needed to look up prayer times. <a href="privacy-policy.html" style="color:#fff;text-decoration:underline">Read the privacy policy →</a></p>
+    </div>
+  </section>
+
+  <section id="faq" class="faq">
+    <div class="wrap" style="max-width:760px">
+      <h2>Frequently asked questions</h2>
+      <p class="lead">Quick answers before you install.</p>
+      <details open><summary>Is Adhan Caster free?</summary><p>Yes — completely free and open source (MIT). No ads, no subscriptions, no premium tier, and no account required.</p></details>
+      <details><summary>Does it really pause video and audio in every tab?</summary><p>Yes. The instant the Adhan begins, it pauses any playing video or audio across all of your open Chrome tabs, including content inside iframes. You can resume with one click or have it auto-resume after a delay you choose.</p></details>
+      <details><summary>Is my location or browsing tracked?</summary><p>No. There is no analytics and no tracking of any kind. Your settings and location stay on your device. The only thing sent off-device is the city name needed to fetch prayer times.</p></details>
+      <details><summary>Which prayers and calculation does it use?</summary><p>It shows all five daily prayers — Fajr, Dhuhr, Asr, Maghrib, and Isha — using an Aladhan-based prayer-time service, calculated for the city you select.</p></details>
+      <details><summary>Does it work on Edge or Firefox?</summary><p>It's built for Chrome (Manifest V3) and works on Chromium browsers. Edge and Firefox builds are on the roadmap — star the GitHub repo to follow along.</p></details>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2>Pray on time, even on a busy day.</h2>
+      <p class="lead">Add Adhan Caster to Chrome and let your browser remember the Adhan for you.</p>
+      <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=footer">Add to Chrome — it's free</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>© Adhan Caster · Made with care for the Ummah 🤲</div>
+    <nav>
+      <a href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia">Chrome Web Store</a>
+      <a href="https://github.com/bilalahamad0/adhan-ce">GitHub</a>
+      <a href="privacy-policy.html">Privacy</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

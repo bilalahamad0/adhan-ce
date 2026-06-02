@@ -9,7 +9,7 @@ It's a standalone Chrome extension. It fetches prayer times from the public
 (`adhan-api-mauve.vercel.app`) and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
-**[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=item-share-cb)**
+**[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://bilalahamad0.github.io/adhan-ce/)**
 
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 
@@ -73,3 +73,11 @@ See [docs/TESTING.md](docs/TESTING.md) for the full pre-publish QA checklist.
 - Prayer times come back as `"hh:mm a"` strings and are parsed in the **browser's local timezone**, which is correct when your machine's timezone matches the chosen location.
 - `chrome.alarms` isn't second-accurate when the service worker is asleep, so `content.js` self-triggers the pause when its own countdown hits zero. Both paths are idempotent.
 - Restricted pages (`chrome://`, the Web Store, the PDF viewer) can't host content scripts, so media there isn't paused — a Chrome platform limitation.
+
+## Marketing, reach & store listing
+
+Assets for getting the extension in front of more people:
+
+- **[docs/index.html](https://bilalahamad0.github.io/adhan-ce/)** — public landing page (SEO-optimized, served via GitHub Pages).
+- **[docs/store-listing.md](docs/store-listing.md)** — copy/paste source of truth for the Chrome Web Store Developer Dashboard: keyword-optimized title, summary, description, permission justifications, and screenshot captions.
+- **[docs/launch-kit.md](docs/launch-kit.md)** — ready-to-post launch copy (Reddit, Show HN, Product Hunt, Facebook, X), the channel/subreddit plan, review-collection tips, and Ramadan timing.
