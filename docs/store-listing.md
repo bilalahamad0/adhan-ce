@@ -39,30 +39,42 @@ Muslim prayer times with a live Adhan countdown that auto-pauses video & audio i
 ## 3. Description (paste into the Dashboard "Description" field)
 
 ```
-Never let a video or song play through the Adhan again.
+🕌 Never miss a prayer because a video, podcast, or playlist pulled you in.
 
-Adhan Caster shows accurate Muslim prayer times for Fajr, Dhuhr, Asr, Maghrib, and Isha right in your browser, with a live countdown to the next salah. The moment the Adhan begins, it automatically pauses any video or audio playing in every open Chrome tab — then resumes with one click, or automatically after a delay you choose.
+Adhan Caster turns your browser into a calm, reliable prayer companion. It shows accurate Muslim prayer times — Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha — with a live countdown to the next salah and a real-time clock for your city. And the instant the Adhan begins, it automatically pauses every video and audio playing across all your open Chrome tabs. No scrambling for the mute button. No realizing an hour later that you prayed late.
 
-WHAT IT DOES
-• All five daily prayer times with a live countdown to the next prayer
-• Auto-pauses video & audio across every tab the instant the Adhan starts
-• A heads-up countdown 15, 30, or 60 seconds before prayer (your choice)
-• Optional full-screen "prayer focus" screen during the Adhan (toggle, notification button, or Ctrl/Cmd+Shift+Y; dismiss with Resume or Esc)
-• One-click resume, or auto-resume after a delay you set
-• Search any city worldwide — times are calculated for your exact location
+When the moment comes, your screen settles: an optional full-screen Prayer Focus gently takes over with a softly animated reminder, so you can step away with intention. One click — or an automatic timer — brings everything back exactly where you left off.
 
-PRIVATE & FREE FOREVER
-• No ads. No subscriptions. No account. No sign-in.
-• No analytics and no tracking of any kind.
-• Your location and settings stay on your device (chrome.storage.local).
-• The only data sent off your device is the city name / search text needed to look up prayer times and resolve your location.
-• Open source and built on the latest Manifest V3.
+━━━━━━━━━━━━━━━━━━━━━━━━
+✨ WHAT MAKES IT SPECIAL
+━━━━━━━━━━━━━━━━━━━━━━━━
+⏰ Live local clock — the current time for your chosen city, right in the popup. Stop glancing at the system clock.
+🕋 Every prayer + Sunrise — Fajr, Dhuhr, Asr, Maghrib, Isha, plus Shuruq (Sunrise), with the next prayer highlighted and a second-by-second countdown.
+⏸️ Auto-pause everywhere — YouTube, Netflix, Spotify, podcasts, lecture tabs… all pause the instant the Adhan starts, in every open tab (even embedded players).
+🧘 Animated Prayer Focus — a calm, breathing full-screen reminder during the Adhan. On by default, from the notification, or via Ctrl/Cmd+Shift+Y. Dismiss with Resume or Esc.
+⏱️ Heads-up countdown — a discreet on-page nudge 15, 30, or 60 seconds before, so the pause never catches you mid-sentence.
+▶️ Effortless resume — one click, or auto-resume after a delay you choose. Always in your control.
+🌍 Any city on Earth — search and lock to your exact location; times are calculated precisely for you.
+🌐 Your language — English, العربية, اردو, Bahasa Indonesia, Türkçe, Français — switch instantly, with full right-to-left support.
 
-Prayer times are provided by an Aladhan-based service; city search is powered by Open-Meteo.
+━━━━━━━━━━━━━━━━━━━━━━━━
+🔒 PRIVATE BY DESIGN — FREE FOREVER
+━━━━━━━━━━━━━━━━━━━━━━━━
+• No ads. No subscriptions. No account. No sign-in. Ever.
+• Zero analytics. Zero tracking. Zero data harvesting.
+• Everything stays on your device — the only thing that ever leaves is the city name needed to look up prayer times.
+• Open source and built on the latest, most secure Manifest V3.
 
-Whether you're working, studying, watching lectures, or listening to music, Adhan Caster makes sure your browser pauses — and gently reminds you — when it's time to pray.
+━━━━━━━━━━━━━━━━━━━━━━━━
+💡 MADE FOR REAL LIFE
+━━━━━━━━━━━━━━━━━━━━━━━━
+Racing a deadline. Deep in a lecture playlist. Catching up on a series. Whatever has your attention, Adhan Caster quietly keeps watch and hands the moment back to you when it's time to stand before your Lord — then returns you to exactly where you were. Lightweight, distraction-free, and respectful of both your time and your privacy.
 
-Made with care for the Ummah. Feedback and feature requests are always welcome.
+Prayer times are powered by the trusted Aladhan service; city search by Open-Meteo.
+
+Made with care for the Ummah. We read every review and reply to feedback — tell us what would make your salah easier. 🤲
+
+Keywords: Muslim prayer times, Adhan, Azan, Salah, Namaz, prayer reminder, Islamic prayer times, prayer notification, prayer clock, Fajr, Dhuhr, Asr, Maghrib, Isha, Sunrise, Shuruq.
 ```
 
 > The **first paragraph is the most important text on the page** — it's your search snippet and your conversion pitch. It now opens with "Adhan", "Muslim prayer times", and the five prayer names (all searchable) instead of jargon.
@@ -72,7 +84,7 @@ Made with care for the Ummah. Feedback and feature requests are always welcome.
 ## 4. Category & language
 
 - **Category:** Workflow & Planning *(current — keep it; it's where productivity/focus tools live and where the competitor sits).*
-- **Language:** English. *(Add more later — see the i18n note in launch-kit.md. Arabic, Urdu, Indonesian, Turkish, French, and Bengali would each unlock a large new search surface.)*
+- **Language:** Ships with **English, Arabic, Urdu, Indonesian, Turkish, and French** (in-app switch with full RTL). In the dashboard, add a **localized listing per language** to unlock each language's search surface (see `docs/i18n.md`).
 
 ---
 
@@ -110,13 +122,13 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 
 Screenshots are downscaled to 640×400, so use **large text and one idea per image**. Recommended order (first screenshot matters most):
 
-1. **screenshot-1.png** — *"All five prayer times, with a live countdown to the next salah."*
+1. **screenshot-1.png** — *"Prayer times + a live local clock — your next salah at a glance."*
 2. **screenshot-2.png** — *"The Adhan starts — every tab's video & audio pauses automatically."*
-3. **screenshot-3.png** — *"Optional full-screen Prayer Focus. Resume with one click or Esc."*
-4. *(add)* — *"A heads-up countdown 15/30/60s before — never caught off guard."*
-5. *(add)* — *"Private & free. No ads, no account, nothing leaves your device."*
+3. **screenshot-3.png** — *"A calm, animated full-screen Prayer Focus. Resume anytime."*
+4. **screenshot-4.png** — *"A heads-up 15/30/60s before — never caught off guard."*
+5. **screenshot-5.png** — *"Free & private, in 6 languages. No ads, no tracking."*
 
-> You currently have 8 media items on the live listing but only 3 source screenshots in `docs/store/`. **Open your listing in an incognito window and confirm every image renders** — broken/placeholder images are a silent conversion killer. Regenerate with `npm run shots` if needed.
+> All 5 source screenshots (1280×800) are generated into `docs/store/` by `npm run shots`. Upload all five; the first is the strongest. Replace any old/placeholder media on the live listing.
 
 ---
 

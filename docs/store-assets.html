@@ -2,128 +2,185 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Adhan Caster Pro — store screenshots</title>
+    <title>Adhan Caster — store screenshots</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
       .slide { display: none; width: 1280px; height: 800px; overflow: hidden; position: relative; }
-      body[data-slide="1"] #s1, body[data-slide="2"] #s2, body[data-slide="3"] #s3 { display: flex; }
+      body[data-slide="1"] #s1, body[data-slide="2"] #s2, body[data-slide="3"] #s3,
+      body[data-slide="4"] #s4, body[data-slide="5"] #s5 { display: flex; }
 
-      /* ---- shared bits ---- */
+      /* ---- shared ---- */
       .brandbg { background: radial-gradient(120% 120% at 15% 10%, #14a06f, #0a5c47 60%, #073324); }
-      .cap { position: absolute; top: 54px; left: 0; right: 0; text-align: center; color: #fff; }
+      .cap { position: absolute; top: 52px; left: 0; right: 0; text-align: center; color: #fff; padding: 0 60px; }
       .cap h2 { font-size: 40px; font-weight: 800; letter-spacing: .3px; }
-      .cap p { font-size: 19px; opacity: .9; margin-top: 8px; }
+      .cap p { font-size: 20px; opacity: .9; margin-top: 8px; }
 
       /* ---- slide 1: hero + popup ---- */
       #s1 { align-items: center; padding: 0 90px; }
       .hero-left { flex: 1; color: #fff; }
       .hero-left .logo { font-size: 72px; }
-      .hero-left h1 { font-size: 60px; font-weight: 800; margin-top: 10px; }
-      .hero-left p { font-size: 22px; line-height: 1.5; opacity: .92; margin-top: 16px; max-width: 520px; }
-      .hero-left ul { list-style: none; margin-top: 26px; font-size: 19px; }
-      .hero-left li { margin: 12px 0; opacity: .95; }
+      .hero-left h1 { font-size: 58px; font-weight: 800; margin-top: 8px; }
+      .hero-left .tag { font-size: 23px; line-height: 1.5; opacity: .94; margin-top: 14px; max-width: 540px; }
+      .hero-left ul { list-style: none; margin-top: 24px; font-size: 20px; }
+      .hero-left li { margin: 13px 0; opacity: .96; }
       .hero-right { width: 430px; display: flex; justify-content: center; }
 
-      /* popup mock (light) */
-      .popup { width: 360px; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 30px 70px rgba(0,0,0,.35); color: #15302a; }
+      .popup { width: 372px; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(0,0,0,.4); color: #15302a; }
       .p-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: linear-gradient(135deg, #0f8a5f, #0a5c47); color: #fff; }
-      .p-head .pl { width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+      .p-head .pl { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; font-size: 22px; }
       .p-head strong { font-size: 16px; display: block; }
-      .p-head span { font-size: 12px; opacity: .85; }
-      .p-next { text-align: center; padding: 20px 0 16px; border-bottom: 1px solid #e4ece9; }
-      .p-next .lab { font-size: 12px; letter-spacing: .6px; color: #6b8079; text-transform: uppercase; }
-      .p-next .nm { font-size: 30px; font-weight: 800; color: #0a5c47; }
+      .p-head .sub { font-size: 12px; opacity: .85; }
+      .p-next { text-align: center; padding: 16px 0 16px; border-bottom: 1px solid #e4ece9; }
+      .p-next .clock { font-size: 19px; font-weight: 800; color: #15302a; letter-spacing: .4px; margin-bottom: 8px; }
+      .p-next .lab { font-size: 11px; letter-spacing: .7px; color: #6b8079; text-transform: uppercase; }
+      .p-next .nm { font-size: 30px; font-weight: 800; color: #0a5c47; margin-top: 2px; }
       .p-next .nm small { font-size: 17px; color: #15302a; font-weight: 700; }
       .p-next .cd { font-size: 14px; color: #6b8079; margin-top: 2px; }
-      .p-row { display: flex; justify-content: space-between; padding: 11px 16px; font-size: 15px; }
+      .p-row { display: flex; justify-content: space-between; padding: 11px 18px; font-size: 15px; }
       .p-row.next { background: #e7f5ef; }
       .p-row.next b, .p-row.next .t { color: #0a5c47; }
       .p-row .ck { color: #0f8a5f; }
       .p-row .t { color: #6b8079; }
       .p-row.dim { opacity: .55; }
+      .p-row.sun { color: #94a39c; }
+      .p-row.sun .t { color: #94a39c; }
 
-      /* ---- slide 2: in-page pause ---- */
-      #s2 { background: #eef1f4; }
-      .browser { position: absolute; inset: 70px 70px 70px 70px; top: 150px; border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.18); background: #fff; }
-      .bbar { height: 44px; background: #d8dde3; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+      /* ---- slide 2 & 4: browser frame ---- */
+      #s2, #s4 { background: #eef1f4; }
+      .browser { position: absolute; inset: 150px 70px 70px 70px; border-radius: 16px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.18); background: #fff; }
+      .bbar { height: 46px; background: #d8dde3; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
       .bdot { width: 12px; height: 12px; border-radius: 50%; }
       .r { background: #ff5f57; } .y { background: #febc2e; } .g { background: #28c840; }
-      .burl { flex: 1; height: 26px; background: #fff; border-radius: 13px; margin-left: 12px; }
-      .bbody { padding: 34px 40px; }
-      .bbody h3 { font-size: 26px; color: #1b2733; }
-      .vid { margin-top: 20px; width: 520px; height: 290px; border-radius: 12px; background: linear-gradient(160deg, #21304a, #0c1118); position: relative; }
-      .vid .lbl { position: absolute; top: 16px; left: 18px; color: #fff; font-weight: 700; }
-      .vid .pz { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 56px; color: #fff; opacity: .9; }
-      .corner { position: absolute; right: 26px; bottom: 26px; display: flex; align-items: center; gap: 12px; color: #fff; background: linear-gradient(135deg, #b4521f, #7c3312); padding: 14px 16px; border-radius: 14px; box-shadow: 0 14px 36px rgba(0,0,0,.3); }
-      .corner .ci { font-size: 26px; }
+      .burl { flex: 1; height: 28px; background: #fff; border-radius: 14px; margin-left: 12px; }
+      .bbody { padding: 36px 44px; }
+      .bbody h3 { font-size: 27px; color: #1b2733; }
+      .vid { margin-top: 22px; width: 560px; height: 308px; border-radius: 14px; background: linear-gradient(160deg, #21304a, #0c1118); position: relative; }
+      .vid .lbl { position: absolute; top: 16px; left: 18px; color: #fff; font-weight: 700; font-size: 16px; }
+      .vid .pz { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 60px; color: #fff; opacity: .92; }
+      .corner { position: absolute; right: 28px; bottom: 28px; display: flex; align-items: center; gap: 13px; color: #fff; padding: 15px 17px; border-radius: 15px; box-shadow: 0 16px 40px rgba(0,0,0,.32); max-width: 320px; }
+      .corner.amber { background: linear-gradient(135deg, #b4521f, #7c3312); }
+      .corner.green { background: linear-gradient(135deg, #0f8a5f, #0a5c47); }
+      .corner .ci { font-size: 27px; }
       .corner b { font-size: 15px; }
-      .corner .s { font-size: 13px; opacity: .92; }
+      .corner .s { font-size: 13px; opacity: .92; margin-top: 1px; }
       .corner button { border: 0; background: #fff; color: #7c3312; font-weight: 700; padding: 8px 14px; border-radius: 9px; font-size: 13px; }
+      .corner .pbar { height: 3px; border-radius: 3px; background: rgba(255,255,255,.3); margin-top: 8px; overflow: hidden; }
+      .corner .pbar > i { display: block; height: 100%; width: 62%; background: #fff; border-radius: 3px; }
 
       /* ---- slide 3: focus screen ---- */
-      #s3 { background: radial-gradient(130% 130% at 50% 28%, rgba(15,138,95,.97), rgba(7,48,37,.99)); align-items: center; justify-content: center; }
-      .focus { text-align: center; color: #fff; }
-      .focus .cre { font-size: 96px; }
+      #s3 { background: radial-gradient(130% 130% at 50% 28%, rgba(15,138,95,.98), rgba(7,48,37,1)); align-items: center; justify-content: center; }
+      .focus { text-align: center; color: #fff; position: relative; }
+      .crescent-wrap { position: relative; display: inline-block; }
+      .crescent-wrap .glow { position: absolute; top: 50%; left: 50%; width: 230px; height: 230px; transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%); }
+      .focus .cre { position: relative; font-size: 104px; }
       .focus .t { font-size: 15px; letter-spacing: 3px; text-transform: uppercase; opacity: .82; margin-top: 18px; }
-      .focus .nm { font-size: 76px; font-weight: 800; margin-top: 6px; }
+      .focus .nm { font-size: 78px; font-weight: 800; margin-top: 6px; }
       .focus .tm { font-size: 26px; opacity: .9; margin-top: 4px; }
-      .focus .ms { font-size: 20px; opacity: .85; margin-top: 22px; }
+      .focus .ms { font-size: 21px; opacity: .85; margin-top: 22px; }
       .focus .au { font-size: 16px; opacity: .72; margin-top: 26px; }
-      .focus .btn { margin-top: 22px; display: inline-block; background: #fff; color: #0a5c47; font-weight: 800; font-size: 18px; padding: 16px 40px; border-radius: 12px; }
+      .focus .btn { margin-top: 22px; display: inline-block; background: #fff; color: #0a5c47; font-weight: 800; font-size: 18px; padding: 16px 42px; border-radius: 13px; }
       .focus .hint { font-size: 14px; opacity: .6; margin-top: 16px; }
+
+      /* ---- slide 5: privacy + languages ---- */
+      #s5 { align-items: center; justify-content: center; }
+      .promo { text-align: center; color: #fff; max-width: 980px; padding: 0 60px; }
+      .promo .em { font-size: 96px; }
+      .promo h2 { font-size: 52px; font-weight: 800; margin-top: 8px; }
+      .promo .sub { font-size: 22px; opacity: .9; margin-top: 12px; }
+      .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 36px; }
+      .chip { font-size: 20px; font-weight: 700; padding: 13px 22px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); color: #fff; }
+      .langs { margin-top: 34px; font-size: 26px; font-weight: 700; letter-spacing: .5px; opacity: .96; }
     </style>
   </head>
   <body data-slide="1">
-    <!-- Slide 1: hero + popup -->
+    <!-- Slide 1: hero + popup (clock + sunrise) -->
     <section class="slide brandbg" id="s1">
       <div class="hero-left">
         <div class="logo">🕌</div>
-        <h1>Adhan Caster Pro</h1>
-        <p>Upcoming prayer times with a live countdown — and your media pauses automatically across every Chrome tab at Adhan time.</p>
+        <h1>Adhan Caster</h1>
+        <p class="tag">Muslim prayer times with a live local clock — and your media pauses automatically across every Chrome tab at Adhan time.</p>
         <ul>
-          <li>✓ Next prayer with a live countdown</li>
-          <li>✓ Auto-pause video &amp; audio in all tabs</li>
-          <li>✓ Optional full-screen prayer focus</li>
+          <li>🕐 Live clock + next prayer countdown</li>
+          <li>⏸️ Auto-pause video &amp; audio in all tabs</li>
+          <li>🧘 Optional full-screen Prayer Focus</li>
+          <li>🌐 6 languages, full right-to-left</li>
         </ul>
       </div>
       <div class="hero-right">
         <div class="popup">
-          <div class="p-head"><span class="pl">🌙</span><span><strong>Adhan Caster Pro</strong><span>Sunnyvale, California, United States</span></span></div>
-          <div class="p-next"><div class="lab">Next prayer</div><div class="nm">Maghrib <small>08:17 PM</small></div><div class="cd">in 2h 11m</div></div>
-          <div class="p-row dim"><span><span class="ck">✓</span> Fajr</span><span class="t">04:27 AM</span></div>
-          <div class="p-row dim"><span><span class="ck">✓</span> Dhuhr</span><span class="t">01:05 PM</span></div>
-          <div class="p-row dim"><span><span class="ck">✓</span> Asr</span><span class="t">04:56 PM</span></div>
-          <div class="p-row next"><b>Maghrib</b><span class="t">08:17 PM</span></div>
-          <div class="p-row"><span>Isha</span><span class="t">09:43 PM</span></div>
+          <div class="p-head"><span class="pl">🌙</span><span><strong>Adhan Caster</strong><div class="sub">Sunnyvale, California</div></span></div>
+          <div class="p-next">
+            <div class="clock">🕐 4:12:00 PM</div>
+            <div class="lab">Next prayer</div>
+            <div class="nm">Maghrib <small>08:24 PM</small></div>
+            <div class="cd">in 4h 12m</div>
+          </div>
+          <div class="p-row dim"><span><span class="ck">✓</span> Fajr</span><span class="t">04:20 AM</span></div>
+          <div class="p-row sun"><span>☀ Sunrise</span><span class="t">05:49 AM</span></div>
+          <div class="p-row dim"><span><span class="ck">✓</span> Dhuhr</span><span class="t">01:06 PM</span></div>
+          <div class="p-row"><span>Asr</span><span class="t">04:58 PM</span></div>
+          <div class="p-row next"><b>Maghrib</b><span class="t">08:24 PM</span></div>
+          <div class="p-row"><span>Isha</span><span class="t">09:53 PM</span></div>
         </div>
       </div>
     </section>
 
-    <!-- Slide 2: in-page auto-pause -->
+    <!-- Slide 2: auto-pause across tabs -->
     <section class="slide" id="s2">
-      <div class="cap" style="color:#15302a"><h2>Media pauses at prayer time</h2><p>Across every tab — then resumes when you're ready, or automatically.</p></div>
+      <div class="cap" style="color:#15302a"><h2>Media pauses the moment the Adhan begins</h2><p>Across every tab — then resumes with one click, or automatically.</p></div>
       <div class="browser">
         <div class="bbar"><span class="bdot r"></span><span class="bdot y"></span><span class="bdot g"></span><span class="burl"></span></div>
         <div class="bbody">
-          <h3>Lecture 1 — Limits &amp; Continuity</h3>
-          <div class="vid"><span class="lbl">▶ Intro to Calculus</span><span class="pz">⏸</span></div>
+          <h3>Lecture 7 — Tafsir &amp; Reflection</h3>
+          <div class="vid"><span class="lbl">▶ Now playing</span><span class="pz">⏸</span></div>
         </div>
-        <div class="corner"><span class="ci">🕌</span><span><b>Maghrib</b><div class="s">Auto-resumes in 4:58</div></span><button>Resume</button></div>
+        <div class="corner amber"><span class="ci">🕌</span><span><b>Maghrib</b><div class="s">Auto-resumes in 4:58</div></span><button>Resume</button></div>
       </div>
     </section>
 
-    <!-- Slide 3: focus screen -->
+    <!-- Slide 3: animated focus screen -->
     <section class="slide" id="s3">
       <div class="focus">
-        <div class="cre">🕌</div>
+        <div class="crescent-wrap"><span class="glow"></span><span class="cre">🕌</span></div>
         <div class="t">Time for prayer</div>
         <div class="nm">Maghrib</div>
-        <div class="tm">08:17 PM</div>
+        <div class="tm">08:24 PM</div>
         <div class="ms">Media is paused. Take a moment for your prayer.</div>
         <div class="au">Auto-resumes in 4:58</div>
         <div class="btn">Resume</div>
         <div class="hint">Press Esc to resume</div>
+      </div>
+    </section>
+
+    <!-- Slide 4: heads-up countdown -->
+    <section class="slide" id="s4">
+      <div class="cap" style="color:#15302a"><h2>A gentle heads-up before every prayer</h2><p>15, 30, or 60 seconds before — so the pause never catches you mid-scroll.</p></div>
+      <div class="browser">
+        <div class="bbar"><span class="bdot r"></span><span class="bdot y"></span><span class="bdot g"></span><span class="burl"></span></div>
+        <div class="bbody">
+          <h3>Documentary — The Andalusian Libraries</h3>
+          <div class="vid"><span class="lbl">▶ Now playing</span></div>
+        </div>
+        <div class="corner green"><span class="ci">🕌</span><span><b>Maghrib Adhan</b><div class="s">Starting in 30s</div><div class="pbar"><i></i></div></span></div>
+      </div>
+    </section>
+
+    <!-- Slide 5: privacy + languages -->
+    <section class="slide brandbg" id="s5">
+      <div class="promo">
+        <div class="em">🔒</div>
+        <h2>Private. Free. In your language.</h2>
+        <div class="sub">No business model hiding in the background — Adhan Caster collects nothing.</div>
+        <div class="chips">
+          <span class="chip">No ads</span>
+          <span class="chip">No tracking</span>
+          <span class="chip">No account</span>
+          <span class="chip">100% on-device</span>
+          <span class="chip">Open source</span>
+          <span class="chip">Manifest V3</span>
+        </div>
+        <div class="langs">English · العربية · اردو · Bahasa Indonesia · Türkçe · Français</div>
       </div>
     </section>
 
