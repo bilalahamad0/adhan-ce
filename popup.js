@@ -233,8 +233,11 @@ $('refresh').addEventListener('click', async (e) => {
 });
 
 // The Test Adhan trigger is a dev-only affordance; hidden in store-installed builds.
+// Also stamp the footer with the running release version straight from the manifest.
 try {
-  document.querySelector('.dev-row').hidden = 'update_url' in chrome.runtime.getManifest();
+  const mf = chrome.runtime.getManifest();
+  document.querySelector('.dev-row').hidden = 'update_url' in mf;
+  $('version').textContent = 'v' + mf.version;
 } catch (_) {}
 
 // Debounced location autocomplete (Open-Meteo geocoding).
