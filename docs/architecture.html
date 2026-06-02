@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Adhan Caster Pro — Architecture · System Design · Workflow</title>
+<style>
+  :root{
+    --bg:#06140f; --bg2:#0a2018;
+    --green:#0f8a5f; --green-d:#0a5c47; --green-l:#34d399;
+    --ink:#eafaf2; --muted:#8fb9a8; --line:rgba(120,220,180,.18);
+    --card:rgba(13,40,31,.62); --card-b:rgba(120,220,180,.16);
+    /* packet / channel colors */
+    --c-api:#f5a524; --c-geo:#4aa3ff; --c-msg:#2dd4bf; --c-store:#a78bfa;
+    --c-alarm:#f472b6; --c-notif:#fb923c; --c-cast:#34d399; --c-resume:#4ade80; --c-heal:#fb7185;
+    --STAGE_W:1100; --STAGE_H:760;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:var(--bg);
+    background-image:
+      radial-gradient(1200px 600px at 78% -10%, rgba(15,138,95,.22), transparent 60%),
+      radial-gradient(900px 500px at 5% 110%, rgba(74,163,255,.10), transparent 55%),
+      radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,.18), transparent),
+      radial-gradient(2px 2px at 70% 60%, rgba(255,255,255,.12), transparent),
+      radial-gradient(1.5px 1.5px at 40% 80%, rgba(255,255,255,.10), transparent),
+      radial-gradient(1.5px 1.5px at 88% 22%, rgba(255,255,255,.12), transparent);
+    min-height:100vh;
+  }
+  a{color:var(--green-l)}
+
+  /* ---------- header ---------- */
+  header{max-width:1180px;margin:0 auto;padding:30px 22px 8px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .crescent{font-size:34px;filter:drop-shadow(0 4px 14px rgba(52,211,153,.5));animation:bob 4s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-5px) rotate(-6deg)}}
+  h1{font-size:clamp(20px,3.2vw,30px);margin:0;letter-spacing:.2px;font-weight:800}
+  h1 small{display:block;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.3px;margin-top:3px}
+  .stamp{margin-left:auto;font-size:12px;color:var(--muted);text-align:right;line-height:1.5}
+  .stamp b{color:var(--green-l)}
+
+  /* ---------- tabs ---------- */
+  nav.tabs{max-width:1180px;margin:18px auto 0;padding:0 22px;display:flex;gap:8px;flex-wrap:wrap}
+  .tab{
+    appearance:none;border:1px solid var(--card-b);background:var(--card);color:var(--ink);
+    padding:10px 18px;border-radius:12px 12px 0 0;font-size:14px;font-weight:600;cursor:pointer;
+    display:flex;align-items:center;gap:8px;transition:.18s;backdrop-filter:blur(6px);
+  }
+  .tab:hover{border-color:var(--green)}
+  .tab[aria-selected="true"]{background:linear-gradient(180deg,var(--green),var(--green-d));border-color:transparent;box-shadow:0 8px 24px rgba(15,138,95,.4)}
+  .tab .k{font-size:11px;opacity:.7;font-weight:500}
+
+  main{max-width:1180px;margin:0 auto;padding:0 22px 60px}
+
+  /* ---------- stage ---------- */
+  #stageHost{margin-top:0}
+  .stage-wrap{position:relative;width:100%;border:1px solid var(--card-b);border-top-left-radius:0;
+    border-radius:0 14px 14px 14px;background:rgba(4,16,11,.55);overflow:hidden;backdrop-filter:blur(4px)}
+  .stage{position:absolute;top:0;left:0;width:1100px;height:760px;transform-origin:top left}
+  .stage svg.edges{position:absolute;inset:0;width:1100px;height:760px;pointer-events:none;z-index:1;overflow:visible}
+  .edge{fill:none;stroke:rgba(120,220,180,.30);stroke-width:2;opacity:.32;transition:opacity .35s,stroke .35s,stroke-width .35s}
+  .stage[data-mode="explore"] .edge{stroke-dasharray:6 10;animation:dash 2.6s linear infinite;opacity:.42}
+  @keyframes dash{to{stroke-dashoffset:-160}}
+  .edge.active{opacity:1;stroke:rgba(160,255,210,.9);stroke-width:2.8;stroke-dasharray:none;animation:none}
+
+  /* nodes */
+  .node{position:absolute;z-index:3;border-radius:15px;padding:11px 13px;color:var(--ink);
+    border:1px solid var(--card-b);background:var(--card);backdrop-filter:blur(7px);
+    box-shadow:0 10px 28px rgba(0,0,0,.34);transition:transform .3s,box-shadow .3s,border-color .3s,opacity .35s,filter .35s;
+    display:flex;flex-direction:column;gap:2px;cursor:default;overflow:hidden}
+  .node .row1{display:flex;align-items:center;gap:9px}
+  .node .ic{font-size:21px;line-height:1;flex:0 0 auto}
+  .node .nm{font-weight:750;font-size:14px;letter-spacing:.2px}
+  .node .sub{font-size:11px;color:var(--muted);line-height:1.35}
+  .node::after{content:"";position:absolute;inset:0;border-radius:15px;pointer-events:none;
+    box-shadow:inset 0 0 0 1.5px transparent;transition:.3s}
+  .node[data-layer="external"]{background:linear-gradient(160deg,rgba(40,30,8,.7),rgba(20,15,6,.6));border-color:rgba(245,165,36,.28)}
+  .node[data-layer="ui"]{background:linear-gradient(160deg,rgba(10,40,55,.66),rgba(8,24,34,.6));border-color:rgba(74,163,255,.3)}
+  .node[data-layer="core"]{background:linear-gradient(155deg,rgba(15,138,95,.9),rgba(10,70,55,.92));border-color:rgba(120,255,200,.4)}
+  .node[data-layer="platform"]{background:linear-gradient(160deg,rgba(36,22,52,.7),rgba(20,14,32,.62));border-color:rgba(167,139,250,.3)}
+  .node[data-layer="content"]{background:linear-gradient(160deg,rgba(11,46,34,.74),rgba(7,28,21,.66));border-color:rgba(52,211,153,.3)}
+  .stage[data-mode="explore"] .node{cursor:pointer}
+  .stage[data-mode="explore"] .node:hover{transform:translateY(-3px);border-color:var(--green-l)}
+  .node.active{border-color:var(--green-l);box-shadow:0 0 0 2px rgba(52,211,153,.55),0 14px 40px rgba(15,138,95,.5);transform:translateY(-2px)}
+  .node.active::after{box-shadow:inset 0 0 26px rgba(52,211,153,.25)}
+  .node.selected{border-color:var(--c-geo);box-shadow:0 0 0 2px rgba(74,163,255,.6)}
+  .stage.dimming .node:not(.active){opacity:.32;filter:saturate(.5)}
+
+  .node.hub{padding:13px 15px}
+  .node.hub .nm{font-size:15px}
+  .badge{position:absolute;top:8px;right:10px;font-size:10px;font-weight:700;letter-spacing:.5px;
+    color:#06140f;background:var(--green-l);border-radius:6px;padding:2px 6px;opacity:0;transform:scale(.7);transition:.25s}
+  .node.hub .badge{background:#ffe9a8}
+  .stage[data-scene]:not([data-scene="idle"]) .node.hub .badge{opacity:1;transform:scale(1)}
+
+  /* tab "screens" with media equalizer + scene overlays */
+  .screen{position:relative;margin-top:7px;height:42px;border-radius:9px;overflow:hidden;
+    background:linear-gradient(180deg,rgba(0,0,0,.32),rgba(0,0,0,.12));border:1px solid rgba(255,255,255,.06)}
+  .eq{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;gap:4px;padding:7px}
+  .eq i{width:6px;background:linear-gradient(180deg,#7ef0c0,#0f8a5f);border-radius:3px;height:30%}
+  .stage[data-scene="idle"] .eq i, .stage[data-scene="countdown"] .eq i,
+  .stage[data-scene="firing"] .eq i, .stage[data-scene="playing"] .eq i{animation:eq 900ms ease-in-out infinite}
+  .eq i:nth-child(2){animation-delay:.15s}.eq i:nth-child(3){animation-delay:.3s}
+  .eq i:nth-child(4){animation-delay:.45s}.eq i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:25%}50%{height:90%}}
+  .pausebadge{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:18px;color:#fff;
+    background:rgba(124,51,18,.55);backdrop-filter:blur(1px)}
+  .stage[data-scene="paused"] .pausebadge,.stage[data-scene="resuming"] .pausebadge{display:flex}
+  .countdownchip{position:absolute;top:-1px;right:-1px;display:none;font-size:10px;font-weight:700;
+    color:#06140f;background:#ffe9a8;border-radius:0 9px 0 9px;padding:3px 7px}
+  .stage[data-scene="countdown"] .node.top .countdownchip{display:block;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.55}}
+  .focusoverlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    color:#fff;font-weight:700;font-size:11px;text-align:center;
+    background:radial-gradient(120% 120% at 50% 30%,rgba(15,138,95,.96),rgba(7,48,37,.98))}
+  .focusoverlay .big{font-size:17px}
+  .stage[data-scene="paused"] .node.top .focusoverlay,
+  .stage[data-scene="resuming"] .node.top .focusoverlay{display:flex;animation:fade .4s ease}
+  @keyframes fade{from{opacity:0}}
+
+  /* packets */
+  .packet{position:absolute;z-index:6;display:flex;align-items:center;gap:7px;transform:translate(-50%,-50%);
+    pointer-events:none;white-space:nowrap;will-change:left,top,opacity}
+  .packet .dot{width:13px;height:13px;border-radius:50%;background:var(--c,#34d399);
+    box-shadow:0 0 14px 3px var(--c,#34d399),0 0 4px #fff inset}
+  .packet .lbl{font-size:11px;font-weight:700;color:#fff;background:rgba(6,20,15,.82);
+    border:1px solid var(--c,#34d399);border-radius:7px;padding:3px 8px;backdrop-filter:blur(3px)}
+
+  /* legend under stage */
+  .legend{display:flex;flex-wrap:wrap;gap:7px 16px;padding:13px 16px;border:1px solid var(--card-b);
+    border-top:none;border-radius:0 0 14px 14px;background:rgba(4,16,11,.5);font-size:12px;color:var(--muted)}
+  .legend b{color:var(--ink);font-weight:600}
+  .lg{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  /* ---------- panels ---------- */
+  .panel{display:none}
+  .panel.show{display:block;animation:fade .35s ease}
+
+  /* architecture side info */
+  .arch-grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:18px}
+  .hint{font-size:13px;color:var(--muted);background:var(--card);border:1px solid var(--card-b);
+    border-radius:12px;padding:12px 16px}
+  .hint b{color:var(--ink)}
+  #nodeInfo{border:1px solid var(--card-b);border-radius:14px;padding:18px 20px;background:var(--card);min-height:120px}
+  #nodeInfo h3{margin:0 0 4px;font-size:17px;display:flex;align-items:center;gap:9px}
+  #nodeInfo .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#06140f;
+    background:var(--green-l);border-radius:6px;padding:2px 7px;margin-left:auto}
+  #nodeInfo p{color:var(--muted);font-size:13.5px;line-height:1.6;margin:8px 0 0}
+  #nodeInfo code{background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px;color:#9be9c8}
+  #nodeInfo ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.7}
+
+  /* ---------- workflow controls ---------- */
+  .flow-top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:18px}
+  .phase-pill{font-size:12px;font-weight:700;letter-spacing:.4px;color:#06140f;
+    background:linear-gradient(90deg,var(--green-l),#a7f3d0);border-radius:999px;padding:6px 14px}
+  .controls{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .btn{appearance:none;border:1px solid var(--card-b);background:var(--card);color:var(--ink);
+    width:42px;height:42px;border-radius:11px;font-size:16px;cursor:pointer;transition:.16s;display:grid;place-items:center}
+  .btn:hover{border-color:var(--green-l);transform:translateY(-1px)}
+  .btn.play{width:auto;padding:0 18px;font-weight:700;gap:8px;background:linear-gradient(90deg,var(--green),var(--green-d));border-color:transparent}
+  .narration{margin-top:14px;border:1px solid var(--card-b);border-radius:14px;padding:18px 20px;
+    background:linear-gradient(160deg,rgba(13,40,31,.7),rgba(8,24,18,.6));min-height:96px}
+  .narration .stepno{font-size:12px;color:var(--green-l);font-weight:700;letter-spacing:.5px}
+  .narration h3{margin:4px 0 6px;font-size:19px}
+  .narration p{margin:0;color:var(--muted);font-size:14px;line-height:1.65;max-width:78ch}
+  .rail{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap}
+  .rail button{flex:1 1 0;min-width:18px;height:8px;border:0;border-radius:6px;background:rgba(120,220,180,.18);cursor:pointer;transition:.2s;padding:0}
+  .rail button:hover{background:rgba(120,220,180,.4)}
+  .rail button.done{background:rgba(52,211,153,.5)}
+  .rail button.cur{background:var(--green-l);box-shadow:0 0 12px var(--green-l)}
+  .progressbar{height:3px;background:rgba(120,220,180,.14);border-radius:3px;margin-top:10px;overflow:hidden}
+  .progressbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--green-l));transition:width .3s}
+
+  /* ---------- system design cards ---------- */
+  .design-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px;margin-top:20px}
+  .dcard{border:1px solid var(--card-b);border-radius:15px;padding:18px 18px 16px;background:var(--card);
+    backdrop-filter:blur(6px);position:relative;overflow:hidden;animation:fade .5s ease both}
+  .dcard::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,var(--green),var(--green-l),transparent)}
+  .dcard h3{margin:2px 0 12px;font-size:16px;display:flex;align-items:center;gap:9px}
+  .dcard h3 .ic{font-size:20px}
+  .dcard.span2{grid-column:span 2}
+  @media(max-width:760px){.dcard.span2{grid-column:span 1}}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;align-items:baseline}
+  .kv .k{color:#9be9c8;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  .kv .v{color:var(--muted);line-height:1.5}
+  .pills{display:flex;flex-wrap:wrap;gap:7px}
+  .pill{font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 10px;color:var(--ink);
+    background:rgba(0,0,0,.22);display:inline-flex;align-items:center;gap:6px}
+  .pill .d{width:8px;height:8px;border-radius:50%}
+  pre.code{margin:0;background:rgba(0,0,0,.42);border:1px solid var(--line);border-radius:10px;
+    padding:12px 13px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;color:#cdeede}
+  pre.code .key{color:#9be9c8}pre.code .str{color:#ffd9a8}pre.code .cm{color:#5e8a78;font-style:italic}
+  .msgrow{display:flex;align-items:center;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .msgrow:last-child{border-bottom:0}
+  .msgrow code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#9be9c8;font-weight:600}
+  .arrow{font-size:12px;color:var(--muted);flex:0 0 auto}
+  .msgrow .ds{color:var(--muted);font-size:12px;margin-left:auto;text-align:right}
+
+  .foot{margin-top:34px;text-align:center;color:var(--muted);font-size:12px;line-height:1.7}
+
+  @media(max-width:560px){
+    .stamp{display:none}
+    .controls{margin-left:0;width:100%}
+    .btn.play{flex:1}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *{animation-duration:.001s!important}
+    .stage[data-mode="explore"] .edge{animation:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="crescent">🕌</span>
+    <h1>Adhan Caster Pro
+      <small>Architecture · System Design · Workflow — interactive &amp; animated</small>
+    </h1>
+    <div class="stamp">Chrome Extension · <b>Manifest V3</b><br/>v1.6.6 · module service worker</div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab" id="t-arch"   role="tab" aria-selected="true"  aria-controls="panel-arch">🗺️ Architecture <span class="k">map</span></button>
+  <button class="tab" id="t-flow"   role="tab" aria-selected="false" aria-controls="panel-flow">▶️ Workflow <span class="k">animated</span></button>
+  <button class="tab" id="t-design" role="tab" aria-selected="false" aria-controls="view-design">🧩 System Design <span class="k">specs</span></button>
+</nav>
+
+<main>
+  <!-- ===== shared stage (architecture + workflow) ===== -->
+  <section id="stageHost">
+    <div class="stage-wrap" id="stageWrap">
+      <div class="stage" id="stage" data-mode="explore" data-scene="idle">
+        <svg class="edges" id="edges" viewBox="0 0 1100 760" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <!-- nodes + packets injected by JS -->
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <!-- ===== architecture panel ===== -->
+  <section class="panel show" id="panel-arch" role="tabpanel">
+    <div class="arch-grid">
+      <div class="hint">🗺️ <b>Layered map.</b> Five layers: <b>external services</b> (amber), the <b>popup UI</b> (blue), the <b>background service worker</b> hub (green), the <b>Chrome platform</b> (violet), and <b>content scripts</b> in every tab (teal). Animated dashes show the live data channels. <b>Click any node</b> for its responsibility.</div>
+      <div id="nodeInfo">
+        <h3>👆 Click a node to inspect it<span class="tag">guide</span></h3>
+        <p>Every box is a real file or Chrome API in the extension. The lines are message, storage and network channels — switch to the <b>Workflow</b> tab to watch data actually flow through them, step by step, during an Adhan event.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== workflow panel ===== -->
+  <section class="panel" id="panel-flow" role="tabpanel">
+    <div class="flow-top">
+      <span class="phase-pill" id="phasePill">① Configure &amp; Schedule</span>
+      <div class="controls">
+        <button class="btn" id="restart" title="Restart">⟲</button>
+        <button class="btn" id="prev" title="Previous (←)">◀</button>
+        <button class="btn play" id="play" title="Play / Pause (space)"><span id="playIcon">▶</span> <span id="playTxt">Play</span></button>
+        <button class="btn" id="next" title="Next (→)">▶</button>
+      </div>
+    </div>
+    <div class="narration">
+      <div class="stepno" id="stepno">Step 1 / 11</div>
+      <h3 id="stepTitle">Pick your location</h3>
+      <p id="stepText">—</p>
+    </div>
+    <div class="progressbar"><i id="progFill"></i></div>
+    <div class="rail" id="rail"></div>
+  </section>
+
+  <!-- ===== system design view ===== -->
+  <section class="panel" id="view-design" role="tabpanel">
+    <div class="design-grid">
+
+      <div class="dcard" style="animation-delay:.02s">
+        <h3><span class="ic">📦</span> Manifest &amp; permissions</h3>
+        <div class="kv">
+          <span class="k">manifest</span><span class="v">v3 · background <code style="all:unset;color:#9be9c8">type:module</code></span>
+          <span class="k">permissions</span><span class="v">storage · alarms · notifications · scripting · tabs</span>
+          <span class="k">host</span><span class="v">adhan-api-mauve.vercel.app · <code style="all:unset;color:#9be9c8">http/https://*</code></span>
+          <span class="k">content</span><span class="v">all frames · <code style="all:unset;color:#9be9c8">document_idle</code></span>
+          <span class="k">command</span><span class="v">toggle-focus → <b>Ctrl/⌘+Shift+Y</b></span>
+        </div>
+      </div>
+
+      <div class="dcard" style="animation-delay:.06s">
+        <h3><span class="ic">🧱</span> Components</h3>
+        <div class="kv">
+          <span class="k">background.js</span><span class="v">MV3 worker: fetch · alarms · notify · broadcast · auto-resume</span>
+          <span class="k">content.js</span><span class="v">every frame: 1 Hz tick · overlays (Shadow DOM) · pause/resume media</span>
+          <span class="k">popup.*</span><span class="v">prayer list · countdown · Resume · location search · settings</span>
+          <span class="k">lib/schedule</span><span class="v">pure: parse times · next prayer · stale-fire · format</span>
+          <span class="k">lib/geocode</span><span class="v">pure: Open-Meteo place search</span>
+        </div>
+      </div>
+
+      <div class="dcard" style="animation-delay:.1s">
+        <h3><span class="ic">⏰</span> Alarms</h3>
+        <div class="kv">
+          <span class="k">PRAYER</span><span class="v"><code style="all:unset;color:#9be9c8">adhan-prayer-fire</code> — fires at next prayer ts</span>
+          <span class="k">RESUME</span><span class="v"><code style="all:unset;color:#9be9c8">adhan-auto-resume</code> — now + autoResumeMinutes</span>
+          <span class="k">TICK</span><span class="v"><code style="all:unset;color:#9be9c8">adhan-tick</code> — every 15 min (self-heal)</span>
+        </div>
+        <p style="color:var(--muted);font-size:12.5px;line-height:1.6;margin:12px 0 0">Alarms re-armed on install, startup &amp; each tick. <code style="all:unset;color:#9be9c8">isStaleFire()</code> (≥90 s late) skips a slept-through Adhan.</p>
+      </div>
+
+      <div class="dcard span2" style="animation-delay:.14s">
+        <h3><span class="ic">💾</span> Storage schema <span style="font-size:11px;color:var(--muted);font-weight:500">chrome.storage.local</span></h3>
+        <pre class="code"><span class="cm">// settings — user config, merged over DEFAULT_SETTINGS</span>
+{ <span class="key">enabled</span>, <span class="key">country</span>, <span class="key">state</span>, <span class="key">city</span>, <span class="key">lat</span>, <span class="key">lon</span>,
+  <span class="key">autoResumeMinutes</span>:5, <span class="key">leadSeconds</span>:30, <span class="key">focusMode</span>:true }
+
+<span class="cm">// schedule — today's prayers (parsed to local-tz timestamps)</span>
+{ <span class="key">date</span>:<span class="str">"YYYY-MM-DD"</span>, <span class="key">prayers</span>:[{name,time,ts}…], <span class="key">fetchedAt</span> }
+
+<span class="cm">// nextPrayer — the one alarm is armed for  (test:true on dev fires)</span>
+{ <span class="key">name</span>, <span class="key">time</span>, <span class="key">ts</span> }
+
+<span class="cm">// paused — central cross-tab pause state</span>
+{ <span class="key">active</span>, <span class="key">prayer</span>, <span class="key">time</span>, <span class="key">since</span>, <span class="key">focus</span> }</pre>
+      </div>
+
+      <div class="dcard span2" style="animation-delay:.18s">
+        <h3><span class="ic">📡</span> Message catalog</h3>
+        <div class="msgrow"><code>GET_STATE · SAVE_SETTINGS · REFRESH</code><span class="arrow">popup →</span><span class="ds">read state / save+refetch / refetch</span></div>
+        <div class="msgrow"><code>RESUME_NOW · FOCUS_NOW</code><span class="arrow">popup / content →</span><span class="ds">end pause · turn on focus</span></div>
+        <div class="msgrow"><code>PRAYER_FALLBACK</code><span class="arrow">content →</span><span class="ds">tab's own countdown hit 0 first</span></div>
+        <div class="msgrow"><code>TEST_ADHAN</code><span class="arrow">popup →</span><span class="ds">dev-only simulated Adhan (30s)</span></div>
+        <div class="msgrow"><code>PRAYER_NOW · RESUME</code><span class="arrow">bg ⇒ all tabs</span><span class="ds">pause everything · resume everything</span></div>
+        <div class="msgrow"><code>FOCUS_ON · FOCUS_OFF</code><span class="arrow">bg ⇒ all tabs</span><span class="ds">raise / drop focus overlay</span></div>
+      </div>
+
+      <div class="dcard" style="animation-delay:.22s">
+        <h3><span class="ic">🌐</span> External services</h3>
+        <div class="kv">
+          <span class="k">adhan-api</span><span class="v">Vercel — <code style="all:unset;color:#9be9c8">/api/prayerTimes</code> → 5 daily times</span>
+          <span class="k">Open-Meteo</span><span class="v">keyless geocoding — city → region + coords</span>
+        </div>
+        <p style="color:var(--muted);font-size:12.5px;line-height:1.6;margin:12px 0 0">No backend of its own, no API keys, no runtime deps. The popup calls Open-Meteo <i>directly</i>; the worker calls adhan-api.</p>
+      </div>
+
+      <div class="dcard" style="animation-delay:.26s">
+        <h3><span class="ic">🛡️</span> Resilience patterns</h3>
+        <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.7">
+          <li><b>Dual trigger</b> — alarm <i>and</i> per-tab countdown both pause; idempotent.</li>
+          <li><b>Self-resume</b> — content.js resumes if <code style="all:unset;color:#9be9c8">ALARM_RESUME</code> never fires.</li>
+          <li><b>Reconcile</b> — worker restart re-arms an in-progress pause.</li>
+          <li><b>Stale skip</b> — slept-through Adhan is ignored, not replayed.</li>
+          <li><b>Single instance</b> — token kills orphaned content scripts.</li>
+          <li><b>Re-prime tabs</b> — inject into open tabs on install &amp; startup.</li>
+        </ul>
+      </div>
+
+      <div class="dcard" style="animation-delay:.3s">
+        <h3><span class="ic">🧪</span> Stack &amp; quality</h3>
+        <div class="pills">
+          <span class="pill"><span class="d" style="background:#9be9c8"></span>Vanilla JS</span>
+          <span class="pill"><span class="d" style="background:#34d399"></span>ES modules</span>
+          <span class="pill"><span class="d" style="background:#a78bfa"></span>Shadow DOM</span>
+          <span class="pill"><span class="d" style="background:#f5a524"></span>MV3 SW</span>
+          <span class="pill"><span class="d" style="background:#4aa3ff"></span>Jest unit tests</span>
+          <span class="pill"><span class="d" style="background:#fb923c"></span>Zero runtime deps</span>
+        </div>
+        <p style="color:var(--muted);font-size:12.5px;line-height:1.6;margin:12px 0 0">Pure logic in <code style="all:unset;color:#9be9c8">lib/</code> is unit-tested; manifest qualification tests gate every build.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="foot">
+    Generated from source — <code style="all:unset;color:#9be9c8">background.js</code> · <code style="all:unset;color:#9be9c8">content.js</code> · <code style="all:unset;color:#9be9c8">popup.js</code> · <code style="all:unset;color:#9be9c8">lib/</code> &nbsp;•&nbsp; Adhan Caster Pro v1.6.6 &nbsp;•&nbsp; single self-contained file
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+  const W = 1100, H = 760;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- node config ---------- */
+  const NODES = {
+    user:    {x:40,  y:42,  w:150, h:62,  layer:"ui",       ic:"👤", nm:"You", sub:"open the popup"},
+    adhanApi:{x:410, y:34,  w:236, h:74,  layer:"external", ic:"🌐", nm:"adhan-api", sub:"prayer times · Vercel"},
+    openMeteo:{x:722,y:34,  w:212, h:74,  layer:"external", ic:"📍", nm:"Open-Meteo", sub:"geocoding API"},
+    popup:   {x:40,  y:250, w:208, h:112, layer:"ui",       ic:"🪟", nm:"Popup UI", sub:"popup.html / js / css"},
+    background:{x:406,y:318,w:300, h:134, layer:"core",     ic:"⚙️", nm:"Background Worker", sub:"background.js · MV3 service worker", hub:true},
+    storage: {x:62,  y:476, w:218, h:92,  layer:"platform", ic:"💾", nm:"chrome.storage", sub:"settings · schedule · nextPrayer · paused"},
+    alarms:  {x:838, y:300, w:214, h:90,  layer:"platform", ic:"⏰", nm:"chrome.alarms", sub:"PRAYER · RESUME · TICK"},
+    notifications:{x:838,y:436,w:214,h:90, layer:"platform", ic:"🔔", nm:"chrome.notifications", sub:"focus / resume buttons"},
+    tab1:    {x:118, y:628, w:248, h:118, layer:"content",  ic:"🎬", nm:"Tab · content.js", sub:"top frame — overlays + media", top:true, screen:true},
+    tab2:    {x:426, y:628, w:248, h:118, layer:"content",  ic:"📄", nm:"Tab · content.js", sub:"all frames — media", screen:true},
+    tab3:    {x:734, y:628, w:248, h:118, layer:"content",  ic:"📺", nm:"Tab · content.js", sub:"all frames — media", screen:true},
+  };
+
+  /* ---------- edges (bidirectional channels) ---------- */
+  const EDGES = {
+    e_user_popup:    ["user","popup",0],
+    e_popup_meteo:   ["popup","openMeteo",-70],
+    e_popup_bg:      ["popup","background",26],
+    e_bg_api:        ["background","adhanApi",-46],
+    e_bg_storage:    ["background","storage",26],
+    e_bg_alarms:     ["background","alarms",-22],
+    e_bg_notif:      ["background","notifications",20],
+    e_bg_tab1:       ["background","tab1",-34],
+    e_bg_tab2:       ["background","tab2",0],
+    e_bg_tab3:       ["background","tab3",34],
+    e_storage_tab1:  ["storage","tab1",44],
+    e_storage_tab2:  ["storage","tab2",30],
+    e_storage_tab3:  ["storage","tab3",66],
+  };
+
+  const C = {api:"#f5a524",geo:"#4aa3ff",msg:"#2dd4bf",store:"#a78bfa",alarm:"#f472b6",
+             notif:"#fb923c",cast:"#34d399",resume:"#4ade80",heal:"#fb7185"};
+
+  /* ---------- node info (architecture inspector) ---------- */
+  const INFO = {
+    user:{tag:"actor",t:"You — the user",h:"Everything starts here. You open the toolbar popup to set a location and preferences, hit <b>Resume</b> during an Adhan, or press <code>Ctrl/⌘+Shift+Y</code> to toggle the prayer-focus screen."},
+    popup:{tag:"UI · popup.js",t:"🪟 Popup UI",h:"The toolbar surface: next-prayer card with a live countdown, the full prayer list, a <b>Resume</b> button, and settings. Its location box queries <b>Open-Meteo directly</b> for real, geocoded places. Talks to the worker over <code>chrome.runtime</code> messages.",l:["GET_STATE → render","SAVE_SETTINGS → save + refetch","RESUME_NOW / FOCUS_NOW","TEST_ADHAN (dev only)"]},
+    adhanApi:{tag:"external",t:"🌐 adhan-api",h:"A small public service on Vercel (<code>adhan-api-mauve.vercel.app</code>). The worker fetches <code>/api/prayerTimes?country&state&city</code> and gets back the five daily prayer times as <code>\"hh:mm a\"</code> strings."},
+    openMeteo:{tag:"external",t:"📍 Open-Meteo",h:"Free, keyless geocoding. As you type a city, the popup resolves it to real places with region (admin1), country and coordinates — so you can't save a location that isn't a real place.",l:["lib/geocode.js · searchPlaces()","parseGeoResults() → {city,state,country,lat,lon}"]},
+    background:{tag:"core hub",t:"⚙️ Background Service Worker",h:"The brain (MV3 module worker, <code>background.js</code>). It fetches &amp; parses the schedule, arms <code>chrome.alarms</code>, and at prayer time records the central <code>paused</code> state, posts the notification, and <b>broadcasts the pause to every tab</b>. It also arms auto-resume and advances to the next prayer.",l:["fetchAndStoreSchedule / refreshNext","armAlarms · handlePrayerFire","broadcast() → all tabs","handleAutoResume · reconcilePaused"]},
+    storage:{tag:"chrome API",t:"💾 chrome.storage.local",h:"The single source of truth shared by worker, popup and all content scripts. Four keys: <code>settings</code>, <code>schedule</code>, <code>nextPrayer</code>, <code>paused</code>. Content scripts subscribe to <code>onChanged</code> so a pause/resume in one place instantly syncs everywhere."},
+    alarms:{tag:"chrome API",t:"⏰ chrome.alarms",h:"Wakes the (sleepy) MV3 worker on schedule. <code>PRAYER</code> fires at the next prayer; <code>RESUME</code> ends the pause after your window; <code>TICK</code> runs every 15 min to refetch, re-arm and reconcile — a self-healing heartbeat."},
+    notifications:{tag:"chrome API",t:"🔔 chrome.notifications",h:"The desktop banner at prayer time, carrying two action buttons: <b>Prayer focus</b> (button 0 → <code>enableFocus</code>) and <b>Resume now</b> (button 1 → <code>resumeNow</code>). Clicking the body opens the popup."},
+    tab1:{tag:"content.js · top frame",t:"🎬 Content script — top frame",h:"Runs in <b>every</b> page &amp; frame. The top visible frame renders three Shadow-DOM overlays: the bottom-right <b>countdown card</b>, the <b>paused/Resume card</b>, and the full-screen <b>prayer-focus</b> screen. A 1 Hz tick drives the UI and the second-accurate fallback pause.",l:["pauseMediaFor() / resumeMedia()","render() overlays (Shadow DOM)","fallback pause → PRAYER_FALLBACK","self-resume + single-instance token"]},
+    tab2:{tag:"content.js · frame",t:"📄 Content script — a frame",h:"Each frame independently pauses and resumes its own <code>&lt;video&gt;/&lt;audio&gt;</code> when the prayer hits — including same- and cross-origin iframes. Only the top frame draws overlays; inner frames just control their own media."},
+    tab3:{tag:"content.js · frame",t:"📺 Content script — a frame",h:"Same script, another tab/frame. On <code>PRAYER_NOW</code> (broadcast) or a <code>storage.paused</code> change it pauses; on <code>RESUME</code> it plays again. Every path is idempotent so the alarm and the fallback can't double-fire."},
+  };
+
+  /* ---------- workflow steps ---------- */
+  const P1="① Configure & Schedule", P2="② Countdown", P3="③ Adhan fires", P4="④ Resume", P5="⑤ Resilience";
+  const STEPS = [
+    {phase:P1,title:"Pick your location",scene:"idle",nodes:["user","popup","openMeteo"],
+     text:"You open the toolbar popup and type a city. The popup queries the Open-Meteo geocoding API directly and lists real, resolved places — you pick one to lock in its region, country and coordinates.",
+     packets:[{e:"e_user_popup",d:"fwd",l:"open popup",c:C.msg},{e:"e_popup_meteo",d:"fwd",l:"search “city”",c:C.geo},{e:"e_popup_meteo",d:"rev",l:"places + coords",c:C.geo}]},
+    {phase:P1,title:"Save → fetch the schedule",scene:"idle",nodes:["popup","background","adhanApi"],
+     text:"On Save, the popup sends SAVE_SETTINGS to the background worker. The worker calls the adhan-api service for today's five prayer times for that location.",
+     packets:[{e:"e_popup_bg",d:"fwd",l:"SAVE_SETTINGS",c:C.msg},{e:"e_bg_api",d:"fwd",l:"GET prayerTimes",c:C.api},{e:"e_bg_api",d:"rev",l:"5 prayer times",c:C.api}]},
+    {phase:P1,title:"Persist &amp; arm the alarm",scene:"idle",nodes:["background","storage","alarms"],
+     text:"The worker parses each “hh:mm a” into a local-timezone timestamp, stores the schedule and the next prayer, then arms a chrome.alarms timer for the exact moment of the next Adhan — plus a 15-minute self-healing tick.",
+     packets:[{e:"e_bg_storage",d:"fwd",l:"schedule + nextPrayer",c:C.store},{e:"e_bg_alarms",d:"fwd",l:"arm PRAYER @ next.ts",c:C.alarm},{e:"e_bg_alarms",d:"fwd",l:"TICK every 15m",c:C.alarm,delay:700}]},
+
+    {phase:P2,title:"Heads-up countdown (T-30s)",scene:"countdown",nodes:["storage","tab1","tab2","tab3"],
+     text:"In every tab, content.js ticks once per second and reads nextPrayer from storage. As the Adhan approaches, the top frame raises the bottom-right countdown card with a shrinking progress bar.",
+     packets:[{e:"e_storage_tab1",d:"fwd",l:"nextPrayer",c:C.store},{e:"e_storage_tab2",d:"fwd",l:"",c:C.store,delay:150},{e:"e_storage_tab3",d:"fwd",l:"",c:C.store,delay:300}]},
+
+    {phase:P3,title:"The alarm fires at prayer time",scene:"countdown",nodes:["alarms","background","storage"],
+     text:"At the prayer timestamp, chrome.alarms wakes the worker. It first checks the fire isn't stale (a device that slept through the moment) — if fresh, it records the central paused state.",
+     packets:[{e:"e_bg_alarms",d:"rev",l:"ALARM_PRAYER",c:C.alarm},{e:"e_bg_storage",d:"fwd",l:"paused = active",c:C.store}]},
+    {phase:P3,title:"Notify &amp; broadcast the pause",scene:"firing",nodes:["background","notifications","tab1","tab2","tab3"],
+     text:"The worker posts the desktop notification (with Prayer-focus / Resume-now buttons), sets the toolbar badge, and broadcasts PRAYER_NOW to every open tab over chrome.tabs.sendMessage.",
+     packets:[{e:"e_bg_notif",d:"fwd",l:"notification",c:C.notif},{e:"e_bg_tab1",d:"fwd",l:"PRAYER_NOW",c:C.cast,delay:250},{e:"e_bg_tab2",d:"fwd",l:"PRAYER_NOW",c:C.cast,delay:380},{e:"e_bg_tab3",d:"fwd",l:"PRAYER_NOW",c:C.cast,delay:510}]},
+    {phase:P3,title:"Media pauses across all tabs",scene:"paused",nodes:["tab1","tab2","tab3"],
+     text:"Each frame pauses its own &lt;video&gt;/&lt;audio&gt; — including cross-origin iframes. The top frame raises the full-screen prayer-focus overlay (if enabled) showing a live “Auto-resumes in 5:00” countdown.",
+     packets:[]},
+    {phase:P3,title:"Arm auto-resume &amp; advance",scene:"paused",nodes:["background","alarms","storage"],
+     text:"The worker arms ALARM_RESUME for the auto-resume window, advances nextPrayer to the following prayer, and re-arms the next PRAYER alarm — so the cycle is already set up for the next Adhan.",
+     packets:[{e:"e_bg_alarms",d:"fwd",l:"arm RESUME +5m",c:C.alarm},{e:"e_bg_storage",d:"fwd",l:"nextPrayer → next",c:C.store,delay:200},{e:"e_bg_alarms",d:"fwd",l:"re-arm PRAYER",c:C.alarm,delay:550}]},
+
+    {phase:P4,title:"Resume — automatic or manual",scene:"resuming",nodes:["alarms","notifications","tab1","background"],
+     text:"Either ALARM_RESUME fires after the window, or you act first: Resume button, Esc, or the notification's “Resume now”. Any of these reaches the worker, which clears the central pause.",
+     packets:[{e:"e_bg_alarms",d:"rev",l:"ALARM_RESUME",c:C.alarm},{e:"e_bg_tab1",d:"rev",l:"RESUME_NOW",c:C.resume,delay:220},{e:"e_bg_notif",d:"rev",l:"“Resume now”",c:C.notif,delay:420},{e:"e_bg_storage",d:"fwd",l:"paused = inactive",c:C.store,delay:640}]},
+    {phase:P4,title:"Playback restored everywhere",scene:"playing",nodes:["background","tab1","tab2","tab3"],
+     text:"The worker broadcasts RESUME. Every tab plays back exactly the media it paused, the overlays slide away, and the badge clears — then it's straight back to the live countdown for the next prayer.",
+     packets:[{e:"e_bg_tab1",d:"fwd",l:"RESUME",c:C.resume},{e:"e_bg_tab2",d:"fwd",l:"RESUME",c:C.resume,delay:150},{e:"e_bg_tab3",d:"fwd",l:"RESUME",c:C.resume,delay:300}]},
+
+    {phase:P5,title:"Self-healing safety nets",scene:"paused",nodes:["tab1","background","alarms","storage"],
+     text:"MV3 workers sleep and alarms can run late, so the design is belt-and-suspenders: content.js self-pauses if the alarm is delayed (PRAYER_FALLBACK) and self-resumes if RESUME never arrives; a 15-min TICK refetches and re-arms; and a worker restart reconciles any in-progress pause. Every path is idempotent.",
+     packets:[{e:"e_bg_tab1",d:"rev",l:"PRAYER_FALLBACK",c:C.heal},{e:"e_bg_alarms",d:"rev",l:"ALARM_TICK",c:C.heal,delay:260},{e:"e_bg_storage",d:"fwd",l:"reconcile",c:C.heal,delay:520}]},
+  ];
+
+  /* ---------- build the stage ---------- */
+  const stage = document.getElementById("stage");
+  const svg = document.getElementById("edges");
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const pathEls = {};
+  const nodeEls = {};
+
+  function center(n){return {x:n.x+n.w/2, y:n.y+n.h/2};}
+  function edgeD(a,b,bend){
+    const c1=center(a), c2=center(b);
+    const mx=(c1.x+c2.x)/2, my=(c1.y+c2.y)/2;
+    const dx=c2.x-c1.x, dy=c2.y-c1.y, len=Math.hypot(dx,dy)||1;
+    const nx=-dy/len, ny=dx/len;
+    return `M${c1.x.toFixed(1)},${c1.y.toFixed(1)} Q${(mx+nx*bend).toFixed(1)},${(my+ny*bend).toFixed(1)} ${c2.x.toFixed(1)},${c2.y.toFixed(1)}`;
+  }
+
+  // edges
+  for (const [id,[from,to,bend]] of Object.entries(EDGES)){
+    const p = document.createElementNS(SVGNS,"path");
+    p.setAttribute("d", edgeD(NODES[from],NODES[to],bend));
+    p.setAttribute("class","edge");
+    p.dataset.id = id;
+    svg.appendChild(p);
+    pathEls[id] = p;
+  }
+
+  // nodes
+  for (const [id,n] of Object.entries(NODES)){
+    const el = document.createElement("div");
+    el.className = "node" + (n.hub?" hub":"") + (n.top?" top":"");
+    el.dataset.layer = n.layer; el.dataset.id = id;
+    el.style.cssText = `left:${n.x}px;top:${n.y}px;width:${n.w}px;min-height:${n.h}px`;
+    let screen = "";
+    if (n.screen){
+      screen = `<div class="screen">
+        <div class="eq"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="pausebadge">⏸</div>
+        ${n.top?'<div class="countdownchip">Adhan · 0:30</div><div class="focusoverlay"><span style="font-size:18px">🕌</span><span class="big">Time for prayer</span><span>Auto-resumes 5:00</span></div>':''}
+      </div>`;
+    }
+    el.innerHTML = `<span class="badge">ACTIVE</span>
+      <div class="row1"><span class="ic">${n.ic}</span><span class="nm">${n.nm}</span></div>
+      <div class="sub">${n.sub}</div>${screen}`;
+    stage.appendChild(el);
+    nodeEls[id] = el;
+    if (n.screen){
+      // vary equalizer bar phases a touch
+      el.querySelectorAll(".eq i").forEach((b,i)=>{ b.style.animationDuration = (760+i*70)+"ms"; });
+    }
+    el.addEventListener("click", ()=>{ if (stage.dataset.mode==="explore") selectNode(id); });
+  }
+
+  /* ---------- legend ---------- */
+  const legendItems = [
+    ["adhan-api fetch",C.api],["geocoding",C.geo],["runtime message",C.msg],["storage r/w",C.store],
+    ["alarm",C.alarm],["notification",C.notif],["broadcast → tabs",C.cast],["resume",C.resume],["self-heal",C.heal]
+  ];
+  document.getElementById("legend").innerHTML =
+    `<span class="lg"><b>Channels:</b></span>` +
+    legendItems.map(([t,c])=>`<span class="lg"><span class="sw" style="background:${c}"></span>${t}</span>`).join("");
+
+  /* ---------- responsive scaling ---------- */
+  const wrap = document.getElementById("stageWrap");
+  function rescale(){
+    const aw = wrap.clientWidth;
+    let s = aw / W;
+    s = Math.min(s, 1.06);
+    stage.style.transform = `scale(${s})`;
+    wrap.style.height = (H*s) + "px";
+  }
+  new ResizeObserver(rescale).observe(wrap);
+  rescale();
+
+  /* ---------- packet animation ---------- */
+  function ride(edgeId, dir, label, color, delay){
+    const path = pathEls[edgeId];
+    if (!path) return 0;
+    const len = path.getTotalLength();
+    const pill = document.createElement("div");
+    pill.className = "packet";
+    pill.style.setProperty("--c", color);
+    pill.innerHTML = `<span class="dot"></span>${label?`<span class="lbl">${label}</span>`:""}`;
+    pill.style.opacity = "0";
+    stage.appendChild(pill);
+    const dur = reduce ? 1 : 1150;
+    const start = performance.now() + (reduce?0:delay);
+    function frame(now){
+      if (!pill.isConnected) return;
+      if (now < start){ requestAnimationFrame(frame); return; }
+      let t = (now - start) / dur; if (t>1) t=1;
+      const p = dir==="rev" ? (1-t) : t;
+      const pt = path.getPointAtLength(p*len);
+      pill.style.left = pt.x + "px";
+      pill.style.top  = pt.y + "px";
+      pill.style.opacity = t<0.12 ? (t/0.12) : (t>0.86 ? (1-t)/0.14 : 1);
+      if (t<1) requestAnimationFrame(frame); else pill.remove();
+    }
+    requestAnimationFrame(frame);
+    return delay + dur + 120;
+  }
+  function clearPackets(){ stage.querySelectorAll(".packet").forEach(p=>p.remove()); }
+
+  /* ---------- workflow controller ---------- */
+  let idx = 0, playing = false, timer = null, dwell = 2400;
+  const $ = id => document.getElementById(id);
+  const rail = $("rail");
+  STEPS.forEach((s,i)=>{
+    const b = document.createElement("button");
+    b.title = `Step ${i+1}: ${s.title.replace(/<[^>]+>/g,"")}`;
+    b.addEventListener("click", ()=>{ pause(); goto(i); });
+    rail.appendChild(b);
+  });
+
+  function setHighlights(s){
+    stage.classList.add("dimming");
+    Object.values(nodeEls).forEach(el=>el.classList.remove("active"));
+    Object.values(pathEls).forEach(el=>el.classList.remove("active"));
+    s.nodes.forEach(id=>nodeEls[id]?.classList.add("active"));
+    (s.packets||[]).forEach(p=>pathEls[p.e]?.classList.add("active"));
+  }
+
+  function showStep(i){
+    idx = (i+STEPS.length) % STEPS.length;
+    const s = STEPS[idx];
+    stage.dataset.scene = s.scene || "idle";
+    setHighlights(s);
+    clearPackets();
+    $("phasePill").textContent = s.phase;
+    $("stepno").textContent = `Step ${idx+1} / ${STEPS.length}`;
+    $("stepTitle").innerHTML = s.title;
+    $("stepText").innerHTML = s.text;
+    $("progFill").style.width = ((idx+1)/STEPS.length*100) + "%";
+    [...rail.children].forEach((b,k)=>{ b.className = k<idx?"done":(k===idx?"cur":""); });
+    // fire packets
+    let maxEnd = 0;
+    (s.packets||[]).forEach((p,k)=>{
+      const delay = p.delay!=null ? p.delay : k*420;
+      maxEnd = Math.max(maxEnd, ride(p.e,p.d,p.l,p.c,delay));
+    });
+    dwell = Math.max(2200, maxEnd + 1100);
+  }
+  function goto(i){ showStep(i); if (playing) schedule(); }
+  function next(){ goto(idx+1<STEPS.length ? idx+1 : 0); }
+  function prev(){ goto(idx-1); }
+  function schedule(){ clearTimeout(timer); timer = setTimeout(()=>{
+      if (!playing) return;
+      if (idx+1 >= STEPS.length){ pause(); return; }   // stop at the end
+      next();
+    }, dwell); }
+  function play(){ playing=true; $("playIcon").textContent="❚❚"; $("playTxt").textContent="Pause";
+    if (idx>=STEPS.length-1) showStep(0); schedule(); }
+  function pause(){ playing=false; clearTimeout(timer); $("playIcon").textContent="▶"; $("playTxt").textContent="Play"; }
+
+  $("play").addEventListener("click", ()=> playing?pause():play());
+  $("next").addEventListener("click", ()=>{ pause(); next(); });
+  $("prev").addEventListener("click", ()=>{ pause(); prev(); });
+  $("restart").addEventListener("click", ()=>{ pause(); showStep(0); });
+
+  /* ---------- architecture inspector ---------- */
+  function selectNode(id){
+    Object.values(nodeEls).forEach(el=>el.classList.remove("selected"));
+    nodeEls[id].classList.add("selected");
+    const info = INFO[id]; if (!info) return;
+    const list = info.l ? `<ul>${info.l.map(x=>`<li>${x}</li>`).join("")}</ul>` : "";
+    $("nodeInfo").innerHTML = `<h3>${info.t}<span class="tag">${info.tag}</span></h3><p>${info.h}</p>${list}`;
+    // light its direct channels
+    Object.entries(pathEls).forEach(([eid,el])=>{
+      const [f,t]=EDGES[eid]; el.classList.toggle("active", f===id||t===id);
+    });
+  }
+
+  /* ---------- tab switching ---------- */
+  const tabs = {
+    "t-arch":  {panel:"panel-arch",  stage:true,  mode:"explore"},
+    "t-flow":  {panel:"panel-flow",  stage:true,  mode:"workflow"},
+    "t-design":{panel:"view-design", stage:false}
+  };
+  function selectTab(tid){
+    for (const [id,cfg] of Object.entries(tabs)){
+      const on = id===tid;
+      document.getElementById(id).setAttribute("aria-selected", on?"true":"false");
+      document.getElementById(cfg.panel).classList.toggle("show", on);
+    }
+    const cfg = tabs[tid];
+    document.getElementById("stageHost").style.display = cfg.stage ? "" : "none";
+    if (cfg.stage){
+      stage.dataset.mode = cfg.mode;
+      if (cfg.mode==="explore"){
+        pause();
+        stage.classList.remove("dimming");
+        stage.dataset.scene = "idle";
+        Object.values(nodeEls).forEach(el=>el.classList.remove("active"));
+        Object.values(pathEls).forEach(el=>el.classList.remove("active"));
+        clearPackets();
+        requestAnimationFrame(rescale);
+      } else {
+        showStep(idx);
+        requestAnimationFrame(rescale);
+      }
+    }
+  }
+  Object.keys(tabs).forEach(id=>document.getElementById(id).addEventListener("click",()=>selectTab(id)));
+
+  /* ---------- keyboard ---------- */
+  addEventListener("keydown", e=>{
+    if (document.getElementById("t-flow").getAttribute("aria-selected")!=="true") return;
+    if (e.key==="ArrowRight"){ pause(); next(); }
+    else if (e.key==="ArrowLeft"){ pause(); prev(); }
+    else if (e.key===" "){ e.preventDefault(); playing?pause():play(); }
+  });
+
+  /* ---------- init ---------- */
+  showStep(0);          // prime workflow state
+  selectTab("t-arch");  // open on the architecture map
+})();
+</script>
+</body>
+</html>
