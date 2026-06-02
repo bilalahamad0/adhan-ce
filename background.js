@@ -294,6 +294,14 @@ chrome.runtime.onStartup.addListener(async () => {
   }
   await armAlarms();
   await reconcilePaused();
+  // Re-prime already-open tabs after a browser restart, exactly like onInstalled
+  // does on install/update. Declarative content_scripts only inject on
+  // navigation, so tabs Chrome restored-but-didn't-reload have no live content
+  // script to receive the Adhan broadcast — leaving the cross-tab pause + focus
+  // overlay on the foreground tab only while background tabs stay untouched.
+  // (The dev workflow hides this: reloading the unpacked extension fires
+  // onInstalled and re-primes every tab; a real user's browser restart never did.)
+  await injectExistingTabs();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
