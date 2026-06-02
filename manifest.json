@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Adhan Caster Pro",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "description": "Live countdown to the next Adhan and automatic pausing of media in every Chrome tab at prayer time.",
   "permissions": ["storage", "alarms", "notifications", "scripting", "tabs"],
   "host_permissions": [
