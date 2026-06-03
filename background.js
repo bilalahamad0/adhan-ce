@@ -117,9 +117,24 @@ async function armAlarms() {
 async function broadcast(message) {
   const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
   await Promise.all(
-    tabs.map((t) =>
-      t.id != null ? chrome.tabs.sendMessage(t.id, message).catch(() => {}) : Promise.resolve()
-    )
+    tabs.map(async (t) => {
+      if (t.id == null) return;
+      try {
+        await chrome.tabs.sendMessage(t.id, message);
+      } catch (_) {
+        // No live content script in this tab — almost always a tab that was open
+        // before the extension loaded/updated (common in dev, and after a browser
+        // restart). Inject it, then retry, so its media still pauses/resumes at
+        // prayer time. (A video in Picture-in-Picture pauses once its source tab's
+        // <video> is paused.) Restricted pages (chrome://, the Web Store, the PDF
+        // viewer) reject injection — ignored.
+        try {
+          await chrome.scripting.insertCSS({ target: { tabId: t.id, allFrames: true }, files: ['content.css'] });
+          await chrome.scripting.executeScript({ target: { tabId: t.id, allFrames: true }, files: ['content.js'] });
+          await chrome.tabs.sendMessage(t.id, message).catch(() => {});
+        } catch (_) {}
+      }
+    })
   );
 }
 

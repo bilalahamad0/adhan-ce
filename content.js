@@ -51,6 +51,7 @@
   // fallback so overlays always have text even before the round-trip / if it fails,
   // i.e. English behavior is unchanged when no translation is loaded.
   const I18N_EN = {
+    app_name: 'Adhan Caster',
     prayer_generic: 'Prayer',
     time_for_prayer: 'Time for prayer',
     media_paused_msg: 'Media is paused. Take a moment for your prayer.',
@@ -89,11 +90,15 @@
     if (fels) fels.scrim.setAttribute('dir', DIR);
   }
   function applyOverlayI18n() {
-    if (els) els.resume.textContent = ti('resume');
+    if (els) {
+      els.resume.textContent = ti('resume');
+      if (els.cbname) els.cbname.textContent = ti('app_name');
+    }
     if (fels) {
       if (fels.ftitle) fels.ftitle.textContent = ti('time_for_prayer');
       if (fels.fmsg) fels.fmsg.textContent = ti('media_paused_msg');
       if (fels.fhint) fels.fhint.textContent = ti('press_esc');
+      if (fels.fbname) fels.fbname.textContent = ti('app_name');
       fels.fresume.textContent = ti('resume');
     }
   }
@@ -143,17 +148,21 @@
         :host { all: initial; }
         * { box-sizing: border-box; }
         .card {
-          display: flex; align-items: center; gap: 11px;
+          display: flex; flex-direction: column; align-items: stretch; gap: 8px;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
           font-size: 13px; line-height: 1.3; color: #fff; text-align: start;
           background: linear-gradient(135deg, #0f8a5f, #0a5c47);
-          padding: 11px 13px; border-radius: 13px; min-width: 192px; max-width: 300px;
+          padding: 11px 13px; border-radius: 13px; min-width: 200px; max-width: 300px;
           box-shadow: 0 10px 30px rgba(0,0,0,.30); border: 1px solid rgba(255,255,255,.15);
           pointer-events: none; opacity: 0; transform: translateY(8px);
           transition: opacity .22s ease, transform .22s ease;
         }
         .card.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
         .card.paused { background: linear-gradient(135deg, #b4521f, #7c3312); }
+        .cbrand { display: flex; align-items: center; gap: 7px; }
+        .cbicon { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+        .cbname { font-size: 12px; font-weight: 700; opacity: .9; letter-spacing: .2px; }
+        .crow { display: flex; align-items: center; gap: 11px; }
         .icon { font-size: 22px; line-height: 1; flex: 0 0 auto; }
         .body { flex: 1 1 auto; min-width: 0; }
         .title { font-weight: 700; font-size: 13px; letter-spacing: .2px; }
@@ -169,17 +178,21 @@
         @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
       </style>
       <div class="card" id="card">
-        <div class="icon" id="icon">🕌</div>
-        <div class="body">
-          <div class="title" id="title">Prayer</div>
-          <div class="sub" id="sub"></div>
-          <div class="bar" id="bar"><i id="barfill"></i></div>
+        <div class="cbrand"><img class="cbicon" id="cbicon" alt="" /><span class="cbname" id="cbname">Adhan Caster</span></div>
+        <div class="crow">
+          <div class="icon" id="icon">🕌</div>
+          <div class="body">
+            <div class="title" id="title">Prayer</div>
+            <div class="sub" id="sub"></div>
+            <div class="bar" id="bar"><i id="barfill"></i></div>
+          </div>
+          <button class="resume" id="resume" hidden>Resume</button>
         </div>
-        <button class="resume" id="resume" hidden>Resume</button>
       </div>`;
     (document.documentElement || document.body).appendChild(host);
     els = {
       card: root.querySelector('#card'),
+      cbname: root.querySelector('#cbname'),
       icon: root.querySelector('#icon'),
       title: root.querySelector('#title'),
       sub: root.querySelector('#sub'),
@@ -187,6 +200,8 @@
       barfill: root.querySelector('#barfill'),
       resume: root.querySelector('#resume'),
     };
+    const cbicon = root.querySelector('#cbicon');
+    if (cbicon) cbicon.src = chrome.runtime.getURL('icons/icon48.png');
     els.resume.addEventListener('click', onResumeClick);
     applyOverlayI18n();
     applyHostDir();
@@ -230,6 +245,9 @@
           animation-iteration-count: infinite, infinite;
         }
         .panel { position: relative; z-index: 2; text-align: center; color: #fff; padding: 28px; max-width: 460px; }
+        .fbrand { display: flex; align-items: center; justify-content: center; gap: 9px; opacity: .92; margin-bottom: 22px; }
+        .fbrand .fbicon { width: 26px; height: 26px; border-radius: 7px; }
+        .fbrand .fbname { font-size: 16px; font-weight: 700; letter-spacing: .3px; }
         .scrim.show .panel { animation: ccpRise .6s cubic-bezier(.2, .7, .2, 1) both; }
         .crescent-wrap { position: relative; display: inline-block; }
         .halo {
@@ -273,6 +291,7 @@
         <div class="bg"></div>
         <div class="stars" id="stars"></div>
         <div class="panel">
+          <div class="fbrand"><img class="fbicon" id="fbicon" alt="" /><span class="fbname" id="fbname">Adhan Caster</span></div>
           <div class="crescent-wrap"><span class="halo"></span><span class="glow"></span><span class="crescent">🕌</span></div>
           <div class="ftitle" id="ftitle">Time for prayer</div>
           <div class="fname" id="fname">Prayer</div>
@@ -303,6 +322,7 @@
     }
     fels = {
       scrim: root.querySelector('#scrim'),
+      fbname: root.querySelector('#fbname'),
       ftitle: root.querySelector('#ftitle'),
       fname: root.querySelector('#fname'),
       ftime: root.querySelector('#ftime'),
@@ -311,6 +331,8 @@
       fresume: root.querySelector('#fresume'),
       fhint: root.querySelector('#fhint'),
     };
+    const fbicon = root.querySelector('#fbicon');
+    if (fbicon) fbicon.src = chrome.runtime.getURL('icons/icon48.png');
     fels.fresume.addEventListener('click', onFocusResume);
     applyOverlayI18n();
     applyHostDir();
