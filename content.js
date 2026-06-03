@@ -208,29 +208,54 @@
         :host { all: initial; }
         * { box-sizing: border-box; }
         .scrim {
-          position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+          position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          background: radial-gradient(130% 130% at 50% 28%, rgba(15,138,95,.93), rgba(7,48,37,.97));
+          background: #062a20;
           -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-          opacity: 0; transition: opacity .28s ease; pointer-events: none;
+          opacity: 0; transition: opacity .35s ease; pointer-events: none;
         }
         .scrim.show { opacity: 1; pointer-events: auto; }
-        .panel { text-align: center; color: #fff; padding: 28px; max-width: 460px; }
-        .scrim.show .panel { animation: ccpRise .55s cubic-bezier(.2, .7, .2, 1) both; }
+        /* full-screen breathing gradient */
+        .bg {
+          position: absolute; inset: -25%; z-index: 0; pointer-events: none;
+          background: radial-gradient(55% 55% at 50% 38%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%);
+          animation: ccpBg 12s ease-in-out infinite;
+        }
+        /* drifting, twinkling stars across the whole screen (positions set per-star in JS) */
+        .stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+        .star {
+          position: absolute; border-radius: 50%; background: #fff;
+          box-shadow: 0 0 6px rgba(255,255,255,.85); opacity: 0;
+          animation-name: ccpFloat, ccpTwinkle; animation-timing-function: linear, ease-in-out;
+          animation-iteration-count: infinite, infinite;
+        }
+        .panel { position: relative; z-index: 2; text-align: center; color: #fff; padding: 28px; max-width: 460px; }
+        .scrim.show .panel { animation: ccpRise .6s cubic-bezier(.2, .7, .2, 1) both; }
         .crescent-wrap { position: relative; display: inline-block; }
+        .halo {
+          position: absolute; top: 50%; left: 50%; width: 190px; height: 190px; pointer-events: none;
+          transform: translate(-50%, -50%); border-radius: 50%;
+          background: conic-gradient(from 0deg, rgba(255,255,255,0), rgba(255,255,255,.28), rgba(255,255,255,0) 50%, rgba(255,255,255,.22), rgba(255,255,255,0));
+          animation: ccpSpin 24s linear infinite;
+        }
         .glow {
           position: absolute; top: 50%; left: 50%; width: 150px; height: 150px; pointer-events: none;
           transform: translate(-50%, -50%); border-radius: 50%;
-          background: radial-gradient(circle, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0) 70%);
-          animation: ccpGlow 6s ease-in-out infinite;
+          background: radial-gradient(circle, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 70%);
+          animation: ccpGlow 5s ease-in-out infinite;
         }
-        .crescent { position: relative; display: inline-block; font-size: 58px; line-height: 1; animation: ccpBreathe 5s ease-in-out infinite; }
-        @keyframes ccpBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
-        @keyframes ccpGlow { 0%, 100% { opacity: .3; transform: translate(-50%, -50%) scale(.9); } 50% { opacity: .65; transform: translate(-50%, -50%) scale(1.3); } }
-        @keyframes ccpRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        .crescent { position: relative; display: inline-block; font-size: 60px; line-height: 1; animation: ccpBreathe 5s ease-in-out infinite; }
+        @keyframes ccpBg { 0%, 100% { transform: scale(1); opacity: .92; } 50% { transform: scale(1.14); opacity: 1; } }
+        @keyframes ccpFloat { from { transform: translateY(20px); } to { transform: translateY(-46px); } }
+        @keyframes ccpTwinkle { 0%, 100% { opacity: 0; } 50% { opacity: .9; } }
+        @keyframes ccpSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+        @keyframes ccpGlow { 0%, 100% { opacity: .35; transform: translate(-50%, -50%) scale(.9); } 50% { opacity: .7; transform: translate(-50%, -50%) scale(1.3); } }
+        @keyframes ccpBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+        @keyframes ccpRise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
         @media (prefers-reduced-motion: reduce) {
-          .crescent, .glow { animation: none !important; }
-          .scrim.show .panel { animation: none !important; }
+          /* drop all movement, but keep a gentle opacity-only twinkle so it isn't dead */
+          .bg, .halo, .glow, .crescent, .scrim.show .panel { animation: none !important; }
+          .star { animation-name: ccpTwinkle !important; }
         }
         .ftitle { font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; opacity: .8; margin-top: 16px; }
         .fname { font-size: 42px; font-weight: 800; margin-top: 4px; }
@@ -245,8 +270,10 @@
         .fhint { font-size: 11px; opacity: .6; margin-top: 12px; }
       </style>
       <div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-label="Prayer focus">
+        <div class="bg"></div>
+        <div class="stars" id="stars"></div>
         <div class="panel">
-          <div class="crescent-wrap"><span class="glow"></span><span class="crescent">🕌</span></div>
+          <div class="crescent-wrap"><span class="halo"></span><span class="glow"></span><span class="crescent">🕌</span></div>
           <div class="ftitle" id="ftitle">Time for prayer</div>
           <div class="fname" id="fname">Prayer</div>
           <div class="ftime" id="ftime"></div>
@@ -257,6 +284,23 @@
         </div>
       </div>`;
     (document.documentElement || document.body).appendChild(fhost);
+    // Scatter drifting, twinkling stars across the full screen.
+    const starsEl = root.querySelector('#stars');
+    if (starsEl) {
+      for (let i = 0; i < 18; i++) {
+        const s = document.createElement('span');
+        s.className = 'star';
+        const size = 2 + Math.random() * 3;
+        const floatDur = 7 + Math.random() * 9;
+        const twkDur = 3 + Math.random() * 4;
+        s.style.cssText =
+          `left:${(Math.random() * 100).toFixed(2)}%;top:${(Math.random() * 100).toFixed(2)}%;` +
+          `width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;` +
+          `animation-duration:${floatDur.toFixed(1)}s,${twkDur.toFixed(1)}s;` +
+          `animation-delay:${(-Math.random() * floatDur).toFixed(1)}s,${(-Math.random() * twkDur).toFixed(1)}s;`;
+        starsEl.appendChild(s);
+      }
+    }
     fels = {
       scrim: root.querySelector('#scrim'),
       ftitle: root.querySelector('#ftitle'),
