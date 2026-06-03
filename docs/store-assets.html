@@ -28,7 +28,8 @@
 
       .popup { width: 372px; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(0,0,0,.4); color: #15302a; }
       .p-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: linear-gradient(135deg, #0f8a5f, #0a5c47); color: #fff; }
-      .p-head .pl { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+      .p-head .pl { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; }
+      .p-head .pl img { width: 28px; height: 28px; border-radius: 7px; }
       .p-head strong { font-size: 16px; display: block; }
       .p-head .sub { font-size: 12px; opacity: .85; }
       .p-next { text-align: center; padding: 16px 0 16px; border-bottom: 1px solid #e4ece9; }
@@ -46,7 +47,7 @@
       .p-row.sun { color: #94a39c; }
       .p-row.sun .t { color: #94a39c; }
 
-      /* ---- slide 2 & 4: browser frame ---- */
+      /* ---- slide 2 & 4: browser frame + corner card (flag) ---- */
       #s2, #s4 { background: #eef1f4; }
       .browser { position: absolute; inset: 150px 70px 70px 70px; border-radius: 16px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.18); background: #fff; }
       .bbar { height: 46px; background: #d8dde3; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
@@ -58,33 +59,41 @@
       .vid { margin-top: 22px; width: 560px; height: 308px; border-radius: 14px; background: linear-gradient(160deg, #21304a, #0c1118); position: relative; }
       .vid .lbl { position: absolute; top: 16px; left: 18px; color: #fff; font-weight: 700; font-size: 16px; }
       .vid .pz { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 60px; color: #fff; opacity: .92; }
-      .corner { position: absolute; right: 28px; bottom: 28px; display: flex; align-items: center; gap: 13px; color: #fff; padding: 15px 17px; border-radius: 15px; box-shadow: 0 16px 40px rgba(0,0,0,.32); max-width: 320px; }
-      .corner.amber { background: linear-gradient(135deg, #b4521f, #7c3312); }
-      .corner.green { background: linear-gradient(135deg, #0f8a5f, #0a5c47); }
-      .corner .ci { font-size: 27px; }
-      .corner b { font-size: 15px; }
-      .corner .s { font-size: 13px; opacity: .92; margin-top: 1px; }
-      .corner button { border: 0; background: #fff; color: #7c3312; font-weight: 700; padding: 8px 14px; border-radius: 9px; font-size: 13px; }
-      .corner .pbar { height: 3px; border-radius: 3px; background: rgba(255,255,255,.3); margin-top: 8px; overflow: hidden; }
-      .corner .pbar > i { display: block; height: 100%; width: 62%; background: #fff; border-radius: 3px; }
+      /* corner card — matches the v1.7.4 in-page notification */
+      .corner { position: absolute; right: 28px; bottom: 28px; display: flex; flex-direction: column; gap: 11px; overflow: hidden; color: #fff; padding: 15px 17px 16px; border-radius: 18px; box-shadow: 0 18px 44px rgba(0,0,0,.36); border: 1px solid rgba(255,255,255,.16); min-width: 270px; max-width: 340px; }
+      .corner.amber { background: linear-gradient(135deg, #c25a23, #7c3312); }
+      .corner.green { background: linear-gradient(135deg, #128a5f, #0a5240); }
+      .corner .crow { display: flex; align-items: center; gap: 14px; }
+      .corner .badge { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 13px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+      .corner .badge img { width: 30px; height: 30px; border-radius: 8px; }
+      .corner .body { flex: 1 1 auto; min-width: 0; }
+      .corner .cbname { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; opacity: .72; }
+      .corner .title { font-weight: 800; font-size: 18px; margin-top: 2px; }
+      .corner .s { font-size: 13px; opacity: .9; margin-top: 2px; }
+      .corner button { flex: 0 0 auto; align-self: center; border: 0; background: #fff; color: #7c3312; font-weight: 700; padding: 10px 18px; border-radius: 999px; font-size: 13px; box-shadow: 0 5px 14px rgba(0,0,0,.2); }
+      .corner.green button { color: #0a5240; }
+      .corner .bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.22); overflow: hidden; }
+      .corner .bar > i { display: block; height: 100%; width: 68%; background: #fff; border-radius: 999px; }
 
-      /* ---- slide 3: focus screen ---- */
-      #s3 { background: radial-gradient(130% 130% at 50% 28%, rgba(15,138,95,.98), rgba(7,48,37,1)); align-items: center; justify-content: center; }
-      .focus { text-align: center; color: #fff; position: relative; }
-      .crescent-wrap { position: relative; display: inline-block; }
-      .crescent-wrap .glow { position: absolute; top: 50%; left: 50%; width: 230px; height: 230px; transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%); }
-      .crescent-wrap .halo { position: absolute; top: 50%; left: 50%; width: 320px; height: 320px; transform: translate(-50%,-50%); border-radius: 50%; background: conic-gradient(from 0deg, rgba(255,255,255,0), rgba(255,255,255,.24), rgba(255,255,255,0) 50%, rgba(255,255,255,.18), rgba(255,255,255,0)); }
+      /* ---- slide 3: fullscreen Prayer Focus (v1.7.4) ---- */
+      #s3 { background: radial-gradient(55% 55% at 50% 42%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); align-items: center; justify-content: center; }
       .s3stars { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
       .s3stars span { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.9); }
-      #s3 .focus { position: relative; z-index: 1; }
-      .focus .cre { position: relative; font-size: 104px; }
-      .focus .t { font-size: 15px; letter-spacing: 3px; text-transform: uppercase; opacity: .82; margin-top: 18px; }
-      .focus .nm { font-size: 78px; font-weight: 800; margin-top: 6px; }
-      .focus .tm { font-size: 26px; opacity: .9; margin-top: 4px; }
-      .focus .ms { font-size: 21px; opacity: .85; margin-top: 22px; }
-      .focus .au { font-size: 16px; opacity: .72; margin-top: 26px; }
-      .focus .btn { margin-top: 22px; display: inline-block; background: #fff; color: #0a5c47; font-weight: 800; font-size: 18px; padding: 16px 42px; border-radius: 13px; }
-      .focus .hint { font-size: 14px; opacity: .6; margin-top: 16px; }
+      #s3 .fbrand { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 12px; color: #fff; padding: 12px 22px 12px 14px; border-radius: 999px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18); }
+      #s3 .fbrand img { width: 32px; height: 32px; border-radius: 9px; }
+      #s3 .fbrand span { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+      .ffocus { position: relative; z-index: 2; text-align: center; color: #fff; }
+      .fcircle { position: relative; display: flex; align-items: center; justify-content: center; width: 300px; height: 300px; margin: 0 auto; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+      .fcircle .fhalo { position: absolute; top: 50%; left: 50%; width: 290px; height: 290px; transform: translate(-50%,-50%); border-radius: 50%; background: conic-gradient(from 0deg, rgba(255,255,255,0), rgba(255,255,255,.30), rgba(255,255,255,0) 50%, rgba(255,255,255,.22), rgba(255,255,255,0)); }
+      .fcircle .fglow { position: absolute; top: 50%; left: 50%; width: 220px; height: 220px; transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%); }
+      .fcircle .fcre { position: relative; font-size: 96px; }
+      .ffocus .t { font-size: 15px; letter-spacing: 3px; text-transform: uppercase; opacity: .82; margin-top: 20px; }
+      .ffocus .nm { font-size: 74px; font-weight: 800; margin-top: 6px; }
+      .ffocus .tm { font-size: 26px; opacity: .9; margin-top: 4px; }
+      .ffocus .ms { font-size: 20px; opacity: .85; margin-top: 22px; }
+      .ffocus .au { font-size: 16px; opacity: .72; margin-top: 24px; }
+      .ffocus .btn { margin-top: 24px; display: inline-block; background: #fff; color: #0a5c47; font-weight: 800; font-size: 18px; padding: 16px 42px; border-radius: 14px; }
+      .ffocus .hint { font-size: 14px; opacity: .6; margin-top: 16px; }
 
       /* ---- slide 5: privacy + languages ---- */
       #s5 { align-items: center; justify-content: center; }
@@ -113,7 +122,7 @@
       </div>
       <div class="hero-right">
         <div class="popup">
-          <div class="p-head"><span class="pl">🌙</span><span><strong>Adhan Caster</strong><div class="sub">Sunnyvale, California</div></span></div>
+          <div class="p-head"><span class="pl"><img src="../icons/icon48.png" alt="" /></span><span><strong>Adhan Caster</strong><div class="sub">Sunnyvale, California</div></span></div>
           <div class="p-next">
             <div class="clock">🕐 4:12:00 PM</div>
             <div class="lab">Next prayer</div>
@@ -130,7 +139,7 @@
       </div>
     </section>
 
-    <!-- Slide 2: auto-pause across tabs -->
+    <!-- Slide 2: auto-pause across tabs (corner card / flag) -->
     <section class="slide" id="s2">
       <div class="cap" style="color:#15302a"><h2>Media pauses the moment the Adhan begins</h2><p>Across every tab — then resumes with one click, or automatically.</p></div>
       <div class="browser">
@@ -139,34 +148,22 @@
           <h3>Lecture 7 — Tafsir &amp; Reflection</h3>
           <div class="vid"><span class="lbl">▶ Now playing</span><span class="pz">⏸</span></div>
         </div>
-        <div class="corner amber"><span class="ci">🕌</span><span><b>Maghrib</b><div class="s">Auto-resumes in 4:58</div></span><button>Resume</button></div>
+        <div class="corner amber">
+          <div class="crow">
+            <div class="badge"><img src="../icons/icon48.png" alt="" /></div>
+            <div class="body"><div class="cbname">Adhan Caster</div><div class="title">Maghrib</div><div class="s">Auto-resumes in 4:58</div></div>
+            <button>Resume</button>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- Slide 3: animated focus screen (starfield) -->
+    <!-- Slide 3: fullscreen Prayer Focus (v1.7.4) -->
     <section class="slide" id="s3">
-      <div class="s3stars">
-        <span style="left:8%;top:14%;width:4px;height:4px;opacity:.7"></span>
-        <span style="left:16%;top:30%;width:3px;height:3px;opacity:.55"></span>
-        <span style="left:10%;top:54%;width:4px;height:4px;opacity:.6"></span>
-        <span style="left:14%;top:76%;width:3px;height:3px;opacity:.5"></span>
-        <span style="left:24%;top:88%;width:3px;height:3px;opacity:.55"></span>
-        <span style="left:6%;top:40%;width:2px;height:2px;opacity:.45"></span>
-        <span style="left:28%;top:16%;width:3px;height:3px;opacity:.6"></span>
-        <span style="left:22%;top:64%;width:4px;height:4px;opacity:.5"></span>
-        <span style="left:40%;top:8%;width:3px;height:3px;opacity:.55"></span>
-        <span style="left:60%;top:10%;width:3px;height:3px;opacity:.6"></span>
-        <span style="left:72%;top:14%;width:4px;height:4px;opacity:.75"></span>
-        <span style="left:82%;top:28%;width:5px;height:5px;opacity:.85"></span>
-        <span style="left:88%;top:50%;width:3px;height:3px;opacity:.55"></span>
-        <span style="left:78%;top:70%;width:4px;height:4px;opacity:.6"></span>
-        <span style="left:90%;top:80%;width:3px;height:3px;opacity:.6"></span>
-        <span style="left:70%;top:86%;width:3px;height:3px;opacity:.5"></span>
-        <span style="left:84%;top:14%;width:3px;height:3px;opacity:.5"></span>
-        <span style="left:94%;top:38%;width:2px;height:2px;opacity:.45"></span>
-      </div>
-      <div class="focus">
-        <div class="crescent-wrap"><span class="halo"></span><span class="glow"></span><span class="cre">🕌</span></div>
+      <div class="s3stars" id="s3stars"></div>
+      <div class="fbrand"><img src="../icons/icon48.png" alt="" /><span>Adhan Caster</span></div>
+      <div class="ffocus">
+        <div class="fcircle"><span class="fhalo"></span><span class="fglow"></span><span class="fcre">🕌</span></div>
         <div class="t">Time for prayer</div>
         <div class="nm">Maghrib</div>
         <div class="tm">08:24 PM</div>
@@ -177,7 +174,7 @@
       </div>
     </section>
 
-    <!-- Slide 4: heads-up countdown -->
+    <!-- Slide 4: heads-up countdown (corner card / flag) -->
     <section class="slide" id="s4">
       <div class="cap" style="color:#15302a"><h2>A gentle heads-up before every prayer</h2><p>15, 30, or 60 seconds before — so the pause never catches you mid-scroll.</p></div>
       <div class="browser">
@@ -186,7 +183,13 @@
           <h3>Documentary — The Andalusian Libraries</h3>
           <div class="vid"><span class="lbl">▶ Now playing</span></div>
         </div>
-        <div class="corner green"><span class="ci">🕌</span><span><b>Maghrib Adhan</b><div class="s">Starting in 30s</div><div class="pbar"><i></i></div></span></div>
+        <div class="corner green">
+          <div class="crow">
+            <div class="badge"><img src="../icons/icon48.png" alt="" /></div>
+            <div class="body"><div class="cbname">Adhan Caster</div><div class="title">Maghrib Adhan</div><div class="s">Starting in 30s</div></div>
+          </div>
+          <div class="bar"><i></i></div>
+        </div>
       </div>
     </section>
 
@@ -211,6 +214,18 @@
     <script>
       const s = new URLSearchParams(location.search).get('slide') || '1';
       document.body.dataset.slide = s;
+      // Scatter stars across the fullscreen focus slide.
+      const stars = document.getElementById('s3stars');
+      if (stars) {
+        for (let i = 0; i < 36; i++) {
+          const e = document.createElement('span');
+          const z = 2 + Math.random() * 4;
+          e.style.cssText =
+            `left:${(Math.random() * 100).toFixed(1)}%;top:${(Math.random() * 100).toFixed(1)}%;` +
+            `width:${z.toFixed(1)}px;height:${z.toFixed(1)}px;opacity:${(0.3 + Math.random() * 0.6).toFixed(2)}`;
+          stars.appendChild(e);
+        }
+      }
     </script>
   </body>
 </html>
