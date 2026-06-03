@@ -17,7 +17,7 @@ tech:
 links:
   extension: "https://github.com/bilalahamad0/adhan-ce"
   api: "https://github.com/bilalahamad0/adhan-api"
-  privacy: "https://bilalahamad0.github.io/adhan-ce/privacy-policy.html"
+  privacy: "https://adhan.bilalahamad.com/privacy-policy.html"
 cover: "./demo.gif"
 ---
 
@@ -142,7 +142,7 @@ permission. So the data story is deliberately boring:
 - The content script touches a page solely to find `<video>`/`<audio>` elements —
   it never reads or transmits page content.
 
-The full [privacy policy](https://bilalahamad0.github.io/adhan-ce/privacy-policy.html)
+The full [privacy policy](https://adhan.bilalahamad.com/privacy-policy.html)
 spells out every permission and why it exists.
 
 ## Quality: tests and a reproducible demo

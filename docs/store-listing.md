@@ -114,7 +114,9 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 - ❌ Does NOT collect personally identifiable info, health, financial, authentication, personal communications, location (GPS), web history, or user activity.
 - ✅ The only network calls send the **city name / search text** to the prayer-times and geocoding services. Disclose this as "Website content → location query, to provide the core feature."
 - ✅ Certify: not sold to third parties; not used for unrelated purposes; not used for creditworthiness.
-- Link your privacy policy: `https://bilalahamad0.github.io/adhan-ce/privacy-policy.html`
+- Link your privacy policy: `https://adhan.bilalahamad.com/privacy-policy.html`
+
+> ⏳ **Timing:** the live CWS listing still points to the old `bilalahamad0.github.io/adhan-ce/privacy-policy.html` from the v1.7.4 submission. **Update the Website + privacy-policy fields to the new `adhan.bilalahamad.com` URLs only AFTER v1.7.4 is approved** — editing a listing mid-review is best avoided. The github.io URL stays live (and its `<link rel="canonical">` points to the new domain) until then, so nothing breaks.
 
 ---
 

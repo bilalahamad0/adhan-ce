@@ -5,7 +5,7 @@ Copy/paste the posts, work the channel table top-to-bottom, and time a bigger pu
 
 **Canonical links (use these everywhere):**
 - 🧩 Chrome Web Store: `https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia`
-- 🌐 Landing page: `https://bilalahamad0.github.io/adhan-ce/`
+- 🌐 Landing page: `https://adhan.bilalahamad.com/`
 - 💻 GitHub (open source): `https://github.com/bilalahamad0/adhan-ce`
 
 > Add `?utm_source=reddit` / `?utm_source=producthunt` etc. to the store link per channel so you can see what's working.

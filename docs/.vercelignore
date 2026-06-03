@@ -1,0 +1,8 @@
+# Keep the public Vercel deploy (adhan.bilalahamad.com) clean: serve only the
+# landing page, privacy policy, and their assets. Internal docs, build scripts,
+# and the screenshot/architecture generators stay in the repo (and on the legacy
+# github.io mirror) but are not served on the branded domain.
+*.md
+*.sh
+store-assets.html
+architecture.html

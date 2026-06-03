@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://bilalahamad0.github.io/adhan-ce/sitemap.xml
+Sitemap: https://adhan.bilalahamad.com/sitemap.xml

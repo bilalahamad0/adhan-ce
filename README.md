@@ -9,7 +9,7 @@ It's a standalone Chrome extension. It fetches prayer times from the public
 (`adhan-api-mauve.vercel.app`) and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
-**[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://bilalahamad0.github.io/adhan-ce/)**
+**[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
 
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 
@@ -78,6 +78,6 @@ See [docs/TESTING.md](docs/TESTING.md) for the full pre-publish QA checklist.
 
 Assets for getting the extension in front of more people:
 
-- **[docs/index.html](https://bilalahamad0.github.io/adhan-ce/)** — public landing page (SEO-optimized, served via GitHub Pages).
+- **[docs/index.html](https://adhan.bilalahamad.com/)** — public landing page (SEO-optimized, served via Vercel at `adhan.bilalahamad.com`).
 - **[docs/store-listing.md](docs/store-listing.md)** — copy/paste source of truth for the Chrome Web Store Developer Dashboard: keyword-optimized title, summary, description, permission justifications, and screenshot captions.
 - **[docs/launch-kit.md](docs/launch-kit.md)** — ready-to-post launch copy (Reddit, Show HN, Product Hunt, Facebook, X), the channel/subreddit plan, review-collection tips, and Ramadan timing.
