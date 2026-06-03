@@ -1,117 +1,146 @@
 # Get the landing page indexed — Google Search Console runbook
 
-Target page: **`https://bilalahamad0.github.io/adhan-ce/`** (a GitHub Pages *project* site served from `main` → `/docs`). You already have `docs/sitemap.xml` and `docs/robots.txt`.
+Target page: **`https://adhan.bilalahamad.com/`** — the landing page (`docs/`) served by
+**Vercel** on a subdomain of your own domain `bilalahamad.com` (DNS + the apex site are
+managed in the **`bilalahamad0/profile`** Vercel setup). `docs/sitemap.xml` and
+`docs/robots.txt` ship with it.
 
-> TL;DR: Add a **URL-prefix** property, verify with an **HTML file or meta tag placed in `docs/`**, submit `sitemap.xml`, then **Request indexing**. DNS/Domain verification is impossible for `github.io` — don't try it.
-
----
-
-## 0. Why this is slightly special
-
-`github.io` is on the **Public Suffix List**, so `bilalahamad0.github.io` is a separate site you don't own at the DNS level. Two consequences:
-- You **cannot** create a "Domain" property (those verify by DNS TXT only, and you can't edit `github.io`'s DNS).
-- You **must** use a **URL-prefix** property and verify by serving a file/tag on your own subpath.
-
-A URL-prefix property for `https://bilalahamad0.github.io/adhan-ce/` covers everything under `/adhan-ce/` (your homepage, `privacy-policy.html`, etc.) and nothing else on the host. That's exactly what you want.
+> TL;DR: Put the page on `adhan.bilalahamad.com` (Vercel, Root Directory = `docs`), then add a
+> **Domain** property for `bilalahamad.com` in Search Console, verify with **one DNS TXT record**
+> (added in Vercel DNS), submit the sitemap, and **Request indexing**. Because you own the domain,
+> the Domain property — which the old `github.io` host couldn't use — is now the clean choice.
 
 ---
 
-## 1. Add the property
+## 0. Why this is now the *better* setup
+
+Previously the page lived on `bilalahamad0.github.io`, which is on the **Public Suffix List** — you
+don't control its DNS, so a Domain property was impossible and you were stuck with a URL-prefix
+property. Now the page is on **your** domain, so:
+
+- You **can** create a **Domain** property for `bilalahamad.com` (verifies by **DNS TXT**, which you
+  fully control in Vercel).
+- **One** verification covers **every** subdomain (`adhan.`, `www.`, the apex) over **both** http and
+  https — and it survives even if you change hosts later.
+- It also gives you Search Console data for your personal apex site in the same property.
+
+A Domain property reports on the whole domain; the canonical landing URL within it is
+`https://adhan.bilalahamad.com/`.
+
+---
+
+## 1. Stand up the subdomain on Vercel (prerequisite)
+
+The page must actually be served from your domain before the property is useful.
+
+1. **Vercel → Add New… → Project → Import** the `bilalahamad0/adhan-ce` repo.
+2. **Set Root Directory = `docs`** (critical — this serves `docs/index.html` at the site root, exactly
+   like GitHub Pages did). Framework preset: **Other**. No build command, no install command.
+3. Deploy. You'll get a `*.vercel.app` preview — confirm the page renders (logo, hero, screenshots).
+4. **Project → Settings → Domains → add `adhan.bilalahamad.com`.** Since `bilalahamad.com`'s DNS is in
+   the same Vercel account, Vercel auto-creates the CNAME and provisions HTTPS in a minute or two.
+   (The apex stays on your `profile` project — subdomains attach to projects independently.)
+5. Open `https://adhan.bilalahamad.com/` and confirm HTTP 200 + valid cert.
+
+`docs/vercel.json` adds light security headers + asset caching; `docs/.vercelignore` keeps internal
+docs/scripts off the public domain.
+
+> **Duplicate-content note.** The old `bilalahamad0.github.io/adhan-ce/` mirror stays live (GitHub
+> Pages is untouched) so the CWS v1.7.4 privacy URL keeps working during review. Both copies now carry
+> `<link rel="canonical" href="https://adhan.bilalahamad.com/">`, so Google consolidates ranking
+> signals onto the new domain. No redirect needed; don't add one (both hosts serve the same file).
+
+---
+
+## 2. Add the Domain property
 
 1. Open **[Google Search Console](https://search.google.com/search-console)** → **Add property**.
-2. Choose **URL prefix** (the right-hand box).
-3. Paste exactly: `https://bilalahamad0.github.io/adhan-ce/` (with the trailing slash).
+2. Choose **Domain** (the left-hand box).
+3. Enter exactly: `bilalahamad.com` (no `https://`, no subdomain, no path).
+4. GSC shows a **TXT record** like `google-site-verification=XXXXXXXX`. Copy it.
 
-## 2. Verify ownership — pick ONE
+## 3. Verify by DNS TXT (in Vercel)
 
-### Option A — HTML file (recommended for static Pages)
-1. GSC gives you a file named like `google1234abcd.html`. Download it.
-2. Put it in the repo's **`docs/`** folder (since Pages serves `/docs` at the site root, it resolves at `https://bilalahamad0.github.io/adhan-ce/google1234abcd.html`).
-3. Commit + push to `main`, wait ~1–2 min for the Pages build.
-4. Open that URL in a browser and confirm it loads (HTTP 200, no redirect — Google does **not** follow redirects for this file).
-5. Click **Verify** in GSC.
-6. **Leave the file in place forever** — deleting it loses verification.
+1. **Vercel dashboard → Domains → `bilalahamad.com` → DNS Records** (or the project's Domains tab).
+2. Add a record: **Type = TXT**, **Name/Host = `@`** (the apex), **Value =** the
+   `google-site-verification=…` string GSC gave you. TTL: default.
+3. Save. DNS on Vercel propagates fast (usually < 1–2 min).
+4. Back in GSC, click **Verify**. If it says "not found," wait a couple minutes and retry —
+   propagation lag, not a mistake.
+5. **Leave the TXT record in place forever** — removing it loses verification.
 
-### Option B — HTML meta tag
-1. GSC gives you `<meta name="google-site-verification" content="TOKEN" />`.
-2. Paste it into the `<head>` of **`docs/index.html`** (a `<!-- google-site-verification placeholder -->` line is already there — replace it).
-3. Commit + push, wait for the build, click **Verify**. Keep it in place permanently.
-
-### Option C — Google Analytics / Tag Manager
-Only if you later add GA4/GTM to the page. Must be in `<head>`, and you must use the **same Google account** for GSC and GA/GTM. (Your page currently has no analytics, so use A or B.)
-
-### ❌ Not available: DNS TXT
-DNS verification is for Domain properties only, and you can't edit `github.io` DNS. Skip it.
+> Keep the verification you may already have created for `https://bilalahamad0.github.io/adhan-ce/`
+> (URL-prefix) or just delete it — harmless either way. The Domain property is now your primary.
 
 ---
 
-## 3. Submit the sitemap
+## 4. Submit the sitemap
 
-1. In GSC → **Indexing → Sitemaps**.
-2. The box is prefilled with your property prefix; type just the relative path:
-   ```
-   sitemap.xml
-   ```
-   (resolves to `https://bilalahamad0.github.io/adhan-ce/sitemap.xml`).
-3. Click **Submit**.
+1. In GSC (the `bilalahamad.com` property) → **Indexing → Sitemaps**.
+2. Enter the full URL: `https://adhan.bilalahamad.com/sitemap.xml` → **Submit**.
 
-Your `robots.txt` already has `Allow: /` and a `Sitemap:` line, and every `<loc>` is under the property prefix — so it should fetch cleanly.
+`robots.txt` already has `Allow: /` and the `Sitemap:` line, and every `<loc>` is now under
+`adhan.bilalahamad.com` — so it should fetch cleanly.
 
-**If it says "Couldn't fetch":**
-- Open `…/adhan-ce/sitemap.xml` in a browser — must be HTTP 200 and valid XML.
-- Make sure `robots.txt` doesn't `Disallow` it (yours doesn't).
-- Run **URL Inspection** on the sitemap URL; if Googlebot can fetch it, re-submit. The status often just lags — give it a day.
+**If it says "Couldn't fetch":** open the sitemap URL in a browser (must be HTTP 200 + valid XML), run
+**URL Inspection** on it, and re-submit. Status often just lags a day.
 
 ---
 
-## 4. Inspect the homepage + request indexing
+## 5. Inspect the homepage + request indexing
 
-1. Click the **"Inspect any URL"** bar at the top of GSC and paste `https://bilalahamad0.github.io/adhan-ce/`.
-2. Click **Test live URL** → confirm it's fetchable and indexable (returns 200, no `noindex`).
-3. Click **Request indexing**.
+1. Paste `https://adhan.bilalahamad.com/` into the **"Inspect any URL"** bar.
+2. **Test live URL** → confirm fetchable + indexable (200, no `noindex`).
+3. **Request indexing.**
 
-**Expectations (be honest with yourself):**
-- Crawling takes **a few days to a few weeks**; indexing is **never guaranteed**.
-- Re-clicking "Request indexing" does **not** make it faster (there's a daily quota).
-- `Discovered/Crawled – currently not indexed` for a brand-new, low-authority page usually means "not enough signal yet," not a bug. The fix is **backlinks + substance**, not config.
-
----
-
-## 5. Help discovery (this is the real lever for a new page)
-
-A brand-new `github.io` subpath has near-zero authority. Give Google reasons to crawl and index:
-- **Link to it from places you control:** your Chrome Web Store listing ("Website" field), your GitHub repo README (already done), your social posts.
-- Get even 1–2 genuine inbound links (a directory, a relevant forum/comment, the Product Hunt page).
-- Keep the page substantive (it is — feature copy + FAQ + schema markup).
-- **Do not** block it in `robots.txt` to "save crawl budget" — blocking *prevents* indexing.
+**Honest expectations:**
+- Crawling takes **days to weeks**; indexing is **never guaranteed**.
+- Re-clicking "Request indexing" doesn't speed it up (daily quota).
+- `Discovered / Crawled – currently not indexed` on a new low-authority page means "not enough signal
+  yet," not a bug. The fix is **backlinks + substance**, not config (see §7).
 
 ---
 
-## 6. Bonus channels (free, ~10 min)
+## 6. Bing + others (free, ~10 min)
 
 ### Bing Webmaster Tools — import from Google (no re-verification)
-[bing.com/webmasters](https://www.bing.com/webmasters/) → **My Sites → Import** → sign in with Google → **Allow**. Pulls your verified property + sitemap straight from GSC. Bing also powers DuckDuckGo/Ecosia, so this is worthwhile.
+[bing.com/webmasters](https://www.bing.com/webmasters/) → **My Sites → Import** → sign in with Google →
+**Allow**. Pulls the verified property + sitemap straight from GSC. Bing also powers
+DuckDuckGo/Ecosia, so it's worth it.
 
-### IndexNow (optional — Bing/Yandex/etc., NOT Google)
-GitHub Pages can support it because it only needs a static key file:
-1. Generate a hex key, save it as `docs/<key>.txt` (contents = the key) → served at `…/adhan-ce/<key>.txt`.
-2. Ping: `https://www.bing.com/indexnow?url=https://bilalahamad0.github.io/adhan-ce/&key=YOUR_KEY&keyLocation=https://bilalahamad0.github.io/adhan-ce/YOUR_KEY.txt`
-Google doesn't participate, so the Bing import above is usually enough.
+### IndexNow (optional — Bing/Yandex, NOT Google)
+Vercel can serve the static key file: save a hex key as `docs/<key>.txt`, then ping
+`https://www.bing.com/indexnow?url=https://adhan.bilalahamad.com/&key=YOUR_KEY&keyLocation=https://adhan.bilalahamad.com/YOUR_KEY.txt`.
 
 ---
 
-## 7. One-screen checklist
+## 7. The real lever for a new page
 
-- [ ] Add **URL-prefix** property `https://bilalahamad0.github.io/adhan-ce/`
-- [ ] Verify via HTML file in `docs/` **or** the meta tag in `docs/index.html` `<head>`
-- [ ] Submit `sitemap.xml`
+A brand-new domain has near-zero authority. Give Google reasons to crawl and index:
+- **Link to it from places you control:** the Chrome Web Store "Website" field (update **after** v1.7.4
+  is approved — see the timing note in `store-listing.md`), the GitHub README (done), your social posts,
+  and a link/iframe from your `bilalahamad.com` personal site.
+- Earn 1–2 genuine inbound links (a directory, a relevant forum, a Product Hunt page).
+- Keep the page substantive (feature copy + FAQ + schema markup — it already is).
+- **Don't** block it in `robots.txt` to "save crawl budget" — blocking *prevents* indexing.
+
+---
+
+## 8. One-screen checklist
+
+- [ ] Vercel project from `adhan-ce`, **Root Directory = `docs`**, deployed
+- [ ] `adhan.bilalahamad.com` added to the Vercel project (HTTPS green)
+- [ ] Add **Domain** property `bilalahamad.com` in GSC
+- [ ] Verify via **TXT** record in Vercel DNS (leave it forever)
+- [ ] Submit `https://adhan.bilalahamad.com/sitemap.xml`
 - [ ] Inspect homepage → **Test live URL** → **Request indexing**
 - [ ] Import into Bing Webmaster Tools
-- [ ] Add a couple of real backlinks; then wait days–weeks and monitor the Page Indexing report
+- [ ] After v1.7.4 is approved: swap the CWS Website + privacy URLs to `adhan.bilalahamad.com`
+- [ ] Add a couple of real backlinks; then monitor the Page Indexing report over days–weeks
 
 ---
 
 ### Sources
-- [Add a property](https://support.google.com/webmasters/answer/34592) · [Verify ownership](https://support.google.com/webmasters/answer/9008080) · [Sitemaps report](https://support.google.com/webmasters/answer/7451001) · [Ask Google to recrawl](https://developers.google.com/search/docs/crawling-indexing/ask-google-to-recrawl) · [URL Inspection](https://support.google.com/webmasters/answer/9012289) · [Page indexing report](https://support.google.com/webmasters/answer/7440203)
-- [GitHub: Configuring a publishing source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site) · [GitHub blog: github.io + Public Suffix List](https://github.blog/engineering/infrastructure/yummy-cookies-across-domains/)
+- [Add a property](https://support.google.com/webmasters/answer/34592) · [Domain property + DNS verification](https://support.google.com/webmasters/answer/9008080) · [Sitemaps report](https://support.google.com/webmasters/answer/7451001) · [Ask Google to recrawl](https://developers.google.com/search/docs/crawling-indexing/ask-google-to-recrawl) · [URL Inspection](https://support.google.com/webmasters/answer/9012289) · [Page indexing report](https://support.google.com/webmasters/answer/7440203)
+- [Vercel: add a domain](https://vercel.com/docs/projects/domains/add-a-domain) · [Vercel: managing DNS records](https://vercel.com/docs/projects/domains/managing-dns-records) · [rel=canonical & consolidation](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
 - [Bing: Import from Search Console](https://blogs.bing.com/webmaster/september-2019/Import-sites-from-Search-Console-to-Bing-Webmaster-Tools) · [IndexNow](https://www.indexnow.org/faq)
