@@ -5,207 +5,299 @@
     <title>Adhan Caster — store screenshots</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-      .slide { display: none; width: 1280px; height: 800px; overflow: hidden; position: relative; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+      .slide { display: none; width: 1280px; height: 800px; position: relative; overflow: hidden;
+        background: radial-gradient(125% 90% at 50% -12%, #17b07e, #0c6b51 42%, #084735 72%, #052a20 100%); }
       body[data-slide="1"] #s1, body[data-slide="2"] #s2, body[data-slide="3"] #s3,
-      body[data-slide="4"] #s4, body[data-slide="5"] #s5 { display: flex; }
+      body[data-slide="4"] #s4, body[data-slide="5"] #s5 { display: block; }
 
-      /* ---- shared ---- */
-      .brandbg { background: radial-gradient(120% 120% at 15% 10%, #14a06f, #0a5c47 60%, #073324); }
-      .cap { position: absolute; top: 52px; left: 0; right: 0; text-align: center; color: #fff; padding: 0 60px; }
-      .cap h2 { font-size: 40px; font-weight: 800; letter-spacing: .3px; }
-      .cap p { font-size: 20px; opacity: .9; margin-top: 8px; }
+      /* ---------- shared headline ---------- */
+      .head { position: absolute; top: 50px; left: 0; right: 0; text-align: center; color: #fff; padding: 0 90px; z-index: 6; }
+      .head h2 { font-size: 46px; font-weight: 800; letter-spacing: -.6px; line-height: 1.04; text-shadow: 0 2px 28px rgba(0,0,0,.28); }
+      .head h2 .hl { color: #ffe08a; }
+      .head p { font-size: 21px; opacity: .82; margin-top: 12px; font-weight: 500; }
+      .mark { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 9px; color: #fff; opacity: .92; }
+      .mark img { width: 26px; height: 26px; border-radius: 7px; }
+      .mark span { font-size: 16px; font-weight: 800; letter-spacing: .3px; }
 
-      /* ---- slide 1: hero + popup ---- */
-      #s1 { align-items: center; padding: 0 90px; }
-      .hero-left { flex: 1; color: #fff; }
-      .hero-left .logo { font-size: 72px; }
-      .hero-left h1 { font-size: 58px; font-weight: 800; margin-top: 8px; }
-      .hero-left .tag { font-size: 23px; line-height: 1.5; opacity: .94; margin-top: 14px; max-width: 540px; }
-      .hero-left ul { list-style: none; margin-top: 24px; font-size: 20px; }
-      .hero-left li { margin: 13px 0; opacity: .96; }
-      .hero-right { width: 430px; display: flex; justify-content: center; }
+      /* ---------- realistic Chrome window ---------- */
+      .win { position: absolute; left: 50%; transform: translateX(-50%); top: 196px; width: 1108px; border-radius: 16px; overflow: hidden;
+        box-shadow: 0 60px 130px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.07); background: #fff; }
+      .tabs { height: 44px; background: #cdd2d9; display: flex; align-items: center; padding: 0 10px; gap: 8px; }
+      .lights { display: flex; gap: 8px; margin-right: 8px; }
+      .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+      .lr { background: #ff5f57; } .ly { background: #febc2e; } .lg { background: #28c840; }
+      .tab { height: 33px; margin-top: 11px; background: #fff; border-radius: 11px 11px 0 0; display: flex; align-items: center; gap: 9px; padding: 0 15px; font-size: 13px; color: #3c4043; box-shadow: 0 -1px 2px rgba(0,0,0,.04); }
+      .tab .fav { width: 16px; height: 16px; border-radius: 4px; flex: 0 0 auto; }
+      .tab.bg { background: #c2c7ce; color: #565b61; height: 30px; margin-top: 14px; }
+      .toolbar { height: 48px; background: #fff; display: flex; align-items: center; gap: 16px; padding: 0 18px; border-bottom: 1px solid #ededf1; }
+      .navi { display: flex; gap: 18px; color: #5f6368; font-size: 17px; }
+      .url { flex: 1; height: 32px; background: #f1f3f4; border-radius: 17px; display: flex; align-items: center; gap: 9px; padding: 0 15px; font-size: 13.5px; color: #3c4043; }
+      .url .lock { color: #5f6368; font-size: 13px; }
+      .toolbar .exticon { width: 26px; height: 26px; border-radius: 7px; box-shadow: 0 0 0 2px rgba(15,138,95,.18); }
+      .toolbar .avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #7c5cff, #d65cff); }
+      .view { position: relative; height: 470px; overflow: hidden; background: #0f0f0f; }
 
-      .popup { width: 372px; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(0,0,0,.4); color: #15302a; }
-      .p-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: linear-gradient(135deg, #0f8a5f, #0a5c47); color: #fff; }
-      .p-head .pl { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; }
-      .p-head .pl img { width: 28px; height: 28px; border-radius: 7px; }
-      .p-head strong { font-size: 16px; display: block; }
-      .p-head .sub { font-size: 12px; opacity: .85; }
-      .p-next { text-align: center; padding: 16px 0 16px; border-bottom: 1px solid #e4ece9; }
-      .p-next .clock { font-size: 19px; font-weight: 800; color: #15302a; letter-spacing: .4px; margin-bottom: 8px; }
-      .p-next .lab { font-size: 11px; letter-spacing: .7px; color: #6b8079; text-transform: uppercase; }
-      .p-next .nm { font-size: 30px; font-weight: 800; color: #0a5c47; margin-top: 2px; }
-      .p-next .nm small { font-size: 17px; color: #15302a; font-weight: 700; }
-      .p-next .cd { font-size: 14px; color: #6b8079; margin-top: 2px; }
-      .p-row { display: flex; justify-content: space-between; padding: 11px 18px; font-size: 15px; }
-      .p-row.next { background: #e7f5ef; }
-      .p-row.next b, .p-row.next .t { color: #0a5c47; }
-      .p-row .ck { color: #0f8a5f; }
-      .p-row .t { color: #6b8079; }
-      .p-row.dim { opacity: .55; }
-      .p-row.sun { color: #94a39c; }
-      .p-row.sun .t { color: #94a39c; }
+      /* ---------- YouTube watch page ---------- */
+      .yt { display: flex; height: 100%; background: #0f0f0f; color: #f1f1f1; }
+      .yt-main { flex: 1; padding: 18px 22px; min-width: 0; }
+      .player { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; }
+      .scene { position: absolute; inset: 0; background:
+        radial-gradient(70% 110% at 72% 16%, rgba(255,221,160,.95), rgba(255,150,80,.25) 38%, transparent 62%),
+        linear-gradient(176deg, #21356e 0%, #5b3f86 36%, #b65d51 66%, #2a1622 100%); }
+      .scene::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 46%;
+        background: linear-gradient(180deg, transparent, #160b14 86%);
+        clip-path: polygon(0 42%, 16% 30%, 33% 40%, 52% 24%, 70% 38%, 86% 26%, 100% 36%, 100% 100%, 0 100%); }
+      .player .pz { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+      .player .pz b { width: 70px; height: 70px; border-radius: 50%; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 28px; }
+      .player .ctrl { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 14px 10px; }
+      .player .scrub { height: 4px; background: rgba(255,255,255,.3); border-radius: 3px; position: relative; }
+      .player .scrub i { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: #f00; border-radius: 3px; }
+      .player .scrub b { position: absolute; left: 38%; top: 50%; width: 13px; height: 13px; border-radius: 50%; background: #f00; transform: translate(-50%, -50%); }
+      .player .crow { display: flex; align-items: center; gap: 16px; color: #fff; margin-top: 9px; font-size: 13px; }
+      .player .crow .sp { flex: 1; }
+      .yt-title { font-size: 21px; font-weight: 700; margin-top: 15px; line-height: 1.25; }
+      .yt-meta { font-size: 13px; color: #aaa; margin-top: 6px; }
+      .yt-ch { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+      .yt-ch .ava { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #0f8a5f, #0a5c47); flex: 0 0 auto; }
+      .yt-ch .nm { font-weight: 600; font-size: 15px; }
+      .yt-ch .sub { font-size: 12px; color: #aaa; }
+      .yt-ch .btn { margin-left: auto; background: #fff; color: #0f0f0f; font-weight: 600; font-size: 14px; padding: 9px 16px; border-radius: 999px; }
+      .yt-side { width: 304px; padding: 18px 16px 0 8px; }
+      .yt-side .up { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #f1f1f1; }
+      .sug { display: flex; gap: 9px; margin-bottom: 12px; }
+      .sug .th { width: 130px; height: 74px; border-radius: 8px; flex: 0 0 auto; }
+      .sug .tl { flex: 1; }
+      .sug .tl i { display: block; height: 11px; border-radius: 3px; background: #2a2a2a; margin-bottom: 7px; }
+      .sug .tl i:nth-child(1) { width: 100%; } .sug .tl i:nth-child(2) { width: 70%; } .sug .tl i:nth-child(3) { width: 45%; background: #1f1f1f; }
 
-      /* ---- slide 2 & 4: browser frame + corner card (flag) ---- */
-      #s2, #s4 { background: #eef1f4; }
-      .browser { position: absolute; inset: 150px 70px 70px 70px; border-radius: 16px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.18); background: #fff; }
-      .bbar { height: 46px; background: #d8dde3; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
-      .bdot { width: 12px; height: 12px; border-radius: 50%; }
-      .r { background: #ff5f57; } .y { background: #febc2e; } .g { background: #28c840; }
-      .burl { flex: 1; height: 28px; background: #fff; border-radius: 14px; margin-left: 12px; }
-      .bbody { padding: 36px 44px; }
-      .bbody h3 { font-size: 27px; color: #1b2733; }
-      .vid { margin-top: 22px; width: 560px; height: 308px; border-radius: 14px; background: linear-gradient(160deg, #21304a, #0c1118); position: relative; }
-      .vid .lbl { position: absolute; top: 16px; left: 18px; color: #fff; font-weight: 700; font-size: 16px; }
-      .vid .pz { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 60px; color: #fff; opacity: .92; }
-      /* corner card — matches the v1.7.4 in-page notification */
-      .corner { position: absolute; right: 28px; bottom: 28px; display: flex; flex-direction: column; gap: 11px; overflow: hidden; color: #fff; padding: 15px 17px 16px; border-radius: 18px; box-shadow: 0 18px 44px rgba(0,0,0,.36); border: 1px solid rgba(255,255,255,.16); min-width: 270px; max-width: 340px; }
-      .corner.amber { background: linear-gradient(135deg, #c25a23, #7c3312); }
-      .corner.green { background: linear-gradient(135deg, #128a5f, #0a5240); }
-      .corner .crow { display: flex; align-items: center; gap: 14px; }
-      .corner .badge { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 13px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
-      .corner .badge img { width: 30px; height: 30px; border-radius: 8px; }
-      .corner .body { flex: 1 1 auto; min-width: 0; }
-      .corner .cbname { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; opacity: .72; }
-      .corner .title { font-weight: 800; font-size: 18px; margin-top: 2px; }
-      .corner .s { font-size: 13px; opacity: .9; margin-top: 2px; }
-      .corner button { flex: 0 0 auto; align-self: center; border: 0; background: #fff; color: #7c3312; font-weight: 700; padding: 10px 18px; border-radius: 999px; font-size: 13px; box-shadow: 0 5px 14px rgba(0,0,0,.2); }
-      .corner.green button { color: #0a5240; }
-      .corner .bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.22); overflow: hidden; }
-      .corner .bar > i { display: block; height: 100%; width: 68%; background: #fff; border-radius: 999px; }
+      /* ---------- Netflix browse ---------- */
+      .nf { height: 100%; background: #141414; color: #fff; position: relative; }
+      .nf-top { position: absolute; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; gap: 26px; padding: 0 26px; z-index: 4;
+        background: linear-gradient(180deg, rgba(0,0,0,.7), transparent); }
+      .nf-logo { color: #e50914; font-weight: 900; font-size: 26px; letter-spacing: -1px; }
+      .nf-nav { display: flex; gap: 20px; font-size: 13px; opacity: .9; }
+      .nf-hero { position: relative; height: 330px; padding: 0 48px; display: flex; flex-direction: column; justify-content: center; }
+      .nf-scene { position: absolute; inset: 0; background:
+        radial-gradient(60% 90% at 78% 30%, rgba(120,40,160,.7), transparent 55%),
+        linear-gradient(110deg, #3a0d12 0%, #5b1622 40%, #1a0a18 78%); }
+      .nf-scene::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #141414 8%, transparent 56%), linear-gradient(0deg, #141414, transparent 60%); }
+      .nf-hero .ct { position: relative; max-width: 480px; }
+      .nf-tag { font-size: 12px; letter-spacing: 3px; opacity: .8; }
+      .nf-h1 { font-size: 52px; font-weight: 900; margin-top: 8px; line-height: 1; text-shadow: 0 2px 18px rgba(0,0,0,.5); }
+      .nf-desc { font-size: 14px; opacity: .82; margin-top: 14px; line-height: 1.5; }
+      .nf-btns { display: flex; gap: 12px; margin-top: 18px; }
+      .nf-btns .pl { background: #fff; color: #000; font-weight: 700; font-size: 15px; padding: 10px 26px; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+      .nf-btns .mi { background: rgba(109,109,110,.7); color: #fff; font-weight: 600; font-size: 15px; padding: 10px 22px; border-radius: 6px; }
+      .nf-row { position: absolute; left: 0; right: 0; bottom: 16px; padding: 0 26px; }
+      .nf-row .lab { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+      .nf-cards { display: flex; gap: 12px; }
+      .nf-card { width: 168px; height: 96px; border-radius: 6px; flex: 0 0 auto; box-shadow: 0 6px 16px rgba(0,0,0,.4); }
 
-      /* ---- slide 3: fullscreen Prayer Focus (v1.7.4) ---- */
-      #s3 { background: radial-gradient(55% 55% at 50% 42%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); align-items: center; justify-content: center; }
-      .s3stars { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-      .s3stars span { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.9); }
-      #s3 .fbrand { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 12px; color: #fff; padding: 12px 22px 12px 14px; border-radius: 999px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18); }
-      #s3 .fbrand img { width: 32px; height: 32px; border-radius: 9px; }
-      #s3 .fbrand span { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
-      .ffocus { position: relative; z-index: 2; text-align: center; color: #fff; }
-      .fcircle { position: relative; display: flex; align-items: center; justify-content: center; width: 300px; height: 300px; margin: 0 auto; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
-      .fcircle .fhalo { position: absolute; top: 50%; left: 50%; width: 290px; height: 290px; transform: translate(-50%,-50%); border-radius: 50%; background: conic-gradient(from 0deg, rgba(255,255,255,0), rgba(255,255,255,.30), rgba(255,255,255,0) 50%, rgba(255,255,255,.22), rgba(255,255,255,0)); }
-      .fcircle .fglow { position: absolute; top: 50%; left: 50%; width: 220px; height: 220px; transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%); }
-      .fcircle .fcre { position: relative; font-size: 96px; }
-      .ffocus .t { font-size: 15px; letter-spacing: 3px; text-transform: uppercase; opacity: .82; margin-top: 20px; }
-      .ffocus .nm { font-size: 74px; font-weight: 800; margin-top: 6px; }
-      .ffocus .tm { font-size: 26px; opacity: .9; margin-top: 4px; }
-      .ffocus .ms { font-size: 20px; opacity: .85; margin-top: 22px; }
-      .ffocus .au { font-size: 16px; opacity: .72; margin-top: 24px; }
-      .ffocus .btn { margin-top: 24px; display: inline-block; background: #fff; color: #0a5c47; font-weight: 800; font-size: 18px; padding: 16px 42px; border-radius: 14px; }
-      .ffocus .hint { font-size: 14px; opacity: .6; margin-top: 16px; }
+      /* ---------- fullscreen Prayer Focus (hero) ---------- */
+      .focus { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;
+        background: #062a20; color: #fff; }
+      .focus .fbg { position: absolute; inset: -10%; background: radial-gradient(55% 55% at 50% 42%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); }
+      .fstars { position: absolute; inset: 0; }
+      .fstars span { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 7px rgba(255,255,255,.9); }
+      .fpill { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+        padding: 9px 18px 9px 11px; border-radius: 999px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18); z-index: 3; }
+      .fpill img { width: 26px; height: 26px; border-radius: 7px; }
+      .fpill span { font-size: 16px; font-weight: 700; }
+      .fcol { position: relative; z-index: 2; text-align: center; }
+      .fcircle { position: relative; display: flex; align-items: center; justify-content: center; width: 210px; height: 210px; margin: 0 auto; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+      .fcircle .fhalo { position: absolute; top: 50%; left: 50%; width: 204px; height: 204px; transform: translate(-50%,-50%); border-radius: 50%; background: conic-gradient(from 0deg, rgba(255,255,255,0), rgba(255,255,255,.3), rgba(255,255,255,0) 50%, rgba(255,255,255,.22), rgba(255,255,255,0)); }
+      .fcircle .fglow { position: absolute; top: 50%; left: 50%; width: 158px; height: 158px; transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%); }
+      .fcircle .fcre { position: relative; font-size: 66px; }
+      .fcol .t { font-size: 13px; letter-spacing: 2.6px; text-transform: uppercase; opacity: .82; margin-top: 16px; }
+      .fcol .nm { font-size: 50px; font-weight: 800; margin-top: 6px; }
+      .fcol .tm { font-size: 19px; opacity: .9; margin-top: 4px; }
+      .fcol .ms { font-size: 15px; opacity: .85; margin-top: 16px; }
+      .fcol .btn { margin-top: 18px; display: inline-block; background: #fff; color: #0a5c47; font-weight: 800; font-size: 16px; padding: 13px 34px; border-radius: 12px; }
 
-      /* ---- slide 5: privacy + languages ---- */
-      #s5 { align-items: center; justify-content: center; }
-      .promo { text-align: center; color: #fff; max-width: 980px; padding: 0 60px; }
-      .promo .em { font-size: 96px; }
-      .promo h2 { font-size: 52px; font-weight: 800; margin-top: 8px; }
-      .promo .sub { font-size: 22px; opacity: .9; margin-top: 12px; }
-      .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 36px; }
-      .chip { font-size: 20px; font-weight: 700; padding: 13px 22px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); color: #fff; }
-      .langs { margin-top: 34px; font-size: 26px; font-weight: 700; letter-spacing: .5px; opacity: .96; }
+      /* ---------- corner flag ---------- */
+      .flag { position: absolute; right: 26px; bottom: 26px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; color: #fff;
+        padding: 14px 16px 15px; border-radius: 17px; box-shadow: 0 20px 46px rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.16); min-width: 264px; z-index: 5; }
+      .flag.amber { background: linear-gradient(135deg, #c25a23, #7c3312); }
+      .flag.green { background: linear-gradient(135deg, #128a5f, #0a5240); }
+      .flag .crow { display: flex; align-items: center; gap: 13px; }
+      .flag .badge { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.16); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); flex: 0 0 auto; }
+      .flag .badge img { width: 28px; height: 28px; border-radius: 8px; }
+      .flag .body { flex: 1 1 auto; }
+      .flag .bn { font-size: 11px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; opacity: .72; }
+      .flag .ti { font-size: 17px; font-weight: 800; margin-top: 2px; }
+      .flag .su { font-size: 12.5px; opacity: .9; margin-top: 2px; }
+      .flag button { align-self: center; border: 0; background: #fff; color: #7c3312; font-weight: 700; padding: 9px 16px; border-radius: 999px; font-size: 12.5px; flex: 0 0 auto; }
+      .flag.green button { color: #0a5240; }
+      .flag .bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.22); overflow: hidden; }
+      .flag .bar > i { display: block; height: 100%; width: 64%; background: #fff; border-radius: 999px; }
+
+      /* ---------- popup (slide 3) ---------- */
+      .pop { position: absolute; right: 18px; top: 8px; width: 360px; border-radius: 16px; overflow: hidden; background: #fff; color: #15302a; z-index: 5;
+        box-shadow: 0 30px 70px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.05); }
+      .pop .ph { display: flex; align-items: center; gap: 11px; padding: 14px 16px; background: linear-gradient(135deg, #0f8a5f, #0a5c47); color: #fff; }
+      .pop .ph .pl { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; }
+      .pop .ph .pl img { width: 24px; height: 24px; border-radius: 6px; }
+      .pop .ph strong { font-size: 15px; display: block; }
+      .pop .ph .lo { font-size: 11px; opacity: .85; }
+      .pop .pn { text-align: center; padding: 14px 0 14px; border-bottom: 1px solid #e4ece9; }
+      .pop .pn .ck { font-size: 17px; font-weight: 800; letter-spacing: .4px; margin-bottom: 7px; }
+      .pop .pn .lb { font-size: 10px; letter-spacing: .7px; color: #6b8079; text-transform: uppercase; }
+      .pop .pn .nm { font-size: 27px; font-weight: 800; color: #0a5c47; margin-top: 2px; }
+      .pop .pn .nm small { font-size: 15px; color: #15302a; }
+      .pop .pn .cd { font-size: 13px; color: #6b8079; margin-top: 2px; }
+      .pop .row { display: flex; justify-content: space-between; padding: 10px 16px; font-size: 14px; }
+      .pop .row.nx { background: #e7f5ef; } .pop .row.nx b, .pop .row.nx .t { color: #0a5c47; }
+      .pop .row .t { color: #6b8079; } .pop .row.dim { opacity: .5; } .pop .row.sun, .pop .row.sun .t { color: #94a39c; }
+      .pop .pf { display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; font-size: 11px; color: #6b8079; }
+      .anchor { position: absolute; right: 70px; top: -7px; width: 14px; height: 14px; background: #fff; transform: rotate(45deg); box-shadow: 0 0 0 1px rgba(0,0,0,.05); }
+
+      /* ---------- slide 5: brand ---------- */
+      #s5 { display: flex; align-items: center; justify-content: center; }
+      .promo { text-align: center; color: #fff; max-width: 1000px; padding: 0 60px; }
+      .promo .em { width: 110px; height: 110px; margin: 0 auto; border-radius: 28px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }
+      .promo .em img { width: 78px; height: 78px; border-radius: 20px; }
+      .promo h2 { font-size: 54px; font-weight: 800; margin-top: 26px; letter-spacing: -.5px; }
+      .promo .sub { font-size: 23px; opacity: .9; margin-top: 14px; }
+      .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 13px; margin-top: 34px; }
+      .chip { font-size: 19px; font-weight: 700; padding: 12px 22px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); }
+      .langs { margin-top: 30px; font-size: 25px; font-weight: 700; letter-spacing: .4px; opacity: .96; }
     </style>
   </head>
   <body data-slide="1">
-    <!-- Slide 1: hero + popup (clock + sunrise) -->
-    <section class="slide brandbg" id="s1">
-      <div class="hero-left">
-        <div class="logo">🕌</div>
-        <h1>Adhan Caster</h1>
-        <p class="tag">Muslim prayer times with a live local clock — and your media pauses automatically across every Chrome tab at Adhan time.</p>
-        <ul>
-          <li>🕐 Live clock + next prayer countdown</li>
-          <li>⏸️ Auto-pause video &amp; audio in all tabs</li>
-          <li>🧘 Optional full-screen Prayer Focus</li>
-          <li>🌐 6 languages, full right-to-left</li>
-        </ul>
-      </div>
-      <div class="hero-right">
-        <div class="popup">
-          <div class="p-head"><span class="pl"><img src="../icons/icon48.png" alt="" /></span><span><strong>Adhan Caster</strong><div class="sub">Sunnyvale, California</div></span></div>
-          <div class="p-next">
-            <div class="clock">🕐 4:12:00 PM</div>
-            <div class="lab">Next prayer</div>
-            <div class="nm">Maghrib <small>08:24 PM</small></div>
-            <div class="cd">in 4h 12m</div>
+    <!-- ===== Slide 1: HERO — fullscreen block on a streaming page ===== -->
+    <section class="slide" id="s1">
+      <div class="head"><h2>When the Adhan calls, your screen <span class="hl">pauses for prayer</span></h2><p>A calm full-screen reminder takes over — right where you were streaming.</p></div>
+      <div class="win">
+        <div class="tabs"><span class="lights"><i class="lr"></i><i class="ly"></i><i class="lg"></i></span>
+          <span class="tab"><span class="fav" style="background:#ff0000"></span>Intro to Tafsir — YouTube</span>
+          <span class="tab bg"><span class="fav" style="background:#0a5c47"></span>Quran.com</span>
+        </div>
+        <div class="toolbar"><span class="navi">←&nbsp; →&nbsp; ⟳</span><span class="url"><span class="lock">🔒</span> youtube.com/watch?v=…</span><img class="exticon" src="../icons/icon48.png" alt="" /><span class="avatar"></span></div>
+        <div class="view">
+          <div class="focus">
+            <div class="fbg"></div><div class="fstars" id="st1"></div>
+            <div class="fpill"><img src="../icons/icon48.png" alt="" /><span>Adhan Caster</span></div>
+            <div class="fcol">
+              <div class="fcircle"><span class="fhalo"></span><span class="fglow"></span><span class="fcre">🕌</span></div>
+              <div class="t">Time for prayer</div>
+              <div class="nm">Maghrib</div>
+              <div class="tm" dir="ltr">08:24 PM</div>
+              <div class="ms">Media is paused. Take a moment for your prayer.</div>
+              <div class="btn">Resume</div>
+            </div>
           </div>
-          <div class="p-row dim"><span><span class="ck">✓</span> Fajr</span><span class="t">04:20 AM</span></div>
-          <div class="p-row sun"><span>☀ Sunrise</span><span class="t">05:49 AM</span></div>
-          <div class="p-row dim"><span><span class="ck">✓</span> Dhuhr</span><span class="t">01:06 PM</span></div>
-          <div class="p-row"><span>Asr</span><span class="t">04:58 PM</span></div>
-          <div class="p-row next"><b>Maghrib</b><span class="t">08:24 PM</span></div>
-          <div class="p-row"><span>Isha</span><span class="t">09:53 PM</span></div>
         </div>
       </div>
     </section>
 
-    <!-- Slide 2: auto-pause across tabs (corner card / flag) -->
+    <!-- ===== Slide 2: auto-pause on YouTube (flag) ===== -->
     <section class="slide" id="s2">
-      <div class="cap" style="color:#15302a"><h2>Media pauses the moment the Adhan begins</h2><p>Across every tab — then resumes with one click, or automatically.</p></div>
-      <div class="browser">
-        <div class="bbar"><span class="bdot r"></span><span class="bdot y"></span><span class="bdot g"></span><span class="burl"></span></div>
-        <div class="bbody">
-          <h3>Lecture 7 — Tafsir &amp; Reflection</h3>
-          <div class="vid"><span class="lbl">▶ Now playing</span><span class="pz">⏸</span></div>
+      <div class="head"><h2>Auto-pauses <span class="hl">YouTube, Netflix &amp; every open tab</span></h2><p>The instant the Adhan begins — then resumes with one click, or on its own.</p></div>
+      <div class="win">
+        <div class="tabs"><span class="lights"><i class="lr"></i><i class="ly"></i><i class="lg"></i></span>
+          <span class="tab"><span class="fav" style="background:#ff0000"></span>The Golden Age of Andalusia — YouTube</span>
+          <span class="tab bg"><span class="fav" style="background:#1db954"></span>Spotify</span>
         </div>
-        <div class="corner amber">
-          <div class="crow">
-            <div class="badge"><img src="../icons/icon48.png" alt="" /></div>
-            <div class="body"><div class="cbname">Adhan Caster</div><div class="title">Maghrib</div><div class="s">Auto-resumes in 4:58</div></div>
-            <button>Resume</button>
+        <div class="toolbar"><span class="navi">←&nbsp; →&nbsp; ⟳</span><span class="url"><span class="lock">🔒</span> youtube.com/watch?v=…</span><img class="exticon" src="../icons/icon48.png" alt="" /><span class="avatar"></span></div>
+        <div class="view">
+          <div class="yt">
+            <div class="yt-main">
+              <div class="player">
+                <div class="scene"></div>
+                <div class="pz"><b>❚❚</b></div>
+                <div class="ctrl"><div class="scrub"><i></i><b></b></div><div class="crow"><span>14:02 / 38:17</span><span class="sp"></span><span>⚙</span><span>⛶</span></div></div>
+              </div>
+              <div class="yt-title">The Golden Age of Andalusia — A Documentary</div>
+              <div class="yt-meta">482,109 views • 3 weeks ago</div>
+              <div class="yt-ch"><span class="ava"></span><span><div class="nm">Islamic History</div><div class="sub">1.2M subscribers</div></span><span class="btn">Subscribe</span></div>
+            </div>
+            <div class="yt-side">
+              <div class="up">Up next</div>
+              <div class="sug"><span class="th" style="background:linear-gradient(135deg,#3a5,#163)"></span><span class="tl"><i></i><i></i><i></i></span></div>
+              <div class="sug"><span class="th" style="background:linear-gradient(135deg,#46c,#229)"></span><span class="tl"><i></i><i></i><i></i></span></div>
+              <div class="sug"><span class="th" style="background:linear-gradient(135deg,#a55,#722)"></span><span class="tl"><i></i><i></i><i></i></span></div>
+              <div class="sug"><span class="th" style="background:linear-gradient(135deg,#765,#332)"></span><span class="tl"><i></i><i></i><i></i></span></div>
+            </div>
+          </div>
+          <div class="flag amber">
+            <div class="crow"><span class="badge"><img src="../icons/icon48.png" alt="" /></span><span class="body"><div class="bn">Adhan Caster</div><div class="ti">Maghrib</div><div class="su">Auto-resumes in 4:58</div></span><button>Resume</button></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Slide 3: fullscreen Prayer Focus (v1.7.4) -->
+    <!-- ===== Slide 3: the popup ===== -->
     <section class="slide" id="s3">
-      <div class="s3stars" id="s3stars"></div>
-      <div class="fbrand"><img src="../icons/icon48.png" alt="" /><span>Adhan Caster</span></div>
-      <div class="ffocus">
-        <div class="fcircle"><span class="fhalo"></span><span class="fglow"></span><span class="fcre">🕌</span></div>
-        <div class="t">Time for prayer</div>
-        <div class="nm">Maghrib</div>
-        <div class="tm">08:24 PM</div>
-        <div class="ms">Media is paused. Take a moment for your prayer.</div>
-        <div class="au">Auto-resumes in 4:58</div>
-        <div class="btn">Resume</div>
-        <div class="hint">Press Esc to resume</div>
-      </div>
-    </section>
-
-    <!-- Slide 4: heads-up countdown (corner card / flag) -->
-    <section class="slide" id="s4">
-      <div class="cap" style="color:#15302a"><h2>A gentle heads-up before every prayer</h2><p>15, 30, or 60 seconds before — so the pause never catches you mid-scroll.</p></div>
-      <div class="browser">
-        <div class="bbar"><span class="bdot r"></span><span class="bdot y"></span><span class="bdot g"></span><span class="burl"></span></div>
-        <div class="bbody">
-          <h3>Documentary — The Andalusian Libraries</h3>
-          <div class="vid"><span class="lbl">▶ Now playing</span></div>
+      <div class="head"><h2>Every prayer, a <span class="hl">live clock</span>, and Sunrise</h2><p>Your full day at a glance — calculated for your exact city.</p></div>
+      <div class="win">
+        <div class="tabs"><span class="lights"><i class="lr"></i><i class="ly"></i><i class="lg"></i></span>
+          <span class="tab"><span class="fav" style="background:#0a5c47"></span>New Tab</span>
         </div>
-        <div class="corner green">
-          <div class="crow">
-            <div class="badge"><img src="../icons/icon48.png" alt="" /></div>
-            <div class="body"><div class="cbname">Adhan Caster</div><div class="title">Maghrib Adhan</div><div class="s">Starting in 30s</div></div>
+        <div class="toolbar"><span class="navi">←&nbsp; →&nbsp; ⟳</span><span class="url"><span class="lock">🔍</span> Search or type a URL</span><img class="exticon" src="../icons/icon48.png" alt="" /><span class="avatar"></span></div>
+        <div class="view" style="background:#eef1f4">
+          <div class="pop">
+            <div class="anchor"></div>
+            <div class="ph"><span class="pl"><img src="../icons/icon48.png" alt="" /></span><span><strong>Adhan Caster</strong><span class="lo">Sunnyvale, California</span></span></div>
+            <div class="pn"><div class="ck">🕐 4:12:00 PM</div><div class="lb">Next prayer</div><div class="nm">Maghrib <small>08:24 PM</small></div><div class="cd">in 4h 12m</div></div>
+            <div class="row dim"><span>✓ Fajr</span><span class="t">04:20 AM</span></div>
+            <div class="row sun"><span>☀ Sunrise</span><span class="t">05:49 AM</span></div>
+            <div class="row dim"><span>✓ Dhuhr</span><span class="t">01:06 PM</span></div>
+            <div class="row"><span>Asr</span><span class="t">04:58 PM</span></div>
+            <div class="row nx"><b>Maghrib</b><span class="t">08:24 PM</span></div>
+            <div class="row"><span>Isha</span><span class="t">09:53 PM</span></div>
+            <div class="pf"><span>Updated 4:11 PM</span><span>Refresh</span></div>
           </div>
-          <div class="bar"><i></i></div>
         </div>
       </div>
     </section>
 
-    <!-- Slide 5: privacy + languages -->
-    <section class="slide brandbg" id="s5">
+    <!-- ===== Slide 4: heads-up on Netflix (flag) ===== -->
+    <section class="slide" id="s4">
+      <div class="head"><h2>A gentle heads-up <span class="hl">before every prayer</span></h2><p>15, 30, or 60 seconds early — so the pause never catches you mid-scene.</p></div>
+      <div class="win">
+        <div class="tabs"><span class="lights"><i class="lr"></i><i class="ly"></i><i class="lg"></i></span>
+          <span class="tab"><span class="fav" style="background:#e50914"></span>Netflix</span>
+          <span class="tab bg"><span class="fav" style="background:#ff0000"></span>YouTube</span>
+        </div>
+        <div class="toolbar"><span class="navi">←&nbsp; →&nbsp; ⟳</span><span class="url"><span class="lock">🔒</span> netflix.com/browse</span><img class="exticon" src="../icons/icon48.png" alt="" /><span class="avatar"></span></div>
+        <div class="view">
+          <div class="nf">
+            <div class="nf-top"><span class="nf-logo">NETFLIX</span><span class="nf-nav"><span>Home</span><span>Series</span><span>Films</span><span>New &amp; Popular</span><span>My List</span></span></div>
+            <div class="nf-hero">
+              <div class="nf-scene"></div>
+              <div class="ct"><div class="nf-tag">N SERIES</div><div class="nf-h1">DESERT WINDS</div><div class="nf-desc">A sweeping historical epic across the trade routes of the old world.</div>
+                <div class="nf-btns"><span class="pl">▶ Play</span><span class="mi">ⓘ More Info</span></div></div>
+            </div>
+            <div class="nf-row"><div class="lab">Trending Now</div><div class="nf-cards">
+              <span class="nf-card" style="background:linear-gradient(135deg,#3a2d6b,#16204a)"></span>
+              <span class="nf-card" style="background:linear-gradient(135deg,#6b2d3a,#4a1620)"></span>
+              <span class="nf-card" style="background:linear-gradient(135deg,#2d6b4a,#163a2a)"></span>
+              <span class="nf-card" style="background:linear-gradient(135deg,#6b5d2d,#3a2f16)"></span>
+              <span class="nf-card" style="background:linear-gradient(135deg,#2d4a6b,#16263a)"></span>
+              <span class="nf-card" style="background:linear-gradient(135deg,#5d2d6b,#36163a)"></span>
+            </div></div>
+          </div>
+          <div class="flag green">
+            <div class="crow"><span class="badge"><img src="../icons/icon48.png" alt="" /></span><span class="body"><div class="bn">Adhan Caster</div><div class="ti">Maghrib Adhan</div><div class="su">Starting in 30s</div></span></div>
+            <div class="bar"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Slide 5: privacy + languages ===== -->
+    <section class="slide" id="s5">
       <div class="promo">
-        <div class="em">🔒</div>
-        <h2>Private. Free. In your language.</h2>
-        <div class="sub">No business model hiding in the background — Adhan Caster collects nothing.</div>
+        <div class="em"><img src="../icons/icon48.png" alt="" /></div>
+        <h2>Free, private — and fluent in 6 languages</h2>
+        <div class="sub">No ads. No tracking. No account. Everything stays on your device.</div>
         <div class="chips">
-          <span class="chip">No ads</span>
-          <span class="chip">No tracking</span>
-          <span class="chip">No account</span>
-          <span class="chip">100% on-device</span>
-          <span class="chip">Open source</span>
-          <span class="chip">Manifest V3</span>
+          <span class="chip">🔒 No tracking</span>
+          <span class="chip">🚫 No ads</span>
+          <span class="chip">👤 No account</span>
+          <span class="chip">📴 100% on-device</span>
+          <span class="chip">⚙️ Open source</span>
         </div>
         <div class="langs">English · العربية · اردو · Bahasa Indonesia · Türkçe · Français</div>
       </div>
@@ -214,16 +306,13 @@
     <script>
       const s = new URLSearchParams(location.search).get('slide') || '1';
       document.body.dataset.slide = s;
-      // Scatter stars across the fullscreen focus slide.
-      const stars = document.getElementById('s3stars');
-      if (stars) {
-        for (let i = 0; i < 36; i++) {
+      const st = document.getElementById('st1');
+      if (st) {
+        for (let i = 0; i < 34; i++) {
           const e = document.createElement('span');
-          const z = 2 + Math.random() * 4;
-          e.style.cssText =
-            `left:${(Math.random() * 100).toFixed(1)}%;top:${(Math.random() * 100).toFixed(1)}%;` +
-            `width:${z.toFixed(1)}px;height:${z.toFixed(1)}px;opacity:${(0.3 + Math.random() * 0.6).toFixed(2)}`;
-          stars.appendChild(e);
+          const z = 1.5 + Math.random() * 3;
+          e.style.cssText = `left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*100).toFixed(1)}%;width:${z.toFixed(1)}px;height:${z.toFixed(1)}px;opacity:${(0.3+Math.random()*0.6).toFixed(2)}`;
+          st.appendChild(e);
         }
       }
     </script>

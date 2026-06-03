@@ -122,11 +122,11 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 
 Screenshots are downscaled to 640×400, so use **large text and one idea per image**. Recommended order (first screenshot matters most):
 
-1. **screenshot-1.png** — *"Prayer times + a live local clock — your next salah at a glance."*
-2. **screenshot-2.png** — *"The Adhan starts — every tab's video & audio pauses automatically."*
-3. **screenshot-3.png** — *"A calm, animated full-screen Prayer Focus. Resume anytime."*
-4. **screenshot-4.png** — *"A heads-up 15/30/60s before — never caught off guard."*
-5. **screenshot-5.png** — *"Free & private, in 6 languages. No ads, no tracking."*
+1. **screenshot-1.png** *(hero)* — *"When the Adhan calls, your whole screen pauses for prayer."*
+2. **screenshot-2.png** — *"Auto-pauses YouTube, Netflix & every open tab."*
+3. **screenshot-3.png** — *"Every prayer, a live clock, and Sunrise — at a glance."*
+4. **screenshot-4.png** — *"A gentle heads-up 15–60s before every prayer."*
+5. **screenshot-5.png** — *"Free, private, and in 6 languages."*
 
 > All 5 source screenshots (1280×800) are generated into `docs/store/` by `npm run shots`. Upload all five; the first is the strongest. Replace any old/placeholder media on the live listing.
 
