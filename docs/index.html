@@ -94,8 +94,8 @@
   .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--ink);text-decoration:none}
   .brand img{width:30px;height:30px;border-radius:8px}
   .nav-links{display:flex;align-items:center;gap:22px}
-  .nav-links a{color:var(--muted);text-decoration:none;font-weight:600;font-size:15px}
-  .nav-links a:hover{color:var(--ink)}
+  .nav-links a:not(.nav-cta){color:var(--muted);text-decoration:none;font-weight:600;font-size:15px}
+  .nav-links a:not(.nav-cta):hover{color:var(--ink)}
   .nav-cta{padding:10px 18px;font-size:14px}
   @media(max-width:720px){.nav-links a:not(.nav-cta){display:none}}
 
