@@ -122,13 +122,14 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 
 Screenshots are downscaled to 640×400, so use **large text and one idea per image**. Recommended order (first screenshot matters most):
 
-1. **screenshot-1.png** *(hero)* — *"When the Adhan calls, your whole screen pauses for prayer."*
-2. **screenshot-2.png** — *"Auto-pauses YouTube, Netflix & every open tab."*
-3. **screenshot-3.png** — *"Every prayer, a live clock, and Sunrise — at a glance."*
-4. **screenshot-4.png** — *"A gentle heads-up 15–60s before every prayer."*
-5. **screenshot-5.png** — *"Free, private, and in 6 languages."*
+1. **screenshot-1.png** *(hero)* — *"Pause every tab for prayer"* — with the sites it covers (YouTube, Netflix, Spotify, Twitch, Prime Video).
+2. **screenshot-2.png** — *"One Adhan. Every tab stops."* — instant pause + one-click / auto resume.
+3. **screenshot-3.png** — *"Five prayers, one glance."* — popup with live clock, Sunrise, any city.
+4. **screenshot-4.png** — *"A heads-up before every prayer."* — 15 / 30 / 60s lead time.
+5. **screenshot-5.png** — *"Pray in your language."* — 6 languages + full RTL (Arabic shown).
+6. **screenshot-6.png** — *"Free, private, and yours."* — no ads, no tracking, no account.
 
-> All 5 source screenshots (1280×800) are generated into `docs/store/` by `npm run shots`. Upload all five; the first is the strongest. Replace any old/placeholder media on the live listing.
+> Six retina-rendered 1280×800 screenshots are generated into `docs/store/` by `npm run shots` (editorial layout, Fraunces/Inter web fonts). **Chrome Web Store allows up to 5 screenshots**, so pick your best five — the hero (#1) is essential; if you must drop one, #6 (privacy) is the most expendable. Replace old media on the live listing.
 
 ---
 
