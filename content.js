@@ -241,7 +241,7 @@
       .fbrand .fbname { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
       .panel { position: relative; z-index: 2; text-align: center; color: #fff; padding: 28px; max-width: 480px; }
       .scrim.show .panel { animation: ccpRise .6s cubic-bezier(.2, .7, .2, 1) both; }
-      .crescent-wrap { position: relative; display: inline-block; }
+      .crescent-wrap { position: relative; display: flex; align-items: center; justify-content: center; width: 216px; height: 216px; margin: 0 auto; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.10); }
       .halo { position: absolute; top: 50%; left: 50%; width: 210px; height: 210px; pointer-events: none; transform: translate(-50%, -50%); border-radius: 50%; background: conic-gradient(from 0deg, rgba(255,255,255,0), rgba(255,255,255,.30), rgba(255,255,255,0) 50%, rgba(255,255,255,.22), rgba(255,255,255,0)); animation: ccpSpin 24s linear infinite; }
       .glow { position: absolute; top: 50%; left: 50%; width: 160px; height: 160px; pointer-events: none; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%); animation: ccpGlow 5s ease-in-out infinite; }
       .crescent { position: relative; display: inline-block; font-size: 64px; line-height: 1; animation: ccpBreathe 5s ease-in-out infinite; }
@@ -269,7 +269,7 @@
     const fbname = mk('span', { class: 'fbname', text: 'Adhan Caster' });
     const ftitle = mk('div', { class: 'ftitle', text: 'Time for prayer' });
     const fname = mk('div', { class: 'fname', text: 'Prayer' });
-    const ftime = mk('div', { class: 'ftime' });
+    const ftime = mk('div', { class: 'ftime', dir: 'ltr' });
     const fmsg = mk('div', { class: 'fmsg', text: 'Media is paused. Take a moment for your prayer.' });
     const fauto = mk('div', { class: 'fauto' });
     const fresume = mk('button', { class: 'fresume' }, 'Resume');

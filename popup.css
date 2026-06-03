@@ -91,6 +91,8 @@ body {
 .next-time { font-size: 15px; color: var(--text); font-weight: 600; }
 .next-countdown { margin-top: 3px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .clock { font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: .4px; margin-bottom: 8px; }
+/* Clock times are always written LTR ("01:14 PM"), even in RTL (Arabic/Urdu) UIs. */
+.clock, .next-time, .row .ptime { direction: ltr; unicode-bidi: isolate; }
 
 .list { padding: 6px 8px 8px; }
 .row {
