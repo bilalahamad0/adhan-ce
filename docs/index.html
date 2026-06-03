@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<!-- google-site-verification placeholder — replace with the tag from Google Search Console, e.g.
+     <meta name="google-site-verification" content="YOUR_TOKEN"> (see docs/seo-search-console.md) -->
+
 <!-- Primary SEO -->
 <title>Adhan Caster — Muslim Prayer Times Chrome Extension that Auto-Pauses Media</title>
 <meta name="description" content="Free Chrome extension showing Muslim prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha) with a live Adhan countdown — and it auto-pauses video & audio in every tab at salah. No ads, no tracking, open source.">
@@ -13,6 +16,8 @@
 <link rel="canonical" href="https://bilalahamad0.github.io/adhan-ce/">
 <link rel="icon" type="image/png" href="icon128.png">
 <link rel="apple-touch-icon" href="icon128.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,600&display=swap" rel="stylesheet">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
@@ -41,7 +46,7 @@
   "description": "Free Chrome extension that shows Muslim prayer times with a live Adhan countdown and automatically pauses video and audio in every browser tab at prayer time.",
   "url": "https://bilalahamad0.github.io/adhan-ce/",
   "downloadUrl": "https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia",
-  "softwareVersion": "1.6.6",
+  "softwareVersion": "1.7.4",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "Bilal Ahamad" }
@@ -89,21 +94,24 @@
   .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--ink);text-decoration:none}
   .brand img{width:30px;height:30px;border-radius:8px}
   .nav-links{display:flex;align-items:center;gap:22px}
-  .nav-links a{color:var(--muted);text-decoration:none;font-weight:600;font-size:15px}
-  .nav-links a:hover{color:var(--ink)}
+  .nav-links a:not(.nav-cta){color:var(--muted);text-decoration:none;font-weight:600;font-size:15px}
+  .nav-links a:not(.nav-cta):hover{color:var(--ink)}
   .nav-cta{padding:10px 18px;font-size:14px}
   @media(max-width:720px){.nav-links a:not(.nav-cta){display:none}}
 
-  /* Hero */
-  .hero{background:linear-gradient(180deg,var(--green-light),#fff);padding:72px 0 56px;text-align:center}
-  .badge{display:inline-block;background:#fff;border:1px solid var(--line);color:var(--green-dark);font-weight:700;font-size:13px;padding:6px 14px;border-radius:999px;margin-bottom:22px}
-  .hero h1{font-size:clamp(32px,5vw,52px);line-height:1.1;margin:0 0 18px;letter-spacing:-.02em}
-  .hero h1 .hl{color:var(--green)}
-  .hero p.sub{font-size:clamp(17px,2.4vw,21px);color:var(--muted);max-width:680px;margin:0 auto 30px}
+  /* Hero — editorial premium */
+  .hero{position:relative;overflow:hidden;padding:84px 0 66px;text-align:center;color:#fff;
+    background:radial-gradient(90% 70% at 50% -8%,rgba(95,230,182,.16),transparent 55%),linear-gradient(165deg,#0e6147,#094030 55%,#062a20)}
+  .hero .badge{display:inline-block;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#eafff6;font-weight:700;font-size:13px;padding:7px 15px;border-radius:999px;margin-bottom:24px}
+  .hero h1{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:clamp(38px,5.6vw,62px);line-height:1.03;margin:0 0 20px;letter-spacing:-.01em}
+  .hero h1 .hl{font-style:italic;color:#5fe6b6}
+  .hero p.sub{font-size:clamp(17px,2.4vw,21px);color:rgba(255,255,255,.82);max-width:660px;margin:0 auto 30px}
   .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-  .trust{margin-top:22px;color:var(--muted);font-size:14px;font-weight:600}
+  .hero .btn-ghost{background:rgba(255,255,255,.08);color:#fff;border:1.5px solid rgba(255,255,255,.26)}
+  .hero .btn-ghost:hover{background:rgba(255,255,255,.14)}
+  .trust{margin-top:24px;color:rgba(255,255,255,.7);font-size:14px;font-weight:600}
   .trust span{margin:0 8px;white-space:nowrap}
-  .hero-shot{max-width:920px;margin:46px auto 0;border-radius:var(--radius);overflow:hidden;box-shadow:0 30px 70px rgba(11,94,63,.18);border:1px solid var(--line)}
+  .hero-shot{max-width:940px;margin:50px auto 0;border-radius:var(--radius);overflow:hidden;box-shadow:0 40px 90px rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.08)}
   .hero-shot img{display:block;width:100%;height:auto}
 
   /* Sections */
@@ -180,7 +188,7 @@
   <section class="hero">
     <div class="wrap">
       <span class="badge">🕌 Free &amp; open source · Privacy-first</span>
-      <h1>Never miss a prayer<br>because you were <span class="hl">mid-scroll</span>.</h1>
+      <h1>Never miss a prayer,<br>even <span class="hl">mid-stream</span>.</h1>
       <p class="sub">Adhan Caster shows your <strong>Muslim prayer times</strong> with a live countdown — and the moment the <strong>Adhan</strong> begins, it automatically pauses video &amp; audio in <strong>every Chrome tab</strong>.</p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=hero">Add to Chrome — it's free</a>

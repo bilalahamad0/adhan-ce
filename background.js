@@ -3,9 +3,19 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, computeNext, buildPrayers, isStaleFire } from './lib/schedule.js';
+import { ymd, computeNext, buildPrayers, isStaleFire, parseTimeToday, hhmmTo12h } from './lib/schedule.js';
+import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 
-const API_BASE = 'https://adhan-api-mauve.vercel.app/api/prayerTimes';
+// Call Aladhan directly (CORS-open). method=2 (ISNA) matches the prior companion
+// API, so prayer-time values are unchanged; we additionally get Sunrise + the
+// location's IANA timezone (data.meta.timezone) for the in-popup clock.
+const ALADHAN_BASE = 'https://api.aladhan.com/v1/timingsByCity';
+
+// Aladhan's optional date path segment is DD-MM-YYYY.
+function ddmmyyyy(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`;
+}
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -49,14 +59,33 @@ async function getState() {
 // ---------- schedule fetch ----------
 async function fetchAndStoreSchedule() {
   const settings = await getSettings();
-  let url = `${API_BASE}?country=${encodeURIComponent(settings.country)}&city=${encodeURIComponent(settings.city)}`;
+  const date = ddmmyyyy(new Date());
+  let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(
+    settings.country
+  )}&method=2&school=0`;
   if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
   const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
+  if (!res.ok) throw new Error(`Aladhan ${res.status}`);
+  const json = await res.json();
+  const data = json && json.data;
+  if (!data || !data.timings) throw new Error('Aladhan: malformed response');
+  const tmg = data.timings;
   const base = new Date();
-  const prayers = buildPrayers(data.all_prayers, base);
-  const schedule = { date: ymd(base), prayers, fetchedAt: Date.now() };
+  // Aladhan returns 24h "HH:mm"; convert to the "hh:mm a" the app already parses
+  // and displays, so scheduling/firing is byte-identical to before.
+  const five = {
+    Fajr: hhmmTo12h(tmg.Fajr),
+    Dhuhr: hhmmTo12h(tmg.Dhuhr),
+    Asr: hhmmTo12h(tmg.Asr),
+    Maghrib: hhmmTo12h(tmg.Maghrib),
+    Isha: hhmmTo12h(tmg.Isha),
+  };
+  const prayers = buildPrayers(five, base);
+  // Sunrise is informational only (no pause/notification), shown greyed in the popup.
+  const sunriseTime = tmg.Sunrise ? hhmmTo12h(tmg.Sunrise) : null;
+  const sunrise = sunriseTime ? { time: sunriseTime, ts: parseTimeToday(sunriseTime, base) } : null;
+  const tz = (data.meta && data.meta.timezone) || null;
+  const schedule = { date: ymd(base), prayers, sunrise, tz, fetchedAt: Date.now() };
   const nextPrayer = computeNext(prayers, Date.now());
   await chrome.storage.local.set({ schedule, nextPrayer });
   return { schedule, nextPrayer };
@@ -88,9 +117,24 @@ async function armAlarms() {
 async function broadcast(message) {
   const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
   await Promise.all(
-    tabs.map((t) =>
-      t.id != null ? chrome.tabs.sendMessage(t.id, message).catch(() => {}) : Promise.resolve()
-    )
+    tabs.map(async (t) => {
+      if (t.id == null) return;
+      try {
+        await chrome.tabs.sendMessage(t.id, message);
+      } catch (_) {
+        // No live content script in this tab — almost always a tab that was open
+        // before the extension loaded/updated (common in dev, and after a browser
+        // restart). Inject it, then retry, so its media still pauses/resumes at
+        // prayer time. (A video in Picture-in-Picture pauses once its source tab's
+        // <video> is paused.) Restricted pages (chrome://, the Web Store, the PDF
+        // viewer) reject injection — ignored.
+        try {
+          await chrome.scripting.insertCSS({ target: { tabId: t.id, allFrames: true }, files: ['content.css'] });
+          await chrome.scripting.executeScript({ target: { tabId: t.id, allFrames: true }, files: ['content.js'] });
+          await chrome.tabs.sendMessage(t.id, message).catch(() => {});
+        } catch (_) {}
+      }
+    })
   );
 }
 
@@ -131,13 +175,16 @@ async function handlePrayerFire() {
   await chrome.storage.local.set({ paused });
 
   try {
+    const { lang } = await chrome.storage.local.get('lang');
+    const M = await getCatalog(lang || 'en');
+    const pname = M['prayer_' + nextPrayer.name] || nextPrayer.name;
     await chrome.notifications.create(`adhan-${firedTs}`, {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: `🕌 ${nextPrayer.name} — Adhan time`,
-      message: `It's time for ${nextPrayer.name} (${nextPrayer.time}). Media has been paused across your tabs.`,
+      title: interpolate(M.notif_title, { prayer: pname }),
+      message: interpolate(M.notif_body, { prayer: pname, time: nextPrayer.time }),
       priority: 2,
-      buttons: [{ title: 'Prayer focus' }, { title: 'Resume now' }],
+      buttons: [{ title: M.btn_focus }, { title: M.btn_resume }],
     });
   } catch (_) {}
 
@@ -336,6 +383,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       case 'GET_STATE':
         sendResponse(await getState());
         break;
+      case 'GET_I18N': {
+        // Content scripts can't import the i18n module (classic content script),
+        // so the background hands them the merged catalog + direction.
+        const { lang } = await chrome.storage.local.get('lang');
+        let ui = 'en';
+        try {
+          ui = chrome.i18n.getUILanguage();
+        } catch (_) {}
+        const code = resolveLang(lang, ui);
+        sendResponse({ lang: code, dir: isRTLLang(code) ? 'rtl' : 'ltr', messages: await getCatalog(code) });
+        break;
+      }
       case 'RESUME_NOW':
         await resumeNow();
         sendResponse({ ok: true });

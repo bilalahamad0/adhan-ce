@@ -90,6 +90,9 @@ body {
 .next-name { font-size: 24px; font-weight: 800; color: var(--accent); }
 .next-time { font-size: 15px; color: var(--text); font-weight: 600; }
 .next-countdown { margin-top: 3px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.clock { font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: .4px; margin-bottom: 8px; }
+/* Clock times are always written LTR ("01:14 PM"), even in RTL (Arabic/Urdu) UIs. */
+.clock, .next-time, .row .ptime { direction: ltr; unicode-bidi: isolate; }
 
 .list { padding: 6px 8px 8px; }
 .row {
@@ -103,7 +106,10 @@ body {
 .row.next { background: var(--next-bg); }
 .row.next .pname { color: var(--accent); }
 .row.next .ptime { color: var(--accent); font-weight: 600; }
-.row .ptime em { font-style: normal; font-size: 10px; color: var(--amber-text); margin-left: 4px; }
+.row .ptime em { font-style: normal; font-size: 10px; color: var(--amber-text); margin-inline-start: 4px; }
+.row.sunrise .pname { color: var(--muted); font-weight: 600; }
+.row.sunrise .pname::before { content: "☀ "; opacity: .85; }
+.row.sunrise .ptime { color: var(--muted); }
 
 .settings { padding: 10px 14px 14px; border-top: 1px solid var(--line); background: var(--surface); }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13px; }
@@ -118,7 +124,7 @@ body {
 
 .city-wrap { position: relative; width: 140px; }
 .suggest {
-  position: absolute; top: calc(100% + 4px); right: 0; z-index: 5;
+  position: absolute; top: calc(100% + 4px); inset-inline-end: 0; z-index: 5;
   width: 250px; max-height: 196px; overflow-y: auto;
   background: var(--surface); border: 1px solid var(--input-border);
   border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
@@ -132,7 +138,7 @@ body {
 .field-stack > span:first-child { display: block; margin-bottom: 6px; }
 .field-stack .city-wrap { width: 100%; }
 .field-stack #city { width: 100%; }
-.field-stack .suggest { left: 0; right: 0; width: auto; }
+.field-stack .suggest { inset-inline: 0; width: auto; }
 .settings-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .save-btn { border: 0; background: var(--green-1); color: #fff; font-weight: 600; padding: 8px 18px; border-radius: 8px; cursor: pointer; }
 .save-btn:hover { background: var(--green-2); }

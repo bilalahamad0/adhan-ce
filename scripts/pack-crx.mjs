@@ -37,6 +37,13 @@ const RUNTIME_FILES = [
   'icons/icon128.png',
   'lib/schedule.js',
   'lib/geocode.js',
+  'lib/i18n.js',
+  'locales/en.json',
+  'locales/ar.json',
+  'locales/ur.json',
+  'locales/id.json',
+  'locales/tr.json',
+  'locales/fr.json',
 ];
 
 async function readManifestVersion() {

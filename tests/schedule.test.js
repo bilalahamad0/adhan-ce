@@ -4,6 +4,7 @@ import {
   buildPrayers,
   computeNext,
   formatCountdown,
+  hhmmTo12h,
   isStaleFire,
   STALE_FIRE_MS,
   PRAYER_ORDER,
@@ -110,5 +111,29 @@ describe('formatCountdown', () => {
   });
   it('clamps negatives to 0s', () => {
     expect(formatCountdown(-5000)).toBe('0s');
+  });
+});
+
+describe('hhmmTo12h', () => {
+  it('converts 24h HH:mm to 12h hh:mm a (matches live Aladhan values)', () => {
+    expect(hhmmTo12h('04:20')).toBe('04:20 AM');
+    expect(hhmmTo12h('05:49')).toBe('05:49 AM');
+    expect(hhmmTo12h('13:06')).toBe('01:06 PM');
+    expect(hhmmTo12h('20:24')).toBe('08:24 PM');
+    expect(hhmmTo12h('21:53')).toBe('09:53 PM');
+  });
+  it('handles midnight and noon boundaries', () => {
+    expect(hhmmTo12h('00:00')).toBe('12:00 AM');
+    expect(hhmmTo12h('00:06')).toBe('12:06 AM');
+    expect(hhmmTo12h('12:00')).toBe('12:00 PM');
+  });
+  it('passes through non-HH:mm input unchanged (already 12h or invalid)', () => {
+    expect(hhmmTo12h('08:24 PM')).toBe('08:24 PM');
+    expect(hhmmTo12h('not a time')).toBe('not a time');
+  });
+  it('round-trips through parseTimeToday for scheduling', () => {
+    const ts = parseTimeToday(hhmmTo12h('20:24'), BASE);
+    expect(new Date(ts).getHours()).toBe(20);
+    expect(new Date(ts).getMinutes()).toBe(24);
   });
 });
