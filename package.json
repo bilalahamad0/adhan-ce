@@ -25,7 +25,8 @@
   "license": "MIT",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --collectCoverageFrom='lib/**/*.js'",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "pack": "bash docs/pack.sh",
     "pack:crx": "node scripts/pack-crx.mjs",
     "submit:cws": "node scripts/submit-cws.mjs",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "crx3": "^1.1.3",
-    "jest": "^30.3.0"
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.4.1"
   }
 }

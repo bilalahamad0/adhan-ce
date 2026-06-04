@@ -26,10 +26,15 @@ It's a standalone Chrome extension. It fetches prayer times from the public
 ## Setup (for development)
 
 ```bash
-npm install      # installs Jest (dev only — the extension itself has no runtime deps)
-npm test         # unit + manifest qualification tests
+npm install      # installs Jest + jsdom (dev only — the extension itself has no runtime deps)
+npm test         # full suite: pure-lib units, service-worker / content / popup integration, manifest
+npm run test:cov # same, with a coverage report + enforced thresholds (~96% statements)
 npm run pack     # runs the tests, then zips a clean build → adhan-caster-pro-<version>.zip
 ```
+
+Every push and pull request runs the suite on Linux, **Windows and macOS** (see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)) so the timezone, DST and
+locale-formatting paths are verified on each OS the extension ships to.
 
 To publish a new version to the Chrome Web Store, see [RELEASING.md](RELEASING.md).
 
@@ -63,7 +68,7 @@ below is the same architecture in words.
 | `background.js` (module service worker) | Fetches the schedule, parses prayer times into timestamps, arms `chrome.alarms`, fires the desktop notification + broadcasts the cross-tab pause, and arms auto-resume. |
 | `content.js` (all frames) | Per-second ticker: bottom-right countdown overlay + full-screen focus overlay (top visible frame, Shadow DOM), and pauses/resumes its own frame's media. |
 | `popup.html/js/css` | Prayer list, live countdown, Resume, the Open-Meteo location search, and settings. |
-| `lib/schedule.js`, `lib/geocode.js` | Pure, dependency-free helpers (time parsing / next-prayer / formatting; geocoding) — unit-tested. |
+| `lib/schedule.js`, `lib/geocode.js`, `lib/i18n.js` | Pure, dependency-free helpers (time parsing / next-prayer / formatting; geocoding; runtime i18n) — unit-tested. |
 | `icons/generate-icons.cjs` | Regenerates the PNG icons with pure Node `zlib` (`npm run icons`). |
 
 See [docs/TESTING.md](docs/TESTING.md) for the full pre-publish QA checklist.

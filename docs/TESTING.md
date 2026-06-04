@@ -4,22 +4,32 @@ How to verify Adhan Caster Pro before publishing a production build.
 
 ## Automated tests
 
-Pure logic and packaging are covered by Jest (run from the repo root):
+Logic, behavior and packaging are covered by Jest (run from the repo root). The
+suite loads the **real** `background.js`, `content.js` and `popup.js` against an
+in-memory `chrome.*` mock (`tests/helpers/chrome-mock.js`), a `fetch` router
+(`tests/helpers/fetch-mock.js`) and a jsdom DOM — so it exercises shipping code,
+not re-implementations.
 
 ```bash
-npm install                 # one-time: installs Jest
-npm test                    # unit + manifest qualification tests
-npm run test:cov            # with coverage on lib/
+npm install                 # one-time: installs Jest + jsdom
+npm test                    # run everything
+npm run test:cov            # with coverage + enforced thresholds (~96% statements, ~98% lines)
 npm run pack                # runs the tests, then zips a clean build only if they pass
 ```
 
 | Suite | File | Covers |
 | :--- | :--- | :--- |
-| Unit | `tests/schedule.test.js` | `lib/schedule.js` — time parsing (AM/PM, midnight/noon, bad input), next-prayer selection incl. tomorrow-Fajr rollover, countdown formatting. |
+| Unit | `tests/schedule.test.js` | `lib/schedule.js` — time parsing (AM/PM, midnight/noon, bad input), next-prayer selection incl. tomorrow-Fajr rollover, stale-fire guard, countdown formatting. |
 | Unit | `tests/geocode.test.js` | `lib/geocode.js` — parsing Open-Meteo results (region/no-region, empty payloads) and the `searchPlaces` fetch wrapper (mocked). |
+| Unit | `tests/i18n.test.js` | `lib/i18n.js` pure helpers + locale-catalog integrity (every language has the English key set and the same `{placeholders}`). |
+| Unit | `tests/i18n.runtime.test.js` | `lib/i18n.js` runtime — catalog fetch/cache/merge, `initI18n` language resolution, `setLang` persistence (chrome + fetch mocked). |
+| Integration | `tests/background.test.js` | The MV3 service worker driven through its own listeners: install/seed/fetch, prayer fire, **stale (slept-through) fire**, fallback-pause idempotency, auto-resume + reconcile-after-reload, broadcast inject-then-retry, alarm arming, notification/command handlers, the full message router, and the dev-only test-Adhan gate. |
+| Integration | `tests/content.test.js` | The content script in jsdom: cross-tab pause/resume, the in-window vs. stale per-tab fallback, client-side auto-resume, countdown + full-screen focus overlays (Trusted-Types-safe build), scroll lock, and single-instance teardown on reload/takeover. |
+| Integration | `tests/popup.test.js` | The popup in jsdom: render from `GET_STATE`, location autocomplete + save validation, action buttons, language/RTL switching, and the dev-row/version build gate. |
+| Platform | `tests/platform.test.js` | Cross-OS robustness: the macOS vs. default keyboard shortcut, DST-day scheduling (spring-forward/fall-back), date rollover, and OS-independent formatting. |
 | Qualification | `tests/manifest.test.js` | MV3, semver version, ≤132-char description, module SW exists, icons exist + are real PNGs, popup/content files exist, permission set has no scope creep, host permissions, command defined, no leftover `index.html`, popup links resolve, popup is an ES module. |
 
-`npm run pack` is the gate: it refuses to build the `.zip` if any test fails, and includes only the runtime files (`manifest.json`, scripts, styles, `icons/icon*.png`, `lib/`).
+`npm run pack` is the gate: it refuses to build the `.zip` if any test fails, and includes only the runtime files (`manifest.json`, scripts, styles, `icons/icon*.png`, `lib/`). CI (`.github/workflows/ci.yml`) runs the coverage suite on Ubuntu, Windows and macOS on every push/PR; the release workflow runs it again before signing a build.
 
 ## Manual QA checklist (per release)
 
