@@ -103,6 +103,7 @@ body {
 .row .pname { font-weight: 600; flex: 1; min-width: 0; }
 .row .pcheck { flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; }
 .row .pcheck input { width: 17px; height: 17px; margin: 0; accent-color: var(--green-1); cursor: pointer; }
+.row .pcheck input:disabled { opacity: 0.35; cursor: not-allowed; } /* upcoming prayer — not yet markable */
 .row .ptime { color: var(--muted); font-variant-numeric: tabular-nums; }
 .row.past { opacity: 0.55; }
 .row.past .pname::before { content: "✓ "; color: var(--check); }
@@ -118,17 +119,37 @@ body {
 .tracker { padding: 12px 14px 14px; border-top: 1px solid var(--line); background: var(--surface); }
 .tracker-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .tracker-head strong { font-size: 14px; }
-.tracker-stats { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tracker-streak { font-size: 13px; color: var(--accent); font-weight: 600; margin: 6px 0 10px; min-height: 17px; }
-.tracker-list { display: flex; flex-direction: column; gap: 4px; max-height: 230px; overflow-y: auto; }
-.tlog-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 12px; }
-.tlog-row.today { background: var(--next-bg); }
-.tlog-date { color: var(--text); }
-.tlog-row.today .tlog-date { color: var(--accent); font-weight: 600; }
-.tlog-pips { display: flex; gap: 5px; flex: 0 0 auto; }
-.tlog-pip { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line); box-sizing: border-box; }
-.tlog-pip.on { background: var(--green-1); border-color: var(--green-1); }
-.tracker-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 18px 0; }
+.tracker-streak { font-size: 12px; color: var(--accent); font-weight: 700; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; margin: 10px 0 8px; }
+.cal-arrow { width: 26px; height: 26px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 7px; cursor: pointer; font-size: 14px; line-height: 1; }
+.cal-arrow:disabled { opacity: 0.35; cursor: default; }
+.cal-label { font-size: 13px; font-weight: 700; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.cal-wd { font-size: 10px; color: var(--muted); text-align: center; font-weight: 600; padding-bottom: 2px; }
+.cal-day { aspect-ratio: 1 / 1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--text); border: 1px solid transparent; cursor: pointer; }
+.cal-day.empty { visibility: hidden; cursor: default; }
+.cal-day.future { color: var(--muted); cursor: default; background-color: var(--surface); background-image: repeating-linear-gradient(45deg, transparent 0 5px, var(--line) 5px 7px); }
+.cal-day.lvl-0 { background: var(--surface); border-color: var(--line); color: var(--muted); }
+.cal-day.lvl-1 { background: rgba(15, 138, 95, 0.16); }
+.cal-day.lvl-2 { background: rgba(15, 138, 95, 0.32); }
+.cal-day.lvl-3 { background: rgba(15, 138, 95, 0.5); }
+.cal-day.lvl-4 { background: rgba(15, 138, 95, 0.72); color: #fff; }
+.cal-day.lvl-5 { background: var(--green-1); color: #fff; }
+.cal-day.today { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cal-day.sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.cal-legend { display: flex; align-items: center; gap: 5px; justify-content: flex-end; margin-top: 9px; font-size: 10px; color: var(--muted); }
+.cal-legend .lg { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.cal-legend .lg.lvl-1 { background: rgba(15, 138, 95, 0.16); }
+.cal-legend .lg.lvl-2 { background: rgba(15, 138, 95, 0.32); }
+.cal-legend .lg.lvl-3 { background: rgba(15, 138, 95, 0.5); }
+.cal-legend .lg.lvl-4 { background: rgba(15, 138, 95, 0.72); }
+.cal-legend .lg.lvl-5 { background: var(--green-1); }
+.day-detail { margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line); }
+.dd-date { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.dd-prayers { display: flex; gap: 6px; }
+.dd-p { flex: 1; text-align: center; font-size: 10px; padding: 7px 2px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); cursor: pointer; }
+.dd-p.on { background: var(--green-1); border-color: var(--green-1); color: #fff; font-weight: 700; }
+.dd-p.locked { opacity: 0.45; border-style: dashed; cursor: not-allowed; }
 
 .settings { padding: 10px 14px 14px; border-top: 1px solid var(--line); background: var(--surface); }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13px; }

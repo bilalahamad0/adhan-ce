@@ -61,5 +61,9 @@
   "today_count": "Hari ini {done}/{total}",
   "streak_days": "Rentetan {n} hari",
   "total_logged": "{n} salat tercatat",
-  "log_empty": "Belum ada salat tercatat — centang satu dari daftar."
+  "log_empty": "Belum ada salat tercatat — centang satu dari daftar.",
+  "prev_month": "Bulan sebelumnya",
+  "next_month": "Bulan berikutnya",
+  "cal_less": "Sedikit",
+  "cal_more": "Banyak"
 }

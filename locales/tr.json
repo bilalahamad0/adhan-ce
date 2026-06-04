@@ -61,5 +61,9 @@
   "today_count": "Bugün {done}/{total}",
   "streak_days": "{n} günlük seri",
   "total_logged": "{n} namaz kaydedildi",
-  "log_empty": "Henüz namaz kaydı yok — listeden birini işaretleyin."
+  "log_empty": "Henüz namaz kaydı yok — listeden birini işaretleyin.",
+  "prev_month": "Önceki ay",
+  "next_month": "Sonraki ay",
+  "cal_less": "Az",
+  "cal_more": "Çok"
 }

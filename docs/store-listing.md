@@ -56,6 +56,7 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ▶️ Effortless resume — one click, or auto-resume after a delay you choose. Always in your control.
 🌍 Any city on Earth — search and lock to your exact location; times are calculated precisely for you.
 🌐 Your language — English, العربية, اردو, Bahasa Indonesia, Türkçe, Français — switch instantly, with full right-to-left support.
+📅 Prayer tracking — check off each of the five daily prayers and watch your month fill in on a calendar, with a streak to keep you going. Kept entirely on your device.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 🔒 PRIVATE BY DESIGN — FREE FOREVER
@@ -74,7 +75,7 @@ Prayer times are powered by the trusted Aladhan service; city search by Open-Met
 
 Made with care for the Ummah. We read every review and reply to feedback — tell us what would make your salah easier. 🤲
 
-Keywords: Muslim prayer times, Adhan, Azan, Salah, Namaz, prayer reminder, Islamic prayer times, prayer notification, prayer clock, Fajr, Dhuhr, Asr, Maghrib, Isha, Sunrise, Shuruq.
+Keywords: Muslim prayer times, Adhan, Azan, Salah, Namaz, prayer reminder, Islamic prayer times, prayer notification, prayer clock, prayer tracker, salah tracker, Fajr, Dhuhr, Asr, Maghrib, Isha, Sunrise, Shuruq.
 ```
 
 > The **first paragraph is the most important text on the page** — it's your search snippet and your conversion pitch. It now opens with "Adhan", "Muslim prayer times", and the five prayer names (all searchable) instead of jargon.
@@ -130,8 +131,9 @@ Screenshots are downscaled to 640×400, so use **large text and one idea per ima
 4. **screenshot-4.png** — *"A heads-up before every prayer."* — 15 / 30 / 60s lead time.
 5. **screenshot-5.png** — *"Pray in your language."* — 6 languages + full RTL (Arabic shown).
 6. **screenshot-6.png** — *"Free, private, and yours."* — no ads, no tracking, no account.
+7. **screenshot-7.png** — *"Never miss a prayer."* — the prayer-tracking calendar with streaks.
 
-> Six retina-rendered 1280×800 screenshots are generated into `docs/store/` by `npm run shots` (editorial layout, Fraunces/Inter web fonts). **Chrome Web Store allows up to 5 screenshots**, so pick your best five — the hero (#1) is essential; if you must drop one, #6 (privacy) is the most expendable. Replace old media on the live listing.
+> Seven retina-rendered 1280×800 screenshots are generated into `docs/store/` by `npm run shots` (editorial layout, Fraunces/Inter web fonts). **Chrome Web Store allows up to 5 screenshots**, so pick your best five — the hero (#1) is essential and the tracker (#7) is a strong differentiator; if you must drop one, #6 (privacy) is the most expendable. Replace old media on the live listing.
 
 ---
 

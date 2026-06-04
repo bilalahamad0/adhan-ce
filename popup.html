@@ -113,10 +113,23 @@
     <section id="tracker" class="tracker" hidden>
       <div class="tracker-head">
         <strong data-i18n="prayer_log">Prayer log</strong>
-        <span id="trackerStats" class="tracker-stats"></span>
+        <span id="trackerStreak" class="tracker-streak"></span>
       </div>
-      <div id="trackerStreak" class="tracker-streak"></div>
-      <div id="trackerList" class="tracker-list"></div>
+      <div class="cal-nav">
+        <button id="calPrev" class="cal-arrow" aria-label="Previous month" data-i18n-attr="aria-label:prev_month">‹</button>
+        <span id="calLabel" class="cal-label"></span>
+        <button id="calNext" class="cal-arrow" aria-label="Next month" data-i18n-attr="aria-label:next_month">›</button>
+      </div>
+      <div id="calGrid" class="cal-grid"></div>
+      <div class="cal-legend">
+        <span data-i18n="cal_less">Less</span>
+        <i class="lg lvl-1"></i><i class="lg lvl-2"></i><i class="lg lvl-3"></i><i class="lg lvl-4"></i><i class="lg lvl-5"></i>
+        <span data-i18n="cal_more">More</span>
+      </div>
+      <div id="dayDetail" class="day-detail" hidden>
+        <div id="ddDate" class="dd-date"></div>
+        <div id="ddPrayers" class="dd-prayers"></div>
+      </div>
     </section>
 
     <footer class="foot">

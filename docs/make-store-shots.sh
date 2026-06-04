@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Render the Chrome Web Store screenshots (1280x800) from docs/store-assets.html
-# using headless Chrome. Outputs to docs/store/screenshot-{1..5}.png.
+# using headless Chrome. Outputs to docs/store/screenshot-{1..7}.png.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)" # -> chrome-extension/
@@ -19,7 +19,7 @@ SRV=$!
 trap 'kill "$SRV" 2>/dev/null || true; pkill -f "$UDD" 2>/dev/null || true' EXIT
 until curl -s -o /dev/null "http://localhost:$PORT/docs/store-assets.html"; do sleep 0.3; done
 
-for n in 1 2 3 4 5 6; do
+for n in 1 2 3 4 5 6 7; do
   out="$OUT/screenshot-$n.png"
   rm -f "$out" "$UDD"/Singleton* 2>/dev/null || true
   # Render at 2x (retina) with a virtual-time budget so web fonts load, then downscale.

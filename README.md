@@ -16,6 +16,7 @@ and resolves locations via the free
 ## Features
 
 - **Next-prayer popup** — all five daily prayers with the next one highlighted and a live countdown.
+- **Prayer tracking** — check each prayer off as you pray (enabled only once its time has passed); a monthly calendar shows your history as a heat-map with a streak, navigable month to month. Stored on-device (`prayerLog`).
 - **In-page heads-up countdown** — a card pinned to the bottom-right of whatever tab you're looking at, appearing before the prayer (default **30s**, configurable 15/30/60). No Resume button here, so it never competes with the focus screen.
 - **Auto-pause across tabs** — at the exact prayer time, every playing `<video>`/`<audio>` (including same-/cross-origin iframes) is paused.
 - **Resume** — one **Resume** button (popup or the in-page card) restores the paused tabs, and playback **auto-resumes** after a configurable delay (default 5 min). Both overlays show a live "Auto-resumes in M:SS" countdown.

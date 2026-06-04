@@ -61,5 +61,9 @@
   "today_count": "Aujourd'hui {done}/{total}",
   "streak_days": "Série de {n} jours",
   "total_logged": "{n} prières enregistrées",
-  "log_empty": "Aucune prière enregistrée — cochez-en une dans la liste."
+  "log_empty": "Aucune prière enregistrée — cochez-en une dans la liste.",
+  "prev_month": "Mois précédent",
+  "next_month": "Mois suivant",
+  "cal_less": "Moins",
+  "cal_more": "Plus"
 }
