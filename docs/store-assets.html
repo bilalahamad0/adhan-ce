@@ -10,7 +10,8 @@
       .serif { font-family: 'Fraunces', Georgia, serif; }
       .slide { display: none; width: 1280px; height: 800px; position: relative; overflow: hidden; }
       body[data-slide="1"] #s1, body[data-slide="2"] #s2, body[data-slide="3"] #s3,
-      body[data-slide="4"] #s4, body[data-slide="5"] #s5, body[data-slide="6"] #s6 { display: flex; }
+      body[data-slide="4"] #s4, body[data-slide="5"] #s5, body[data-slide="6"] #s6,
+      body[data-slide="7"] #s7 { display: flex; }
 
       .dark { color: #fff; background:
         radial-gradient(90% 80% at 82% 4%, rgba(95,230,182,.16), transparent 52%),
@@ -141,6 +142,24 @@
       .pop .lang { display: flex; align-items: center; justify-content: space-between; padding: 12px 17px; border-top: 1px solid #eef3f1; font-size: 14px; }
       .pop .lang .sel { font-weight: 700; color: #0a5c47; display: flex; align-items: center; gap: 7px; }
       .pop[dir="rtl"] .row { direction: rtl; } .pop[dir="rtl"] .t { direction: ltr; }
+
+      /* slide 7: prayer tracker calendar */
+      .pop .tk { padding: 15px 17px 18px; }
+      .pop .tkh { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+      .pop .tkh strong { font-size: 16px; } .pop .tkh .sk { font-size: 13px; color: #0a5c47; font-weight: 700; }
+      .pop .tnav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
+      .pop .tnav b { font-size: 15px; } .pop .tnav span { width: 28px; height: 28px; border: 1px solid #e4ece9; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #15302a; font-size: 16px; }
+      .pop .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+      .pop .cal .wd { font-size: 11px; color: #6b8079; text-align: center; font-weight: 600; }
+      .pop .cal .d { aspect-ratio: 1/1; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #15302a; border: 1px solid transparent; }
+      .pop .cal .d.e { visibility: hidden; }
+      .pop .cal .d.l0 { background: #fff; border-color: #e4ece9; color: #6b8079; }
+      .pop .cal .d.l1 { background: rgba(15,138,95,.16); } .pop .cal .d.l2 { background: rgba(15,138,95,.32); }
+      .pop .cal .d.l3 { background: rgba(15,138,95,.5); } .pop .cal .d.l4 { background: rgba(15,138,95,.72); color: #fff; }
+      .pop .cal .d.l5 { background: #0f8a5f; color: #fff; }
+      .pop .cal .d.today { outline: 2.5px solid #0a5c47; outline-offset: 1px; }
+      .pop .leg { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin-top: 13px; font-size: 11px; color: #6b8079; }
+      .pop .leg i { width: 13px; height: 13px; border-radius: 4px; display: inline-block; }
 
       /* slide 6: brand */
       #s6 { align-items: center; justify-content: center; }
@@ -288,12 +307,41 @@
       </div>
     </section>
 
+    <!-- ===== 7 · prayer tracker ===== -->
+    <section class="slide split light" id="s7">
+      <div class="left">
+        <div class="logo"><img src="../icons/icon48.png" alt="" /><span>Adhan Caster</span></div>
+        <div class="h serif">Never miss<br /><i>a prayer.</i></div>
+        <div class="desc">Check off each of the five daily prayers and watch the month fill in — with a streak that keeps you going.</div>
+        <div class="chips"><span class="chip">📅 Monthly calendar</span><span class="chip">🔥 Streaks</span><span class="chip">✓ Tap any day to log</span><span class="chip">📴 On-device</span></div>
+      </div>
+      <div class="right">
+        <div class="pop">
+          <div class="ph"><span class="pl"><img src="../icons/icon48.png" alt="" /></span><span><strong>Adhan Caster</strong><span class="lo">Sunnyvale, California</span></span></div>
+          <div class="tk">
+            <div class="tkh"><strong>Prayer log</strong><span class="sk">🔥 9-day streak</span></div>
+            <div class="tnav"><span>‹</span><b>June 2026</b><span>›</span></div>
+            <div class="cal" id="cal7"></div>
+            <div class="leg">Less <i style="background:#fff;border:1px solid #e4ece9"></i><i style="background:rgba(15,138,95,.32)"></i><i style="background:rgba(15,138,95,.5)"></i><i style="background:rgba(15,138,95,.72)"></i><i style="background:#0f8a5f"></i> More</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <script>
       const s = new URLSearchParams(location.search).get('slide') || '1';
       document.body.dataset.slide = s;
       const st = document.getElementById('st1');
       if (st) for (let i = 0; i < 26; i++) { const e = document.createElement('span'); const z = 1.3 + Math.random() * 2.4;
         e.style.cssText = `left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*100).toFixed(1)}%;width:${z.toFixed(1)}px;height:${z.toFixed(1)}px;opacity:${(0.3+Math.random()*0.55).toFixed(2)}`; st.appendChild(e); }
+      // slide 7: build the June 2026 tracker calendar (Mon-start month, today = 30).
+      const cal = document.getElementById('cal7');
+      if (cal) {
+        ['S','M','T','W','T','F','S'].forEach((w) => { const e = document.createElement('div'); e.className = 'wd'; e.textContent = w; cal.appendChild(e); });
+        const counts = {1:5,2:5,3:4,4:5,5:5,6:5,7:5,8:3,9:5,10:5,11:5,12:5,13:4,14:5,15:5,16:5,17:2,18:5,19:5,20:5,21:4,22:5,23:5,24:5,25:5,26:5,27:5,28:5,29:5,30:5};
+        for (let i = 0; i < 1; i++) { const e = document.createElement('div'); e.className = 'd e'; cal.appendChild(e); } // June 1 2026 = Monday
+        for (let d = 1; d <= 30; d++) { const e = document.createElement('div'); e.className = 'd l' + (counts[d] || 0); if (d === 30) e.classList.add('today'); e.textContent = d; cal.appendChild(e); }
+      }
     </script>
   </body>
 </html>

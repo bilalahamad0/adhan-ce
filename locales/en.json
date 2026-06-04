@@ -61,5 +61,9 @@
   "today_count": "Today {done}/{total}",
   "streak_days": "{n}-day streak",
   "total_logged": "{n} prayers logged",
-  "log_empty": "No prayers logged yet — check one off in the list."
+  "log_empty": "No prayers logged yet — check one off in the list.",
+  "prev_month": "Previous month",
+  "next_month": "Next month",
+  "cal_less": "Less",
+  "cal_more": "More"
 }

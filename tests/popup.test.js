@@ -292,6 +292,11 @@ describe('prayer tracking', () => {
     expect(boxes).toHaveLength(5); // 5 prayers; sunrise's .pcheck is an empty spacer
     expect(boxes[0].checked).toBe(true); // Fajr marked
     expect(boxes[1].checked).toBe(false); // Dhuhr not
+    // Past/current prayers are markable; still-upcoming prayers today are locked.
+    expect(boxes[0].disabled).toBe(false); // Fajr — already passed
+    expect(boxes[1].disabled).toBe(false); // Dhuhr — already passed
+    expect(boxes[2].disabled).toBe(true); // Asr — still upcoming
+    expect(boxes[4].disabled).toBe(true); // Isha — still upcoming
   });
 
   it('toggling a checkbox sends TOGGLE_PRAYER for that prayer + the shown day', async () => {
@@ -304,29 +309,54 @@ describe('prayer tracking', () => {
     expect(sent.find((m) => m.type === 'TOGGLE_PRAYER')).toMatchObject({ date: '2026-05-23', prayer: 'Fajr' });
   });
 
-  it('the log button opens the tracker with today’s count and per-day history', async () => {
+  it('opens a calendar for the current month with today ringed + heat-mapped days', async () => {
     const state = defaultState();
     state.schedule.date = '2026-05-23';
-    state.installedAt = new Date('2026-05-21T12:00:00').getTime();
-    state.prayerLog = { '2026-05-23': { Fajr: true, Asr: true } };
+    state.installedAt = new Date('2026-05-10T12:00:00').getTime();
+    state.prayerLog = {
+      '2026-05-22': { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true },
+      '2026-05-23': { Fajr: true, Asr: true },
+    };
     await load({ state });
     expect($('tracker').hidden).toBe(true);
 
     $('logBtn').click();
     expect($('tracker').hidden).toBe(false);
-    expect($('settings').hidden).toBe(true); // panels don't stack
-    expect($('trackerStats').textContent).toContain('2'); // Today 2/5
+    expect($('settings').hidden).toBe(true);
+    expect($('calLabel').textContent).toMatch(/May 2026/);
 
-    expect($('trackerList').querySelectorAll('.tlog-row')).toHaveLength(3); // 05-23 → 05-21 (install)
-    const today = $('trackerList').querySelector('.tlog-row.today');
-    expect(today.querySelectorAll('.tlog-pip.on')).toHaveLength(2);
+    const days = [...$('calGrid').querySelectorAll('.cal-day:not(.empty)')];
+    expect(days).toHaveLength(31); // May
+    expect($('calGrid').querySelector('.cal-day.today').textContent).toBe('23');
+    expect(days.find((c) => c.textContent === '22').className).toContain('lvl-5'); // a full day
+    expect(days.find((c) => c.textContent === '24').className).toContain('future'); // after today
   });
 
-  it('shows the empty state when nothing is logged', async () => {
+  it('disables next in the current month and navigates to the previous month', async () => {
     const state = defaultState();
-    state.prayerLog = {};
+    state.schedule.date = '2026-05-23';
+    state.installedAt = new Date('2026-03-01T12:00:00').getTime();
     await load({ state });
     $('logBtn').click();
-    expect($('trackerList').querySelector('.tracker-empty')).not.toBeNull();
+    expect($('calNext').disabled).toBe(true); // can't view future months
+    expect($('calPrev').disabled).toBe(false);
+    $('calPrev').click();
+    expect($('calLabel').textContent).toMatch(/April 2026/);
+    expect($('calNext').disabled).toBe(false);
+  });
+
+  it('selecting a past day shows its detail, and toggling a prayer there logs it', async () => {
+    const state = defaultState();
+    state.schedule.date = '2026-05-23';
+    const sent = [];
+    await load({ state, send: (m) => { sent.push(m); return m.type === 'GET_STATE' ? state : { ok: true, prayerLog: {} }; } });
+    $('logBtn').click();
+    const cell20 = [...$('calGrid').querySelectorAll('.cal-day:not(.empty)')].find((c) => c.textContent === '20');
+    cell20.click();
+    expect($('dayDetail').hidden).toBe(false);
+    expect($('ddDate').textContent).toMatch(/20/);
+    $('ddPrayers').querySelectorAll('.dd-p')[0].click(); // Fajr
+    await settle();
+    expect(sent.find((m) => m.type === 'TOGGLE_PRAYER')).toMatchObject({ date: '2026-05-20', prayer: 'Fajr' });
   });
 });

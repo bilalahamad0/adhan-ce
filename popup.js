@@ -1,6 +1,6 @@
 // Adhan Caster Pro — popup UI logic.
 import { formatCountdown, ymd, PRAYER_ORDER } from './lib/schedule.js';
-import { dayCount, totalLogged, completeStreak, historyDates } from './lib/tracker.js';
+import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { searchPlaces } from './lib/geocode.js';
 import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
@@ -228,8 +228,10 @@ function renderList() {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = prayedToday(p.name);
+    // Can't mark a prayer before its time has come — only past/current prayers today.
+    cb.disabled = p.ts > Date.now();
     cb.setAttribute('aria-label', t('mark_prayed', { prayer: t('prayer_' + p.name) }));
-    cb.addEventListener('change', () => togglePrayer(p.name));
+    cb.addEventListener('change', () => togglePrayer(logToday(), p.name));
     pcheck.appendChild(cb);
     row.appendChild(pcheck);
     wrap.appendChild(row);
@@ -254,17 +256,32 @@ function renderList() {
 }
 
 // ---- prayer tracking ----
-// "Today" for the log = the day the displayed schedule is for (else the local
-// date), so a checkbox always lands on the day the popup is showing.
+const pad2 = (n) => String(n).padStart(2, '0');
+// "Today" for the log = the day the displayed schedule is for (else the local date).
 function logToday() {
   return (st && st.schedule && st.schedule.date) || ymd();
+}
+function ymdParts(year, month, day) {
+  return `${year}-${pad2(month + 1)}-${pad2(day)}`;
+}
+function parseYmd(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return { year: y, month: m - 1, day: d };
 }
 function prayedToday(name) {
   const day = ((st && st.prayerLog) || {})[logToday()] || {};
   return !!day[name];
 }
-async function togglePrayer(name) {
-  const res = await send({ type: 'TOGGLE_PRAYER', date: logToday(), prayer: name });
+// A prayer is "locked" (not yet markable) only while it's still upcoming TODAY,
+// judged by the loaded schedule's per-prayer times. Past days are always editable.
+function prayerLocked(date, name) {
+  if (date !== logToday()) return false;
+  const p = st && st.schedule && st.schedule.prayers && st.schedule.prayers.find((x) => x.name === name);
+  return !!(p && p.ts > Date.now());
+}
+async function togglePrayer(date, name) {
+  if (prayerLocked(date, name)) return;
+  const res = await send({ type: 'TOGGLE_PRAYER', date, prayer: name });
   if (res && res.ok) st.prayerLog = res.prayerLog;
   renderList(); // reflect the stored state (reverts the box if the write failed)
   if (!$('tracker').hidden) renderTracker();
@@ -278,42 +295,92 @@ function fmtLogDate(date) {
   }
 }
 
+// ---- calendar view ----
+let viewYM = null; // { year, month } currently shown
+let selDate = null; // selected day (YYYY-MM-DD) whose detail strip is shown
+
+// Sunday-first narrow weekday initials in the active locale (2023-01-01 = Sunday).
+function weekdayLabels() {
+  const fmt = new Intl.DateTimeFormat(getLang(), { weekday: 'narrow' });
+  const out = [];
+  for (let i = 0; i < 7; i++) out.push(fmt.format(new Date(2023, 0, 1 + i)));
+  return out;
+}
+// When switching months, select the latest non-future day of that month.
+function defaultSel(ym) {
+  const last = ymdParts(ym.year, ym.month, daysInMonth(ym.year, ym.month));
+  return last <= logToday() ? last : logToday();
+}
+function openTracker() {
+  const t0 = parseYmd(logToday());
+  viewYM = { year: t0.year, month: t0.month };
+  selDate = logToday();
+  renderTracker();
+}
+function stepMonth(delta) {
+  viewYM = addMonths(viewYM, delta);
+  selDate = defaultSel(viewYM);
+  renderTracker();
+}
+
 function renderTracker() {
   const today = logToday();
   const log = (st && st.prayerLog) || {};
-  const installDate = st && st.installedAt ? ymd(new Date(st.installedAt)) : today;
-  const total = totalLogged(log);
+  const tp = parseYmd(today);
+  const curYM = { year: tp.year, month: tp.month };
+  const ip = parseYmd(st && st.installedAt ? ymd(new Date(st.installedAt)) : today);
+  const instYM = { year: ip.year, month: ip.month };
+  if (!viewYM) viewYM = curYM;
+
   const streak = completeStreak(log, today);
-  $('trackerStats').textContent = t('today_count', { done: dayCount(log, today), total: PRAYER_ORDER.length });
+  const total = totalLogged(log);
   $('trackerStreak').textContent = streak > 0 ? t('streak_days', { n: streak }) : total > 0 ? t('total_logged', { n: total }) : '';
 
-  const listEl = $('trackerList');
-  listEl.innerHTML = '';
-  if (total === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'tracker-empty';
-    empty.textContent = t('log_empty');
-    listEl.appendChild(empty);
-    return;
+  $('calLabel').textContent = new Intl.DateTimeFormat(getLang(), { month: 'long', year: 'numeric' }).format(new Date(viewYM.year, viewYM.month, 1));
+  $('calPrev').disabled = monthKey(viewYM) <= monthKey(instYM);
+  $('calNext').disabled = monthKey(viewYM) >= monthKey(curYM);
+
+  const grid = $('calGrid');
+  grid.innerHTML = '';
+  for (const w of weekdayLabels()) {
+    const wd = document.createElement('div');
+    wd.className = 'cal-wd';
+    wd.textContent = w;
+    grid.appendChild(wd);
   }
-  for (const date of historyDates(installDate, today)) {
-    const row = document.createElement('div');
-    row.className = date === today ? 'tlog-row today' : 'tlog-row';
-    const dlabel = document.createElement('span');
-    dlabel.className = 'tlog-date';
-    dlabel.textContent = fmtLogDate(date);
-    const pips = document.createElement('span');
-    pips.className = 'tlog-pips';
-    const day = log[date] || {};
+  for (let i = 0; i < firstWeekday(viewYM.year, viewYM.month); i++) {
+    const blank = document.createElement('div');
+    blank.className = 'cal-day empty';
+    grid.appendChild(blank);
+  }
+  const dim = daysInMonth(viewYM.year, viewYM.month);
+  for (let d = 1; d <= dim; d++) {
+    const date = ymdParts(viewYM.year, viewYM.month, d);
+    const future = date > today;
+    const cell = document.createElement('div');
+    cell.className = 'cal-day ' + (future ? 'future' : 'lvl-' + dayCount(log, date));
+    if (date === today) cell.classList.add('today');
+    if (date === selDate) cell.classList.add('sel');
+    cell.textContent = String(d);
+    if (!future) cell.addEventListener('click', () => { selDate = date; renderTracker(); });
+    grid.appendChild(cell);
+  }
+
+  const detail = $('dayDetail');
+  detail.hidden = !selDate;
+  if (selDate) {
+    $('ddDate').textContent = `${fmtLogDate(selDate)} · ${dayCount(log, selDate)}/${PRAYER_ORDER.length}`;
+    const wrap = $('ddPrayers');
+    wrap.innerHTML = '';
+    const day = log[selDate] || {};
     for (const name of PRAYER_ORDER) {
-      const pip = document.createElement('span');
-      pip.className = day[name] ? 'tlog-pip on' : 'tlog-pip';
-      pip.title = t('prayer_' + name);
-      pips.appendChild(pip);
+      const locked = prayerLocked(selDate, name);
+      const cell = document.createElement('div');
+      cell.className = 'dd-p' + (day[name] ? ' on' : '') + (locked ? ' locked' : '');
+      cell.textContent = t('prayer_' + name);
+      if (!locked) cell.addEventListener('click', () => togglePrayer(selDate, name));
+      wrap.appendChild(cell);
     }
-    row.appendChild(dlabel);
-    row.appendChild(pips);
-    listEl.appendChild(row);
   }
 }
 
@@ -400,8 +467,14 @@ $('logBtn').addEventListener('click', () => {
   $('tracker').hidden = !show;
   if (show) {
     $('settings').hidden = true;
-    renderTracker();
+    openTracker();
   }
+});
+$('calPrev').addEventListener('click', () => {
+  if (!$('calPrev').disabled) stepMonth(-1);
+});
+$('calNext').addEventListener('click', () => {
+  if (!$('calNext').disabled) stepMonth(1);
 });
 
 $('refresh').addEventListener('click', async (e) => {

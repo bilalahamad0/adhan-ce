@@ -1,5 +1,5 @@
 // tracker: pure prayer-log helpers (counts, streak, history dates).
-import { dayCount, totalLogged, prevYmd, completeStreak, historyDates } from '../lib/tracker.js';
+import { dayCount, totalLogged, prevYmd, completeStreak, historyDates, daysInMonth, firstWeekday, addMonths, monthKey } from '../lib/tracker.js';
 
 const full = () => ({ Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true });
 
@@ -45,5 +45,16 @@ describe('tracker helpers', () => {
     expect(historyDates('2026-06-04', '2026-06-04')).toEqual(['2026-06-04']);
     expect(historyDates('2026-07-01', '2026-06-04')).toEqual(['2026-06-04']); // future install clamps to today
     expect(historyDates('2020-01-01', '2026-06-04', 5)).toHaveLength(5); // cap bounds the list
+  });
+
+  it('calendar geometry helpers compute month grids (month is 0-indexed)', () => {
+    expect(daysInMonth(2026, 1)).toBe(28); // Feb 2026 (non-leap)
+    expect(daysInMonth(2024, 1)).toBe(29); // Feb 2024 (leap)
+    expect(daysInMonth(2026, 4)).toBe(31); // May
+    expect(firstWeekday(2026, 4)).toBe(5); // May 1 2026 = Friday
+    expect(firstWeekday(2026, 5)).toBe(1); // June 1 2026 = Monday
+    expect(addMonths({ year: 2026, month: 11 }, 1)).toEqual({ year: 2027, month: 0 });
+    expect(addMonths({ year: 2026, month: 0 }, -1)).toEqual({ year: 2025, month: 11 });
+    expect(monthKey({ year: 2026, month: 4 })).toBe('2026-05');
   });
 });
