@@ -109,8 +109,17 @@ docs/scripts off the public domain.
 DuckDuckGo/Ecosia, so it's worth it.
 
 ### IndexNow (optional — Bing/Yandex, NOT Google)
-Vercel can serve the static key file: save a hex key as `docs/<key>.txt`, then ping
-`https://www.bing.com/indexnow?url=https://adhan.bilalahamad.com/&key=YOUR_KEY&keyLocation=https://adhan.bilalahamad.com/YOUR_KEY.txt`.
+The **key is self-generated** — any 8–128 hex characters (e.g. `openssl rand -hex 16`); there's nothing
+to sign up for. It must appear in two matching places: a key *file* at the site root **and** the `key=`
+parameter in the ping. Since Vercel serves `docs/` as the web root, a file in `docs/` lands at the domain root.
+
+Already wired up in this repo (key: `0563cb0697c29ea6b5efdbc9b22e1f2f`):
+
+1. **Key file:** `docs/0563cb0697c29ea6b5efdbc9b22e1f2f.txt` — its contents are that same key — served at
+   `https://adhan.bilalahamad.com/0563cb0697c29ea6b5efdbc9b22e1f2f.txt`.
+2. **Ping** (re-run whenever the page meaningfully changes) — a `200 OK` JSON response means accepted:
+
+   `https://www.bing.com/indexnow?url=https://adhan.bilalahamad.com/&key=0563cb0697c29ea6b5efdbc9b22e1f2f&keyLocation=https://adhan.bilalahamad.com/0563cb0697c29ea6b5efdbc9b22e1f2f.txt`
 
 ---
 
