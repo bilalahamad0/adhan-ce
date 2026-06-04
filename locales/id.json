@@ -49,5 +49,11 @@
   "prayer_Asr": "Asar",
   "prayer_Maghrib": "Magrib",
   "prayer_Isha": "Isya",
-  "sunrise": "Terbit"
+  "sunrise": "Terbit",
+  "calc_method": "Metode perhitungan",
+  "asr_method": "Metode Asar (mazhab)",
+  "asr_standard": "Standar (Syafi'i, Maliki, Hanbali)",
+  "asr_hanafi": "Hanafi",
+  "show_hijri": "Tampilkan tanggal Hijriah",
+  "hijri_adjust": "Penyesuaian Hijriah"
 }

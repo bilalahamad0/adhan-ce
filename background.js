@@ -6,9 +6,10 @@
 import { ymd, computeNext, buildPrayers, isStaleFire, parseTimeToday, hhmmTo12h } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 
-// Call Aladhan directly (CORS-open). method=2 (ISNA) matches the prior companion
-// API, so prayer-time values are unchanged; we additionally get Sunrise + the
-// location's IANA timezone (data.meta.timezone) for the in-popup clock.
+// Call Aladhan directly (CORS-open). Calculation method + Asr school come from
+// settings (defaults method=2 ISNA, school=0 Standard — unchanged from before);
+// we additionally get Sunrise + the location's IANA timezone (data.meta.timezone)
+// for the in-popup clock.
 const ALADHAN_BASE = 'https://api.aladhan.com/v1/timingsByCity';
 
 // Aladhan's optional date path segment is DD-MM-YYYY.
@@ -25,6 +26,10 @@ const DEFAULT_SETTINGS = {
   autoResumeMinutes: 5,
   leadSeconds: 30,
   focusMode: true,
+  method: 2, // Aladhan calculation method id; 2 = ISNA (preserves prior times)
+  school: 0, // Asr juristic method: 0 = Standard (Shafi/Maliki/Hanbali), 1 = Hanafi
+  showHijri: true, // show the Hijri (Islamic) date in the popup header
+  hijriOffset: 0, // ±days moon-sighting correction applied to the displayed Hijri date
 };
 
 const ALARM_PRAYER = 'adhan-prayer-fire';
@@ -62,7 +67,7 @@ async function fetchAndStoreSchedule() {
   const date = ddmmyyyy(new Date());
   let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(
     settings.country
-  )}&method=2&school=0`;
+  )}&method=${settings.method}&school=${settings.school}`;
   if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Aladhan ${res.status}`);

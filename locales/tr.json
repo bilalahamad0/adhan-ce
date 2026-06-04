@@ -49,5 +49,11 @@
   "prayer_Asr": "İkindi",
   "prayer_Maghrib": "Akşam",
   "prayer_Isha": "Yatsı",
-  "sunrise": "Güneş"
+  "sunrise": "Güneş",
+  "calc_method": "Hesaplama yöntemi",
+  "asr_method": "İkindi (fıkhî) yöntemi",
+  "asr_standard": "Standart (Şafii, Maliki, Hanbeli)",
+  "asr_hanafi": "Hanefi",
+  "show_hijri": "Hicri tarihi göster",
+  "hijri_adjust": "Hicri tarih düzeltmesi"
 }

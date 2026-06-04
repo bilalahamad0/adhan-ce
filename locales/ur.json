@@ -49,5 +49,11 @@
   "prayer_Asr": "عصر",
   "prayer_Maghrib": "مغرب",
   "prayer_Isha": "عشاء",
-  "sunrise": "طلوع آفتاب"
+  "sunrise": "طلوع آفتاب",
+  "calc_method": "حساب کا طریقہ",
+  "asr_method": "عصر کا فقہی طریقہ",
+  "asr_standard": "معیاری (شافعی، مالکی، حنبلی)",
+  "asr_hanafi": "حنفی",
+  "show_hijri": "ہجری تاریخ دکھائیں",
+  "hijri_adjust": "ہجری تاریخ کی تنظیم"
 }

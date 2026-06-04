@@ -283,7 +283,7 @@
         <div class="kv">
           <span class="k">manifest</span><span class="v">v3 · background <code style="all:unset;color:#9be9c8">type:module</code></span>
           <span class="k">permissions</span><span class="v">storage · alarms · notifications · scripting · tabs</span>
-          <span class="k">host</span><span class="v">adhan-api-mauve.vercel.app · <code style="all:unset;color:#9be9c8">http/https://*</code></span>
+          <span class="k">host</span><span class="v">api.aladhan.com · <code style="all:unset;color:#9be9c8">http/https://*</code></span>
           <span class="k">content</span><span class="v">all frames · <code style="all:unset;color:#9be9c8">document_idle</code></span>
           <span class="k">command</span><span class="v">toggle-focus → <b>Ctrl/⌘+Shift+Y</b></span>
         </div>
@@ -423,7 +423,7 @@
   const INFO = {
     user:{tag:"actor",t:"You — the user",h:"Everything starts here. You open the toolbar popup to set a location and preferences, hit <b>Resume</b> during an Adhan, or press <code>Ctrl/⌘+Shift+Y</code> to toggle the prayer-focus screen."},
     popup:{tag:"UI · popup.js",t:"🪟 Popup UI",h:"The toolbar surface: next-prayer card with a live countdown, the full prayer list, a <b>Resume</b> button, and settings. Its location box queries <b>Open-Meteo directly</b> for real, geocoded places. Talks to the worker over <code>chrome.runtime</code> messages.",l:["GET_STATE → render","SAVE_SETTINGS → save + refetch","RESUME_NOW / FOCUS_NOW","TEST_ADHAN (dev only)"]},
-    adhanApi:{tag:"external",t:"🌐 adhan-api",h:"A small public service on Vercel (<code>adhan-api-mauve.vercel.app</code>). The worker fetches <code>/api/prayerTimes?country&state&city</code> and gets back the five daily prayer times as <code>\"hh:mm a\"</code> strings."},
+    adhanApi:{tag:"external",t:"🌐 AlAdhan API",h:"The public AlAdhan prayer-times API (<code>api.aladhan.com</code>). The worker fetches <code>/v1/timingsByCity?city&country&state&method&school</code> and reads back the day's timings (24h <code>\"HH:mm\"</code>), the location's IANA timezone, and Sunrise."},
     openMeteo:{tag:"external",t:"📍 Open-Meteo",h:"Free, keyless geocoding. As you type a city, the popup resolves it to real places with region (admin1), country and coordinates — so you can't save a location that isn't a real place.",l:["lib/geocode.js · searchPlaces()","parseGeoResults() → {city,state,country,lat,lon}"]},
     background:{tag:"core hub",t:"⚙️ Background Service Worker",h:"The brain (MV3 module worker, <code>background.js</code>). It fetches &amp; parses the schedule, arms <code>chrome.alarms</code>, and at prayer time records the central <code>paused</code> state, posts the notification, and <b>broadcasts the pause to every tab</b>. It also arms auto-resume and advances to the next prayer.",l:["fetchAndStoreSchedule / refreshNext","armAlarms · handlePrayerFire","broadcast() → all tabs","handleAutoResume · reconcilePaused"]},
     storage:{tag:"chrome API",t:"💾 chrome.storage.local",h:"The single source of truth shared by worker, popup and all content scripts. Four keys: <code>settings</code>, <code>schedule</code>, <code>nextPrayer</code>, <code>paused</code>. Content scripts subscribe to <code>onChanged</code> so a pause/resume in one place instantly syncs everywhere."},

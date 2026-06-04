@@ -4,9 +4,9 @@ Upcoming Islamic prayer times with a live countdown, and **automatic pausing of
 media in every Chrome tab** at Adhan time — with an optional full-screen "prayer
 focus" screen.
 
-It's a standalone Chrome extension. It fetches prayer times from the public
-[adhan-api](https://github.com/bilalahamad0/adhan-api) service
-(`adhan-api-mauve.vercel.app`) and resolves locations via the free
+It's a standalone Chrome extension. It fetches prayer times directly from the
+public [AlAdhan API](https://aladhan.com/prayer-times-api) (`api.aladhan.com`)
+and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
 **[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**

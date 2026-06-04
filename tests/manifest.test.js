@@ -51,8 +51,10 @@ describe('manifest qualification', () => {
 
   it('host permissions cover the prayer-times API and all http/https sites', () => {
     expect(manifest.host_permissions).toEqual(
-      expect.arrayContaining(['https://adhan-api-mauve.vercel.app/*', 'http://*/*', 'https://*/*'])
+      expect.arrayContaining(['https://api.aladhan.com/*', 'http://*/*', 'https://*/*'])
     );
+    // The retired companion proxy host must no longer be requested.
+    expect(manifest.host_permissions).not.toContain('https://adhan-api-mauve.vercel.app/*');
   });
 
   it('defines the toggle-focus command with a suggested key', () => {
