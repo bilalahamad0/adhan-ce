@@ -14,6 +14,7 @@
         <span id="locLabel" class="loc">—</span>
         <span id="hijriLabel" class="hijri" hidden></span>
       </div>
+      <button id="logBtn" class="gear logbtn" title="Prayer log" aria-label="Prayer log" data-i18n-attr="title:prayer_log;aria-label:prayer_log">☑</button>
       <button id="gear" class="gear" title="Settings" aria-label="Settings" data-i18n-attr="title:settings;aria-label:settings">⚙</button>
     </header>
 
@@ -107,6 +108,15 @@
         <button id="testBtn" class="test-btn" data-i18n="test_adhan">Run test Adhan (30s)</button>
         <span id="testMsg" class="save-msg"></span>
       </div>
+    </section>
+
+    <section id="tracker" class="tracker" hidden>
+      <div class="tracker-head">
+        <strong data-i18n="prayer_log">Prayer log</strong>
+        <span id="trackerStats" class="tracker-stats"></span>
+      </div>
+      <div id="trackerStreak" class="tracker-streak"></div>
+      <div id="trackerList" class="tracker-list"></div>
     </section>
 
     <footer class="foot">

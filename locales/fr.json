@@ -55,5 +55,11 @@
   "asr_standard": "Standard (Shafi, Maliki, Hanbali)",
   "asr_hanafi": "Hanafi",
   "show_hijri": "Afficher la date hégirienne",
-  "hijri_adjust": "Ajustement hégirien"
+  "hijri_adjust": "Ajustement hégirien",
+  "prayer_log": "Journal des prières",
+  "mark_prayed": "Marquer {prayer} comme accomplie",
+  "today_count": "Aujourd'hui {done}/{total}",
+  "streak_days": "Série de {n} jours",
+  "total_logged": "{n} prières enregistrées",
+  "log_empty": "Aucune prière enregistrée — cochez-en une dans la liste."
 }

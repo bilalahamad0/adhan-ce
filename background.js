@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, computeNext, buildPrayers, isStaleFire, parseTimeToday, hhmmTo12h } from './lib/schedule.js';
+import { ymd, computeNext, buildPrayers, isStaleFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
@@ -52,12 +52,21 @@ async function getSettings() {
   return { ...DEFAULT_SETTINGS, ...(settings || {}) };
 }
 async function getState() {
-  const data = await chrome.storage.local.get(['settings', 'schedule', 'nextPrayer', 'paused']);
+  const data = await chrome.storage.local.get([
+    'settings',
+    'schedule',
+    'nextPrayer',
+    'paused',
+    'prayerLog',
+    'installedAt',
+  ]);
   return {
     settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
     schedule: data.schedule || null,
     nextPrayer: data.nextPrayer || null,
     paused: data.paused || { active: false },
+    prayerLog: data.prayerLog || {},
+    installedAt: data.installedAt || null,
   };
 }
 
@@ -323,9 +332,12 @@ async function injectExistingTabs() {
 
 // ---------- event wiring ----------
 chrome.runtime.onInstalled.addListener(async () => {
-  const stored = await chrome.storage.local.get(['settings', 'paused']);
+  const stored = await chrome.storage.local.get(['settings', 'paused', 'installedAt']);
   if (!stored.settings) await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
   if (!stored.paused) await chrome.storage.local.set({ paused: { active: false } });
+  // Anchor the prayer-tracking history. For an existing user updating into this
+  // version we can't know the true install date, so "since installation" starts now.
+  if (!stored.installedAt) await chrome.storage.local.set({ installedAt: Date.now() });
   try {
     await fetchAndStoreSchedule();
   } catch (e) {
@@ -444,6 +456,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse({ ok: false, error: String(e.message || e) });
         }
         break;
+      case 'TOGGLE_PRAYER': {
+        // Mark/unmark one prayer as prayed on a given day (YYYY-MM-DD). Stores only
+        // the marked prayers; an emptied day is dropped so the log stays compact.
+        if (!msg.date || !PRAYER_ORDER.includes(msg.prayer)) {
+          sendResponse({ ok: false, error: 'bad prayer' });
+          break;
+        }
+        const { prayerLog } = await chrome.storage.local.get('prayerLog');
+        const log = prayerLog || {};
+        const day = { ...(log[msg.date] || {}) };
+        if (day[msg.prayer]) delete day[msg.prayer];
+        else day[msg.prayer] = true;
+        if (Object.keys(day).length) log[msg.date] = day;
+        else delete log[msg.date];
+        await chrome.storage.local.set({ prayerLog: log });
+        sendResponse({ ok: true, prayerLog: log });
+        break;
+      }
       default:
         sendResponse({ ok: false, error: 'unknown message' });
     }

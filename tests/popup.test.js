@@ -281,3 +281,52 @@ describe('dev-only affordances', () => {
     expect(document.querySelector('.dev-row').hidden).toBe(false);
   });
 });
+
+describe('prayer tracking', () => {
+  it('puts a prayed-checkbox on each prayer row (sunrise gets a spacer) reflecting the log', async () => {
+    const state = defaultState();
+    state.schedule.date = '2026-05-23';
+    state.prayerLog = { '2026-05-23': { Fajr: true } };
+    await load({ state });
+    const boxes = $('list').querySelectorAll('.row .pcheck input');
+    expect(boxes).toHaveLength(5); // 5 prayers; sunrise's .pcheck is an empty spacer
+    expect(boxes[0].checked).toBe(true); // Fajr marked
+    expect(boxes[1].checked).toBe(false); // Dhuhr not
+  });
+
+  it('toggling a checkbox sends TOGGLE_PRAYER for that prayer + the shown day', async () => {
+    const state = defaultState();
+    state.schedule.date = '2026-05-23';
+    const sent = [];
+    await load({ state, send: (m) => { sent.push(m); return m.type === 'GET_STATE' ? state : { ok: true, prayerLog: {} }; } });
+    $('list').querySelector('.row .pcheck input').click();
+    await settle();
+    expect(sent.find((m) => m.type === 'TOGGLE_PRAYER')).toMatchObject({ date: '2026-05-23', prayer: 'Fajr' });
+  });
+
+  it('the log button opens the tracker with today’s count and per-day history', async () => {
+    const state = defaultState();
+    state.schedule.date = '2026-05-23';
+    state.installedAt = new Date('2026-05-21T12:00:00').getTime();
+    state.prayerLog = { '2026-05-23': { Fajr: true, Asr: true } };
+    await load({ state });
+    expect($('tracker').hidden).toBe(true);
+
+    $('logBtn').click();
+    expect($('tracker').hidden).toBe(false);
+    expect($('settings').hidden).toBe(true); // panels don't stack
+    expect($('trackerStats').textContent).toContain('2'); // Today 2/5
+
+    expect($('trackerList').querySelectorAll('.tlog-row')).toHaveLength(3); // 05-23 → 05-21 (install)
+    const today = $('trackerList').querySelector('.tlog-row.today');
+    expect(today.querySelectorAll('.tlog-pip.on')).toHaveLength(2);
+  });
+
+  it('shows the empty state when nothing is logged', async () => {
+    const state = defaultState();
+    state.prayerLog = {};
+    await load({ state });
+    $('logBtn').click();
+    expect($('trackerList').querySelector('.tracker-empty')).not.toBeNull();
+  });
+});

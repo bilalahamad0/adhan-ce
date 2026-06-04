@@ -55,5 +55,11 @@
   "asr_standard": "Standard (Shafi, Maliki, Hanbali)",
   "asr_hanafi": "Hanafi",
   "show_hijri": "Show Hijri date",
-  "hijri_adjust": "Hijri adjustment"
+  "hijri_adjust": "Hijri adjustment",
+  "prayer_log": "Prayer log",
+  "mark_prayed": "Mark {prayer} as prayed",
+  "today_count": "Today {done}/{total}",
+  "streak_days": "{n}-day streak",
+  "total_logged": "{n} prayers logged",
+  "log_empty": "No prayers logged yet — check one off in the list."
 }

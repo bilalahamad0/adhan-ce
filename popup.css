@@ -97,10 +97,12 @@ body {
 
 .list { padding: 6px 8px 8px; }
 .row {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 10px;
   padding: 8px 12px; border-radius: 9px; font-size: 13px;
 }
-.row .pname { font-weight: 600; }
+.row .pname { font-weight: 600; flex: 1; min-width: 0; }
+.row .pcheck { flex: 0 0 auto; width: 18px; display: flex; align-items: center; justify-content: center; }
+.row .pcheck input { width: 17px; height: 17px; margin: 0; accent-color: var(--green-1); cursor: pointer; }
 .row .ptime { color: var(--muted); font-variant-numeric: tabular-nums; }
 .row.past { opacity: 0.55; }
 .row.past .pname::before { content: "✓ "; color: var(--check); }
@@ -111,6 +113,22 @@ body {
 .row.sunrise .pname { color: var(--muted); font-weight: 600; }
 .row.sunrise .pname::before { content: "☀ "; opacity: .85; }
 .row.sunrise .ptime { color: var(--muted); }
+
+/* Prayer-tracking panel (toggled by the header ☑ button). */
+.tracker { padding: 12px 14px 14px; border-top: 1px solid var(--line); background: var(--surface); }
+.tracker-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.tracker-head strong { font-size: 14px; }
+.tracker-stats { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tracker-streak { font-size: 13px; color: var(--accent); font-weight: 600; margin: 6px 0 10px; min-height: 17px; }
+.tracker-list { display: flex; flex-direction: column; gap: 4px; max-height: 230px; overflow-y: auto; }
+.tlog-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 12px; }
+.tlog-row.today { background: var(--next-bg); }
+.tlog-date { color: var(--text); }
+.tlog-row.today .tlog-date { color: var(--accent); font-weight: 600; }
+.tlog-pips { display: flex; gap: 5px; flex: 0 0 auto; }
+.tlog-pip { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line); box-sizing: border-box; }
+.tlog-pip.on { background: var(--green-1); border-color: var(--green-1); }
+.tracker-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 18px 0; }
 
 .settings { padding: 10px 14px 14px; border-top: 1px solid var(--line); background: var(--surface); }
 .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13px; }

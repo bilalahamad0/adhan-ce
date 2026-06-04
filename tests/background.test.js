@@ -399,3 +399,53 @@ describe('TEST_ADHAN dev gate', () => {
     expect(res).toEqual({ ok: false, error: 'dev only' });
   });
 });
+
+describe('prayer tracking', () => {
+  it('onInstalled stamps installedAt once, never overwriting an existing one', async () => {
+    const fresh = await loadBackground();
+    await fresh.h.fireInstalled();
+    await flush();
+    expect(typeof fresh.h.store.installedAt).toBe('number');
+
+    const prior = 1_700_000_000_000;
+    const again = await loadBackground({ storage: { installedAt: prior } });
+    await again.h.fireInstalled();
+    await flush();
+    expect(again.h.store.installedAt).toBe(prior);
+  });
+
+  it('GET_STATE exposes prayerLog + installedAt (defaulting when absent)', async () => {
+    const withData = await loadBackground({ storage: { prayerLog: { '2026-06-04': { Fajr: true } }, installedAt: 123 } });
+    const state = await withData.h.sendRuntimeMessage({ type: 'GET_STATE' });
+    expect(state.prayerLog).toEqual({ '2026-06-04': { Fajr: true } });
+    expect(state.installedAt).toBe(123);
+
+    const empty = await loadBackground({ storage: {} });
+    const s2 = await empty.h.sendRuntimeMessage({ type: 'GET_STATE' });
+    expect(s2.prayerLog).toEqual({});
+    expect(s2.installedAt).toBeNull();
+  });
+
+  it('TOGGLE_PRAYER marks, accumulates, toggles off, and drops emptied days', async () => {
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS } });
+    const r1 = await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Asr' });
+    expect(r1.ok).toBe(true);
+    expect(h.store.prayerLog['2026-06-04']).toEqual({ Asr: true });
+
+    await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Fajr' });
+    expect(h.store.prayerLog['2026-06-04']).toEqual({ Asr: true, Fajr: true });
+
+    await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Asr' });
+    expect(h.store.prayerLog['2026-06-04']).toEqual({ Fajr: true });
+
+    const r4 = await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Fajr' });
+    expect(r4.prayerLog['2026-06-04']).toBeUndefined(); // emptied day removed
+  });
+
+  it('TOGGLE_PRAYER rejects an unknown prayer without touching storage', async () => {
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS } });
+    const res = await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Brunch' });
+    expect(res).toEqual({ ok: false, error: 'bad prayer' });
+    expect(h.store.prayerLog).toBeUndefined();
+  });
+});
