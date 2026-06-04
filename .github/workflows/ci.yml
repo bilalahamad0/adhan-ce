@@ -1,0 +1,52 @@
+name: CI
+
+# Runs the test suite with coverage on every push and pull request. The matrix
+# spans the operating systems the extension's users actually run (the install
+# base is split across Windows, macOS and ChromeOS/Linux), so the timezone, DST
+# and locale-formatting tests are proven to behave identically on each — not just
+# on a single CI host.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20]
+        include:
+          # Exercise the active LTS range on Linux to catch engine-specific issues.
+          - os: ubuntu-latest
+            node: 18
+          - os: ubuntu-latest
+            node: 22
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage (enforces thresholds)
+        run: npm run test:cov
+
+      - name: Upload coverage report
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 20
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: ignore
