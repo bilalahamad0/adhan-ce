@@ -49,5 +49,11 @@
   "prayer_Asr": "Asr",
   "prayer_Maghrib": "Maghrib",
   "prayer_Isha": "Isha",
-  "sunrise": "Sunrise"
+  "sunrise": "Sunrise",
+  "calc_method": "Calculation method",
+  "asr_method": "Asr (juristic) method",
+  "asr_standard": "Standard (Shafi, Maliki, Hanbali)",
+  "asr_hanafi": "Hanafi",
+  "show_hijri": "Show Hijri date",
+  "hijri_adjust": "Hijri adjustment"
 }

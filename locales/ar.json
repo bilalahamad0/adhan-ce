@@ -49,5 +49,11 @@
   "prayer_Asr": "العصر",
   "prayer_Maghrib": "المغرب",
   "prayer_Isha": "العشاء",
-  "sunrise": "الشروق"
+  "sunrise": "الشروق",
+  "calc_method": "طريقة الحساب",
+  "asr_method": "مذهب حساب العصر",
+  "asr_standard": "القياسي (الشافعي، المالكي، الحنبلي)",
+  "asr_hanafi": "الحنفي",
+  "show_hijri": "إظهار التاريخ الهجري",
+  "hijri_adjust": "تعديل التاريخ الهجري"
 }

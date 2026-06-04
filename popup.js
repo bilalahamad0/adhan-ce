@@ -2,10 +2,51 @@
 import { formatCountdown } from './lib/schedule.js';
 import { searchPlaces } from './lib/geocode.js';
 import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
+import { formatHijri } from './lib/hijri.js';
 
 const $ = (id) => document.getElementById(id);
 let st = null;
 let tickTimer = null;
+
+// Aladhan calculation methods (id → label). Method 6 doesn't exist; 99 (custom)
+// is deferred. Default stays 2 (ISNA) so existing users' prayer times don't shift.
+const METHODS = [
+  { id: 2, name: 'ISNA — Islamic Society of North America' },
+  { id: 3, name: 'Muslim World League' },
+  { id: 1, name: 'University of Islamic Sciences, Karachi' },
+  { id: 4, name: 'Umm al-Qura University, Makkah' },
+  { id: 5, name: 'Egyptian General Authority of Survey' },
+  { id: 0, name: 'Shia Ithna-Ashari (Jafari)' },
+  { id: 7, name: 'University of Tehran' },
+  { id: 8, name: 'Gulf Region' },
+  { id: 9, name: 'Kuwait' },
+  { id: 10, name: 'Qatar' },
+  { id: 11, name: 'Singapore (MUIS)' },
+  { id: 12, name: 'France (UOIF)' },
+  { id: 13, name: 'Turkey (Diyanet)' },
+  { id: 14, name: 'Russia' },
+  { id: 15, name: 'Moonsighting Committee Worldwide' },
+  { id: 16, name: 'Dubai' },
+  { id: 17, name: 'Malaysia (JAKIM)' },
+  { id: 18, name: 'Tunisia' },
+  { id: 19, name: 'Algeria' },
+  { id: 20, name: 'Indonesia (Kemenag)' },
+  { id: 21, name: 'Morocco' },
+  { id: 22, name: 'Portugal (Lisbon)' },
+  { id: 23, name: 'Jordan' },
+];
+
+// Fill the calculation-method <select> once (labels are proper names, not i18n'd).
+function populateMethods() {
+  const sel = $('method');
+  if (!sel || sel.options.length) return;
+  for (const m of METHODS) {
+    const opt = document.createElement('option');
+    opt.value = String(m.id);
+    opt.textContent = m.name;
+    sel.appendChild(opt);
+  }
+}
 
 // Live clock for the selected location (uses the location's timezone when known,
 // so it reads the local time *there*, not just the machine clock).
@@ -108,6 +149,14 @@ function renderAll() {
   $('city').value = place ? place.label : '';
   $('resumeMin').value = settings.autoResumeMinutes != null ? settings.autoResumeMinutes : 5;
   $('leadSeconds').value = String(settings.leadSeconds || 30);
+  $('method').value = String(settings.method != null ? settings.method : 2);
+  $('school').value = String(settings.school != null ? settings.school : 0);
+  $('showHijri').checked = settings.showHijri !== false;
+  $('hijriOffset').value = String(settings.hijriOffset || 0);
+  const hijriShown = settings.showHijri !== false;
+  const hijriTxt = hijriShown ? formatHijri(new Date(), getLang(), settings.hijriOffset || 0) : '';
+  $('hijriLabel').textContent = hijriTxt ? '🌙 ' + hijriTxt : '';
+  $('hijriLabel').hidden = !hijriTxt;
   $('locLabel').textContent = place ? place.label : '—';
 
   if (paused && paused.active) {
@@ -232,6 +281,7 @@ $('save').addEventListener('click', async () => {
     setTimeout(() => ($('saveMsg').textContent = ''), 3000);
     return;
   }
+  const method = parseInt($('method').value, 10);
   const settings = {
     enabled: $('enabled').checked,
     focusMode: $('focusMode').checked,
@@ -242,6 +292,10 @@ $('save').addEventListener('click', async () => {
     lon: selectedPlace.lon,
     autoResumeMinutes: Math.max(0, parseInt($('resumeMin').value, 10) || 5),
     leadSeconds: parseInt($('leadSeconds').value, 10) || 30,
+    method: Number.isFinite(method) ? method : 2,
+    school: parseInt($('school').value, 10) === 1 ? 1 : 0,
+    showHijri: $('showHijri').checked,
+    hijriOffset: parseInt($('hijriOffset').value, 10) || 0,
   };
   $('save').disabled = true;
   $('save').textContent = t('saving');
@@ -301,6 +355,7 @@ async function start() {
   applyDir(document);
   applyStaticI18n(document);
   $('lang').value = getLang();
+  populateMethods();
   await load();
   startTick();
 }

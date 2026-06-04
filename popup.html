@@ -12,6 +12,7 @@
       <div class="head-title">
         <strong data-i18n="app_name">Adhan Caster</strong>
         <span id="locLabel" class="loc">—</span>
+        <span id="hijriLabel" class="hijri" hidden></span>
       </div>
       <button id="gear" class="gear" title="Settings" aria-label="Settings" data-i18n-attr="title:settings;aria-label:settings">⚙</button>
     </header>
@@ -62,6 +63,29 @@
           <input type="text" id="city" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
           <div id="cityResults" class="suggest" hidden></div>
         </span>
+      </label>
+      <label class="field">
+        <span data-i18n="calc_method">Calculation method</span>
+        <select id="method"></select>
+      </label>
+      <label class="field">
+        <span data-i18n="asr_method">Asr (juristic) method</span>
+        <select id="school">
+          <option value="0" data-i18n="asr_standard">Standard (Shafi, Maliki, Hanbali)</option>
+          <option value="1" data-i18n="asr_hanafi">Hanafi</option>
+        </select>
+      </label>
+      <label class="field toggle">
+        <span data-i18n="show_hijri">Show Hijri date</span>
+        <input type="checkbox" id="showHijri" />
+      </label>
+      <label class="field">
+        <span data-i18n="hijri_adjust">Hijri adjustment</span>
+        <select id="hijriOffset">
+          <option value="-1">−1</option>
+          <option value="0">0</option>
+          <option value="1">+1</option>
+        </select>
       </label>
       <label class="field">
         <span data-i18n="heads_up">Heads-up before Adhan</span>

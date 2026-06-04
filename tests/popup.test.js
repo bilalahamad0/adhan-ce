@@ -143,6 +143,36 @@ describe('saving settings', () => {
     expect(saved.settings).toMatchObject({ enabled: false, city: 'Sunnyvale', country: 'United States', autoResumeMinutes: 8 });
     expect($('saveMsg').textContent).toBe(EN.saved);
   });
+
+  it('populates the calculation-method list and saves the chosen method + Asr school', async () => {
+    await load();
+    // Stored settings carry no method/school yet → defaults to ISNA (2) / Standard (0).
+    expect($('method').options.length).toBe(23);
+    expect($('method').value).toBe('2');
+    expect($('school').value).toBe('0');
+    // Pick MWL + Hanafi and save.
+    $('method').value = '3';
+    $('school').value = '1';
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings).toMatchObject({ method: 3, school: 1 });
+  });
+
+  it('shows the Hijri date in the header and saves the toggle + offset', async () => {
+    await load();
+    // Default (showHijri undefined → shown): header carries a 🌙 Hijri date.
+    expect($('showHijri').checked).toBe(true);
+    expect($('hijriLabel').hidden).toBe(false);
+    expect($('hijriLabel').textContent).toMatch(/^🌙 /);
+    // Turn it off, nudge the offset, and save.
+    $('showHijri').checked = false;
+    $('hijriOffset').value = '1';
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings).toMatchObject({ showHijri: false, hijriOffset: 1 });
+  });
 });
 
 describe('action buttons relay to the worker', () => {

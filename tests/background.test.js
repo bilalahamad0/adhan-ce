@@ -25,6 +25,10 @@ const DEFAULTS = {
   autoResumeMinutes: 5,
   leadSeconds: 30,
   focusMode: true,
+  method: 2,
+  school: 0,
+  showHijri: true,
+  hijriOffset: 0,
 };
 
 // Serve real /locales catalogs to fetch() so the i18n round-trips are faithful.
@@ -336,6 +340,16 @@ describe('message router', () => {
     expect(h.store.settings.city).toBe('London');
     expect(fetch.calls.some((u) => u.includes('city=London'))).toBe(true);
     expect(h.alarms.has(ALARM_TICK)).toBe(true);
+  });
+
+  it('SAVE_SETTINGS forwards a custom calculation method + Asr school to Aladhan', async () => {
+    const { h, fetch } = await loadBackground({ storage: { settings: DEFAULTS } });
+    await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { method: 3, school: 1 } });
+    await flush();
+    expect(h.store.settings.method).toBe(3);
+    expect(h.store.settings.school).toBe(1);
+    const url = fetch.calls.find((u) => u.includes('aladhan') && u.includes('method=3'));
+    expect(url).toContain('school=1');
   });
 
   it('SAVE_SETTINGS reports the error (and still arms) when the refetch fails', async () => {
