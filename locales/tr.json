@@ -55,5 +55,11 @@
   "asr_standard": "Standart (Şafii, Maliki, Hanbeli)",
   "asr_hanafi": "Hanefi",
   "show_hijri": "Hicri tarihi göster",
-  "hijri_adjust": "Hicri tarih düzeltmesi"
+  "hijri_adjust": "Hicri tarih düzeltmesi",
+  "prayer_log": "Namaz kaydı",
+  "mark_prayed": "{prayer} namazını kılındı işaretle",
+  "today_count": "Bugün {done}/{total}",
+  "streak_days": "{n} günlük seri",
+  "total_logged": "{n} namaz kaydedildi",
+  "log_empty": "Henüz namaz kaydı yok — listeden birini işaretleyin."
 }

@@ -55,5 +55,11 @@
   "asr_standard": "معیاری (شافعی، مالکی، حنبلی)",
   "asr_hanafi": "حنفی",
   "show_hijri": "ہجری تاریخ دکھائیں",
-  "hijri_adjust": "ہجری تاریخ کی تنظیم"
+  "hijri_adjust": "ہجری تاریخ کی تنظیم",
+  "prayer_log": "نماز کا ریکارڈ",
+  "mark_prayed": "{prayer} کو ادا شدہ نشان زد کریں",
+  "today_count": "آج {done}/{total}",
+  "streak_days": "{n} دن کا تسلسل",
+  "total_logged": "{n} نمازیں ریکارڈ شدہ",
+  "log_empty": "ابھی کوئی نماز ریکارڈ نہیں — فہرست سے ایک منتخب کریں۔"
 }

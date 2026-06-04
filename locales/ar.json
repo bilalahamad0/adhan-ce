@@ -55,5 +55,11 @@
   "asr_standard": "القياسي (الشافعي، المالكي، الحنبلي)",
   "asr_hanafi": "الحنفي",
   "show_hijri": "إظهار التاريخ الهجري",
-  "hijri_adjust": "تعديل التاريخ الهجري"
+  "hijri_adjust": "تعديل التاريخ الهجري",
+  "prayer_log": "سجل الصلوات",
+  "mark_prayed": "تحديد {prayer} كمُؤدّاة",
+  "today_count": "اليوم {done}/{total}",
+  "streak_days": "{n} يوم متتالٍ",
+  "total_logged": "{n} صلاة مسجَّلة",
+  "log_empty": "لا صلوات مسجَّلة بعد — اختر واحدة من القائمة."
 }

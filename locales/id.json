@@ -55,5 +55,11 @@
   "asr_standard": "Standar (Syafi'i, Maliki, Hanbali)",
   "asr_hanafi": "Hanafi",
   "show_hijri": "Tampilkan tanggal Hijriah",
-  "hijri_adjust": "Penyesuaian Hijriah"
+  "hijri_adjust": "Penyesuaian Hijriah",
+  "prayer_log": "Catatan salat",
+  "mark_prayed": "Tandai {prayer} sebagai dikerjakan",
+  "today_count": "Hari ini {done}/{total}",
+  "streak_days": "Rentetan {n} hari",
+  "total_logged": "{n} salat tercatat",
+  "log_empty": "Belum ada salat tercatat — centang satu dari daftar."
 }

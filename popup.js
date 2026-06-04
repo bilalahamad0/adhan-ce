@@ -1,5 +1,6 @@
 // Adhan Caster Pro — popup UI logic.
-import { formatCountdown } from './lib/schedule.js';
+import { formatCountdown, ymd, PRAYER_ORDER } from './lib/schedule.js';
+import { dayCount, totalLogged, completeStreak, historyDates } from './lib/tracker.js';
 import { searchPlaces } from './lib/geocode.js';
 import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
@@ -178,6 +179,7 @@ function renderAll() {
           time: new Date(schedule.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         })
       : '';
+  if (!$('tracker').hidden) renderTracker();
 }
 
 function renderNext() {
@@ -221,6 +223,15 @@ function renderList() {
     }
     row.appendChild(pname);
     row.appendChild(ptime);
+    const pcheck = document.createElement('span');
+    pcheck.className = 'pcheck';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = prayedToday(p.name);
+    cb.setAttribute('aria-label', t('mark_prayed', { prayer: t('prayer_' + p.name) }));
+    cb.addEventListener('change', () => togglePrayer(p.name));
+    pcheck.appendChild(cb);
+    row.appendChild(pcheck);
     wrap.appendChild(row);
     // Sunrise (Shuruq) — informational only, shown greyed right after Fajr.
     if (p.name === 'Fajr' && sched.sunrise) {
@@ -234,9 +245,76 @@ function renderList() {
       stime.textContent = sched.sunrise.time;
       sr.appendChild(sn);
       sr.appendChild(stime);
+      const ssp = document.createElement('span'); // keep the time column aligned with checkbox rows
+      ssp.className = 'pcheck';
+      sr.appendChild(ssp);
       wrap.appendChild(sr);
     }
   });
+}
+
+// ---- prayer tracking ----
+// "Today" for the log = the day the displayed schedule is for (else the local
+// date), so a checkbox always lands on the day the popup is showing.
+function logToday() {
+  return (st && st.schedule && st.schedule.date) || ymd();
+}
+function prayedToday(name) {
+  const day = ((st && st.prayerLog) || {})[logToday()] || {};
+  return !!day[name];
+}
+async function togglePrayer(name) {
+  const res = await send({ type: 'TOGGLE_PRAYER', date: logToday(), prayer: name });
+  if (res && res.ok) st.prayerLog = res.prayerLog;
+  renderList(); // reflect the stored state (reverts the box if the write failed)
+  if (!$('tracker').hidden) renderTracker();
+}
+
+function fmtLogDate(date) {
+  try {
+    return new Date(date + 'T12:00:00').toLocaleDateString(getLang(), { weekday: 'short', month: 'short', day: 'numeric' });
+  } catch (_) {
+    return date;
+  }
+}
+
+function renderTracker() {
+  const today = logToday();
+  const log = (st && st.prayerLog) || {};
+  const installDate = st && st.installedAt ? ymd(new Date(st.installedAt)) : today;
+  const total = totalLogged(log);
+  const streak = completeStreak(log, today);
+  $('trackerStats').textContent = t('today_count', { done: dayCount(log, today), total: PRAYER_ORDER.length });
+  $('trackerStreak').textContent = streak > 0 ? t('streak_days', { n: streak }) : total > 0 ? t('total_logged', { n: total }) : '';
+
+  const listEl = $('trackerList');
+  listEl.innerHTML = '';
+  if (total === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'tracker-empty';
+    empty.textContent = t('log_empty');
+    listEl.appendChild(empty);
+    return;
+  }
+  for (const date of historyDates(installDate, today)) {
+    const row = document.createElement('div');
+    row.className = date === today ? 'tlog-row today' : 'tlog-row';
+    const dlabel = document.createElement('span');
+    dlabel.className = 'tlog-date';
+    dlabel.textContent = fmtLogDate(date);
+    const pips = document.createElement('span');
+    pips.className = 'tlog-pips';
+    const day = log[date] || {};
+    for (const name of PRAYER_ORDER) {
+      const pip = document.createElement('span');
+      pip.className = day[name] ? 'tlog-pip on' : 'tlog-pip';
+      pip.title = t('prayer_' + name);
+      pips.appendChild(pip);
+    }
+    row.appendChild(dlabel);
+    row.appendChild(pips);
+    listEl.appendChild(row);
+  }
 }
 
 function startTick() {
@@ -312,7 +390,18 @@ $('save').addEventListener('click', async () => {
 });
 
 $('gear').addEventListener('click', () => {
-  $('settings').hidden = !$('settings').hidden;
+  const show = $('settings').hidden;
+  $('settings').hidden = !show;
+  if (show) $('tracker').hidden = true; // don't stack both panels
+});
+
+$('logBtn').addEventListener('click', () => {
+  const show = $('tracker').hidden;
+  $('tracker').hidden = !show;
+  if (show) {
+    $('settings').hidden = true;
+    renderTracker();
+  }
 });
 
 $('refresh').addEventListener('click', async (e) => {

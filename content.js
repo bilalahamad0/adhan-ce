@@ -236,7 +236,7 @@
       .bg { position: absolute; inset: -25%; z-index: 0; pointer-events: none; background: radial-gradient(55% 55% at 50% 40%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); animation: ccpBg 12s ease-in-out infinite; }
       .stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
       .star { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.85); opacity: 0; animation-name: ccpFloat, ccpTwinkle; animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite, infinite; }
-      .fbrand { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 10px; color: #fff; padding: 9px 16px 9px 11px; border-radius: 999px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: ccpRise .6s ease both; }
+      .fbrand { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 10px; color: #fff; padding: 9px 16px 9px 11px; border-radius: 999px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: ccpBrandRise .6s ease both; }
       .fbrand img { width: 24px; height: 24px; border-radius: 7px; display: block; }
       .fbrand .fbname { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
       .panel { position: relative; z-index: 2; text-align: center; color: #fff; padding: 28px; max-width: 480px; }
@@ -252,6 +252,9 @@
       @keyframes ccpGlow { 0%,100% { opacity: .35; transform: translate(-50%, -50%) scale(.9); } 50% { opacity: .7; transform: translate(-50%, -50%) scale(1.3); } }
       @keyframes ccpBreathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
       @keyframes ccpRise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+      /* The brand pill centers with translateX(-50%); keep it in every frame so the
+         rise animation doesn't clobber the horizontal centering (its fill is both). */
+      @keyframes ccpBrandRise { from { opacity: 0; transform: translateX(-50%) translateY(18px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
       @media (prefers-reduced-motion: reduce) {
         .bg, .halo, .glow, .crescent, .fbrand, .scrim.show .panel { animation: none !important; }
         .star { animation-name: ccpTwinkle !important; }
