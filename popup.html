@@ -63,16 +63,18 @@
               <strong class="tracker-title" data-i18n="prayer_log">Prayer log</strong>
               <span id="trackerStreak" class="tracker-streak"></span>
             </div>
-            <div class="cal-nav glass">
-              <button id="calPrev" class="cal-arrow" type="button" aria-label="Previous month" data-i18n-attr="aria-label:prev_month">‹</button>
-              <span id="calLabel" class="cal-label"></span>
-              <button id="calNext" class="cal-arrow" type="button" aria-label="Next month" data-i18n-attr="aria-label:next_month">›</button>
-            </div>
-            <div id="calGrid" class="cal-grid"></div>
-            <div class="cal-legend">
-              <span data-i18n="cal_less">Less</span>
-              <i class="lg lvl-1"></i><i class="lg lvl-2"></i><i class="lg lvl-3"></i><i class="lg lvl-4"></i><i class="lg lvl-5"></i>
-              <span data-i18n="cal_more">More</span>
+            <div class="cal-block">
+              <div class="cal-nav glass">
+                <button id="calPrev" class="cal-arrow" type="button" aria-label="Previous month" data-i18n-attr="aria-label:prev_month">‹</button>
+                <span id="calLabel" class="cal-label"></span>
+                <button id="calNext" class="cal-arrow" type="button" aria-label="Next month" data-i18n-attr="aria-label:next_month">›</button>
+              </div>
+              <div id="calGrid" class="cal-grid"></div>
+              <div class="cal-legend">
+                <span data-i18n="cal_less">Less</span>
+                <i class="lg lvl-1"></i><i class="lg lvl-2"></i><i class="lg lvl-3"></i><i class="lg lvl-4"></i><i class="lg lvl-5"></i>
+                <span data-i18n="cal_more">More</span>
+              </div>
             </div>
             <div id="dayDetail" class="day-detail glass" hidden>
               <div class="dd-head">
@@ -133,7 +135,7 @@
                   <div id="cityResults" class="suggest" hidden></div>
                 </span>
               </label>
-              <label class="set-row">
+              <label class="set-row col">
                 <span class="set-label" data-i18n="language">Language</span>
                 <select id="lang">
                   <option value="en">English</option>

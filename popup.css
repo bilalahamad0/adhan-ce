@@ -242,6 +242,9 @@ body {
 /* Home + Tracker are sized to fit the frame — no scrolling — and their content
    is distributed to fill the height (no dead space above the tab bar). */
 #view-home .scroll, #view-tracker .scroll { overflow-y: hidden; padding-bottom: 8px; display: flex; flex-direction: column; }
+/* Tracker: distribute its three blocks (header / calendar / day-detail) with
+   uniform gaps top→bottom. */
+#view-tracker .scroll { justify-content: space-evenly; }
 .view.is-active .scroll { animation: viewIn .3s var(--ease); }
 @keyframes viewIn { from { opacity: 0; transform: translateY(8px); } }
 
@@ -329,7 +332,7 @@ body {
 
 /* ============================ TRACKER ===================================== */
 /* Sized so the whole month + day detail fit without scrolling. */
-.tracker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 2px 7px; }
+.tracker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 2px; }
 .tracker-title { font-size: 15px; font-weight: 750; color: var(--text-strong); }
 .tracker-streak { font-size: 12px; font-weight: 750; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: var(--radius-pill); white-space: nowrap; flex: 0 0 auto; }
 .cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; margin-bottom: 7px; }
@@ -363,7 +366,7 @@ body {
 .cal-legend .lg.lvl-3 { background: color-mix(in srgb, var(--accent) 52%, transparent); }
 .cal-legend .lg.lvl-4 { background: color-mix(in srgb, var(--accent) 72%, transparent); }
 .cal-legend .lg.lvl-5 { background: var(--accent); }
-.day-detail { margin-top: auto; padding: 10px 13px; } /* margin-top:auto pins it to the bottom of the view */
+.day-detail { padding: 10px 13px; } /* spacing comes from the view's space-evenly */
 .dd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid var(--line); }
 .dd-date { font-size: 12.5px; font-weight: 750; color: var(--text-strong); }
 .dd-hijri { font-size: 10.5px; color: var(--gold); font-weight: 650; direction: ltr; unicode-bidi: isolate; }
@@ -432,6 +435,8 @@ body {
   font: inherit; font-size: 13px; background: var(--input-bg); color: var(--text); -webkit-appearance: none; appearance: none;
 }
 .set-row.col input[type="text"], .set-row.col select { width: 100%; }
+/* Short-value controls: narrower so their labels stay to ≤2 lines. */
+#hijriOffset, #leadSeconds, #resumeMin { width: 110px; }
 .set-row select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%237a988b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-inline-end: 28px; }
 [dir="rtl"] .set-row select { background-position: left 10px center; }
 .set-row input:focus, .set-row select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
