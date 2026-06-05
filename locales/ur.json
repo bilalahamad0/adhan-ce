@@ -65,5 +65,15 @@
   "prev_month": "پچھلا مہینہ",
   "next_month": "اگلا مہینہ",
   "cal_less": "کم",
-  "cal_more": "زیادہ"
+  "cal_more": "زیادہ",
+  "tab_home": "ہوم",
+  "tab_tracker": "ٹریکر",
+  "tab_settings": "ترتیبات",
+  "appearance": "ظاہری شکل",
+  "appearance_system": "سسٹم",
+  "appearance_light": "روشن",
+  "appearance_dark": "گہرا",
+  "clock_style": "گھڑی",
+  "clock_analog": "اینالاگ",
+  "clock_digital": "ڈیجیٹل"
 }

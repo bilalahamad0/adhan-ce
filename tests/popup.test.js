@@ -88,7 +88,13 @@ describe('initial render from GET_STATE', () => {
     expect($('nextName').textContent).toBe('Asr');
     expect($('nextTime').textContent).toBe('04:56 PM');
     expect($('nextCountdown').textContent).toMatch(/in /);
-    expect($('clock').textContent).toMatch(/^🕐 /);
+    // The analog clock injects an SVG face + a live digital readout (no emoji).
+    expect($('clock').querySelector('svg.clock-face')).not.toBeNull();
+    expect($('clockDigital').textContent).toMatch(/^\d{1,2}:\d{2}/);
+    // Appearance defaults to System; calc method + Asr default to ISNA / Standard.
+    expect(document.documentElement.getAttribute('data-theme')).toBe('system');
+    expect($('method').value).toBe('2');
+    expect($('school').value).toBe('0');
 
     // Five prayer rows + one sunrise row, with the next prayer marked.
     const rows = $('list').querySelectorAll('.row');
@@ -159,12 +165,12 @@ describe('saving settings', () => {
     expect(saved.settings).toMatchObject({ method: 3, school: 1 });
   });
 
-  it('shows the Hijri date in the header and saves the toggle + offset', async () => {
+  it('shows the Hijri date in the Tracker (not the header) and saves the toggle + offset', async () => {
     await load();
-    // Default (showHijri undefined → shown): header carries a 🌙 Hijri date.
     expect($('showHijri').checked).toBe(true);
-    expect($('hijriLabel').hidden).toBe(false);
-    expect($('hijriLabel').textContent).toMatch(/^🌙 /);
+    // The Hijri date lives in the Tracker header now, not the popup header.
+    document.querySelector('[data-tab="tracker"]').click();
+    expect($('calHijri').textContent).toMatch(/\d{4}/); // e.g. "Dhuʻl-Hijjah 1447 AH"
     // Turn it off, nudge the offset, and save.
     $('showHijri').checked = false;
     $('hijriOffset').value = '1';
@@ -187,11 +193,15 @@ describe('action buttons relay to the worker', () => {
     expect($('testMsg').textContent).toBe(EN.test_started);
   });
 
-  it('the gear toggles the settings panel', async () => {
+  it('the tab bar swaps views within the fixed frame (no resize)', async () => {
     await load();
-    const before = $('settings').hidden;
-    $('gear').click();
-    expect($('settings').hidden).toBe(!before);
+    expect($('view-home').classList.contains('is-active')).toBe(true);
+    document.querySelector('[data-tab="settings"]').click();
+    expect($('view-settings').classList.contains('is-active')).toBe(true);
+    expect($('view-home').classList.contains('is-active')).toBe(false);
+    document.querySelector('[data-tab="tracker"]').click();
+    expect($('view-tracker').classList.contains('is-active')).toBe(true);
+    expect($('view-settings').classList.contains('is-active')).toBe(false);
   });
 });
 
@@ -230,7 +240,7 @@ describe('countdown ticking', () => {
     await load();
     const first = $('nextCountdown').textContent;
     jest.advanceTimersByTime(1000);
-    expect($('clock').textContent).toMatch(/^🕐 /);
+    expect($('clockDigital').textContent).toMatch(/^\d{1,2}:\d{2}/);
     expect($('nextCountdown').textContent).toMatch(/in /);
     expect(typeof first).toBe('string');
   });
@@ -318,11 +328,11 @@ describe('prayer tracking', () => {
       '2026-05-23': { Fajr: true, Asr: true },
     };
     await load({ state });
-    expect($('tracker').hidden).toBe(true);
+    expect($('view-tracker').classList.contains('is-active')).toBe(false);
 
-    $('logBtn').click();
-    expect($('tracker').hidden).toBe(false);
-    expect($('settings').hidden).toBe(true);
+    document.querySelector('[data-tab="tracker"]').click();
+    expect($('view-tracker').classList.contains('is-active')).toBe(true);
+    expect($('view-home').classList.contains('is-active')).toBe(false);
     expect($('calLabel').textContent).toMatch(/May 2026/);
 
     const days = [...$('calGrid').querySelectorAll('.cal-day:not(.empty)')];
@@ -337,7 +347,7 @@ describe('prayer tracking', () => {
     state.schedule.date = '2026-05-23';
     state.installedAt = new Date('2026-03-01T12:00:00').getTime();
     await load({ state });
-    $('logBtn').click();
+    document.querySelector('[data-tab="tracker"]').click();
     expect($('calNext').disabled).toBe(true); // can't view future months
     expect($('calPrev').disabled).toBe(false);
     $('calPrev').click();
@@ -350,7 +360,7 @@ describe('prayer tracking', () => {
     state.schedule.date = '2026-05-23';
     const sent = [];
     await load({ state, send: (m) => { sent.push(m); return m.type === 'GET_STATE' ? state : { ok: true, prayerLog: {} }; } });
-    $('logBtn').click();
+    document.querySelector('[data-tab="tracker"]').click();
     const cell20 = [...$('calGrid').querySelectorAll('.cal-day:not(.empty)')].find((c) => c.textContent === '20');
     cell20.click();
     expect($('dayDetail').hidden).toBe(false);
@@ -358,5 +368,21 @@ describe('prayer tracking', () => {
     $('ddPrayers').querySelectorAll('.dd-p')[0].click(); // Fajr
     await settle();
     expect(sent.find((m) => m.type === 'TOGGLE_PRAYER')).toMatchObject({ date: '2026-05-20', prayer: 'Fajr' });
+  });
+});
+
+describe('appearance & clock style', () => {
+  it('the Appearance control applies and persists the chosen theme', async () => {
+    await load();
+    document.querySelector('#appearance [data-val="dark"]').click();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(chrome.__.store.appearance).toBe('dark');
+  });
+
+  it('the Clock-style control switches analog/digital and persists', async () => {
+    await load();
+    document.querySelector('#clockStyle [data-val="digital"]').click();
+    expect($('clock').classList.contains('is-digital')).toBe(true);
+    expect(chrome.__.store.clockStyle).toBe('digital');
   });
 });

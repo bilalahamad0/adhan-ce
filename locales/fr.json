@@ -65,5 +65,15 @@
   "prev_month": "Mois précédent",
   "next_month": "Mois suivant",
   "cal_less": "Moins",
-  "cal_more": "Plus"
+  "cal_more": "Plus",
+  "tab_home": "Accueil",
+  "tab_tracker": "Suivi",
+  "tab_settings": "Réglages",
+  "appearance": "Apparence",
+  "appearance_system": "Système",
+  "appearance_light": "Clair",
+  "appearance_dark": "Sombre",
+  "clock_style": "Horloge",
+  "clock_analog": "Analogique",
+  "clock_digital": "Numérique"
 }

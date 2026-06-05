@@ -1,9 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Adhan Caster: Muslim Prayer Times & Auto-Pause",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "description": "Muslim prayer times with a live Adhan countdown that auto-pauses video & audio in every tab at salah. Free, no ads, private.",
-  "permissions": ["storage", "alarms", "notifications", "scripting", "tabs"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "scripting",
+    "tabs"
+  ],
   "host_permissions": [
     "https://api.aladhan.com/*",
     "http://*/*",
@@ -29,17 +35,31 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle",
       "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
-      "matches": ["http://*/*", "https://*/*"]
+      "resources": [
+        "icons/icon16.png",
+        "icons/icon48.png",
+        "icons/icon128.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
     }
   ],
   "commands": {
