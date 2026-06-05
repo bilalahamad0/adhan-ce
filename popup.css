@@ -1,10 +1,10 @@
 /* ============================================================================
    Adhan Caster — popup UI
-   A compact, fixed-frame glass interface with three tabbed views
-   (Home / Tracker / Settings). Home fits without scrolling: the analog clock and
-   next-prayer sit side by side, above a tight prayer list. Theming is
-   token-driven (serene "day" / elegant "night"), via the Appearance control
-   (System / Light / Dark) on <html data-theme>.
+   Compact, fixed-frame glass interface with three tabbed views
+   (Home / Tracker / Settings). Home and Tracker both fit without scrolling.
+   Theming is token-driven (serene "day" / elegant "night") via the Appearance
+   control (System / Light / Dark) on <html data-theme>. Settings uses
+   Control-Center-style toggle tiles + frosted modules.
    ========================================================================== */
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -239,22 +239,23 @@ body {
 }
 .scroll::-webkit-scrollbar { width: 6px; }
 .scroll::-webkit-scrollbar-thumb { background: var(--switch-off); border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
-/* Home never scrolls — everything is sized to fit the frame. */
-#view-home .scroll { overflow-y: hidden; padding-bottom: 6px; }
+/* Home + Tracker are sized to fit the frame — no scrolling. */
+#view-home .scroll, #view-tracker .scroll { overflow-y: hidden; padding-bottom: 8px; }
 .view.is-active .scroll { animation: viewIn .3s var(--ease); }
 @keyframes viewIn { from { opacity: 0; transform: translateY(8px); } }
 
 /* ============================== HOME ====================================== */
-/* Clock + next-prayer sit side by side so no horizontal space is wasted. */
-.hero { display: flex; align-items: center; gap: 14px; padding: 12px 15px; margin-bottom: 8px; }
+/* Clock + next-prayer sit side by side, centered as a group (no side gaps). */
+.hero { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 15px; margin-bottom: 8px; }
+/* Fixed slot so switching analog↔digital never resizes the card. */
 .clock {
-  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent;
-  transition: transform .12s var(--ease);
+  flex: 0 0 auto; width: 110px; height: 104px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .12s var(--ease);
 }
 .clock:hover { transform: scale(1.03); }
 .clock:active { transform: scale(.98); }
-.clock:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.clock:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 16px; }
 .clock-face { width: 104px; height: 104px; display: block; filter: drop-shadow(0 8px 16px rgba(6, 50, 38, .22)); }
 .clock.is-digital .clock-face { display: none; }
 .cf-track { fill: none; stroke: var(--seg-bg); stroke-width: 6; }
@@ -267,16 +268,15 @@ body {
 .cf-sec { stroke: var(--gold-bright); stroke-width: 2.5; }
 .cf-cap { fill: var(--text-strong); }
 .cf-cap-gold { fill: var(--gold-bright); }
-/* Digital readout: hidden in analog mode, shown big in digital mode. */
 .clock-digital { display: none; }
 .clock.is-digital .clock-digital {
-  display: block; min-width: 104px; text-align: center;
-  font-size: 30px; font-weight: 300; letter-spacing: .5px; color: var(--text-strong);
+  display: block; text-align: center;
+  font-size: 27px; font-weight: 300; letter-spacing: .5px; color: var(--text-strong);
   font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate;
 }
 .clock.is-digital .clock-digital .ampm { font-size: 14px; font-weight: 600; margin-inline-start: 4px; color: var(--muted); }
 
-.hero-next { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.hero-next { flex: 0 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
 .hero-next-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-weight: 650; }
 .next-name { font-size: 25px; font-weight: 800; color: var(--accent); letter-spacing: .2px; line-height: 1.12; }
 .next-time { font-size: 14px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
@@ -327,20 +327,21 @@ body {
 .row .pcheck input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ============================ TRACKER ===================================== */
-.tracker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 2px 9px; }
+/* Sized so the whole month + day detail fit without scrolling. */
+.tracker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 2px 7px; }
 .tracker-title { font-size: 15px; font-weight: 750; color: var(--text-strong); }
 .tracker-streak { font-size: 12px; font-weight: 750; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: var(--radius-pill); white-space: nowrap; flex: 0 0 auto; }
-.cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; margin-bottom: 9px; }
-.cal-arrow { width: 30px; height: 30px; flex: 0 0 auto; border: 0; cursor: pointer; border-radius: 9px; background: var(--seg-bg); color: var(--text); font-size: 18px; line-height: 1; display: grid; place-items: center; transition: background .15s, transform .1s; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; margin-bottom: 7px; }
+.cal-arrow { width: 28px; height: 28px; flex: 0 0 auto; border: 0; cursor: pointer; border-radius: 9px; background: var(--seg-bg); color: var(--text); font-size: 17px; line-height: 1; display: grid; place-items: center; transition: background .15s, transform .1s; }
 .cal-arrow:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .cal-arrow:active:not(:disabled) { transform: scale(.92); }
 .cal-arrow:disabled { opacity: .3; cursor: default; }
 .cal-label { flex: 1; text-align: center; font-size: 13.5px; font-weight: 750; color: var(--text-strong); }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-.cal-wd { text-align: center; font-size: 10px; font-weight: 700; color: var(--faint); text-transform: uppercase; padding-bottom: 2px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-wd { text-align: center; font-size: 9.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; padding-bottom: 1px; }
 .cal-day {
-  aspect-ratio: 1; border-radius: 9px; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums;
+  height: 27px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-size: 11.5px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums;
   cursor: pointer; border: 1px solid transparent; transition: transform .1s;
 }
 .cal-day.empty { visibility: hidden; cursor: default; }
@@ -354,20 +355,20 @@ body {
 .cal-day.lvl-5 { background: linear-gradient(150deg, var(--accent-bright), var(--accent)); color: var(--accent-ink); }
 .cal-day.today { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent); }
 .cal-day.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
-.cal-legend { display: flex; align-items: center; gap: 5px; justify-content: flex-end; margin-top: 9px; font-size: 10px; color: var(--muted); }
-.cal-legend .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.cal-legend { display: flex; align-items: center; gap: 5px; justify-content: flex-end; margin-top: 7px; font-size: 9.5px; color: var(--muted); }
+.cal-legend .lg { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .cal-legend .lg.lvl-1 { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .cal-legend .lg.lvl-2 { background: color-mix(in srgb, var(--accent) 34%, transparent); }
 .cal-legend .lg.lvl-3 { background: color-mix(in srgb, var(--accent) 52%, transparent); }
 .cal-legend .lg.lvl-4 { background: color-mix(in srgb, var(--accent) 72%, transparent); }
 .cal-legend .lg.lvl-5 { background: var(--accent); }
-.day-detail { margin-top: 11px; padding: 12px 14px; }
-.dd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
-.dd-date { font-size: 13px; font-weight: 750; color: var(--text-strong); }
-.dd-hijri { font-size: 11px; color: var(--gold); font-weight: 650; direction: ltr; unicode-bidi: isolate; }
+.day-detail { margin-top: 9px; padding: 10px 13px; }
+.dd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid var(--line); }
+.dd-date { font-size: 12.5px; font-weight: 750; color: var(--text-strong); }
+.dd-hijri { font-size: 10.5px; color: var(--gold); font-weight: 650; direction: ltr; unicode-bidi: isolate; }
 .dd-prayers { display: flex; gap: 6px; }
 .dd-p {
-  flex: 1; text-align: center; font-size: 10.5px; font-weight: 650; padding: 9px 2px; border-radius: 10px;
+  flex: 1; text-align: center; font-size: 10px; font-weight: 650; padding: 7px 2px; border-radius: 9px;
   background: var(--row-fill); border: 1px solid transparent; color: var(--muted); cursor: pointer;
   transition: background .15s, transform .1s;
 }
@@ -377,7 +378,6 @@ body {
 .dd-p.locked { opacity: .4; cursor: not-allowed; border-style: dashed; border-color: var(--line); }
 
 /* ===================== SETTINGS (Control-Center style) ==================== */
-/* Heavily-rounded frosted modules, generously spaced — like iOS Control Center. */
 .set-group {
   background: var(--glass-bg-strong);
   border-radius: var(--radius-lg);
@@ -389,19 +389,23 @@ body {
 .set-label { color: var(--text); font-weight: 600; }
 .set-row.col > .set-label { font-weight: 650; }
 
-/* toggle switch (keeps a real checkbox for logic + a11y) */
-.switch { position: relative; width: 46px; height: 27px; flex: 0 0 auto; }
-.switch-input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 2; }
-.switch-track { position: absolute; inset: 0; border-radius: var(--radius-pill); background: var(--switch-off); transition: background .25s var(--ease); }
-.switch-thumb {
-  position: absolute; top: 3px; inset-inline-start: 3px; width: 21px; height: 21px;
-  border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(0, 0, 0, .28);
-  transition: transform .25s var(--ease);
+/* Control-Center toggle tiles — each fills with accent when ON. */
+.cc-toggles { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
+.cc-tile {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px;
+  background: var(--glass-bg-strong); border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.85); backdrop-filter: blur(var(--glass-blur)) saturate(1.85);
+  box-shadow: inset 0 1px 0 var(--glass-inset);
+  cursor: pointer; color: var(--text); transition: background .2s, color .2s, transform .1s, border-color .2s;
 }
-.switch-input:checked + .switch-track { background: linear-gradient(120deg, var(--accent-bright), var(--accent)); }
-.switch-input:checked + .switch-track .switch-thumb { transform: translateX(19px); }
-.switch-input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
-[dir="rtl"] .switch-input:checked + .switch-track .switch-thumb { transform: translateX(-19px); }
+.cc-tile:active { transform: scale(.985); }
+.cc-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cc-ico { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; background: var(--switch-off); color: var(--muted); transition: background .2s, color .2s; }
+.cc-ico svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cc-label { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 650; }
+.cc-input { display: none; }
+.cc-tile.on { background: linear-gradient(120deg, var(--accent-bright), var(--accent)); color: var(--accent-ink); border-color: transparent; }
+.cc-tile.on .cc-ico { background: rgba(255, 255, 255, .25); color: var(--accent-ink); }
 
 /* segmented control */
 .seg { position: relative; display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); background: var(--seg-bg); border-radius: 13px; padding: 3px; }

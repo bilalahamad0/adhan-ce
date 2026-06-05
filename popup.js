@@ -71,6 +71,19 @@ function applyClockStyle(style) {
   c.classList.toggle('is-analog', style !== 'digital');
 }
 
+// Control-Center toggle tiles are backed by hidden checkboxes (#enabled etc.),
+// so the existing render/save logic (and tests) keep using the checkboxes.
+const TOGGLE_TILES = [['enabled', 'enabledTile'], ['focusMode', 'focusTile'], ['showHijri', 'hijriTile']];
+function syncToggleTiles() {
+  for (const [cb, tile] of TOGGLE_TILES) {
+    const el = $(tile);
+    if (!el) continue;
+    const on = $(cb).checked;
+    el.classList.toggle('on', on);
+    el.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+}
+
 // A segmented control: highlight the active option and slide the pill to it.
 function initSeg(id, value, onPick) {
   const seg = $(id);
@@ -273,6 +286,7 @@ function renderAll() {
   $('school').value = String(settings.school != null ? settings.school : 0);
   $('showHijri').checked = settings.showHijri !== false;
   $('hijriOffset').value = String(settings.hijriOffset || 0);
+  syncToggleTiles();
 
   const place = settings.city
     ? { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon }
@@ -619,6 +633,23 @@ $('clock').addEventListener('keydown', (e) => {
     e.preventDefault();
     toggleClock();
   }
+});
+
+// Control-Center toggle tiles flip their backing checkbox on click / Enter / Space.
+TOGGLE_TILES.forEach(([cb, tile]) => {
+  const el = $(tile);
+  if (!el) return;
+  const flip = () => {
+    $(cb).checked = !$(cb).checked;
+    syncToggleTiles();
+  };
+  el.addEventListener('click', flip);
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      flip();
+    }
+  });
 });
 
 // Tracker month navigation
