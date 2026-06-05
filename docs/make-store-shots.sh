@@ -22,8 +22,9 @@ until curl -s -o /dev/null "http://localhost:$PORT/docs/store-assets.html"; do s
 for n in 1 2 3 4 5 6 7; do
   out="$OUT/screenshot-$n.png"
   rm -f "$out" "$UDD"/Singleton* 2>/dev/null || true
-  # Render at 2x (retina) with a virtual-time budget so web fonts load, then downscale.
-  "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --virtual-time-budget=4500 \
+  # Render at 2x (retina) with a virtual-time budget so web fonts + the embedded
+  # popup (real popup.html/js mounted in an iframe) finish loading, then downscale.
+  "$CHROME" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --virtual-time-budget=6500 \
     --window-size=1280,800 --user-data-dir="$UDD" --no-first-run --no-default-browser-check \
     --screenshot="$out" "http://localhost:$PORT/docs/store-assets.html?slide=$n" >/dev/null 2>&1 &
   CPID=$!

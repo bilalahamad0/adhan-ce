@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- Store-screenshot host: mounts the REAL popup (popup.html + popup.js) with an
+     inline chrome.* shim + sample data, so the Chrome Web Store screenshots show
+     the actual shipping UI. Configure via query params:
+       ?view=home|tracker|settings  &theme=system|light|dark  &lang=en|ar  &clock=analog|digital
+     Served from the repo root (see docs/make-store-shots.sh), so absolute paths
+     (/popup.html, /popup.js, /lib, /locales) resolve. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/" />
+    <link rel="stylesheet" href="/popup.css" />
+    <title>Adhan Caster — store popup</title>
+    <style>html, body { margin: 0; background: transparent; }</style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        const q = new URLSearchParams(location.search);
+        const view = q.get('view') || 'home';
+        const theme = q.get('theme') || 'dark';
+        const lang = q.get('lang') || 'en';
+        const clock = q.get('clock') || 'analog';
+        const city = q.get('city') || 'Makkah';
+        const country = q.get('country') || 'Saudi Arabia';
+        const region = q.get('region') || '';
+        const paused = q.get('paused') === '1';
+
+        const DAY = 86400000;
+        const PRAYER_ORDER = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+        const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_) { return 'UTC'; } })();
+        const to12 = (h, m) => { const a = h >= 12 ? 'PM' : 'AM'; let x = h % 12; if (!x) x = 12; return `${String(x).padStart(2, '0')}:${String(m).padStart(2, '0')} ${a}`; };
+        const tsToday = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.getTime(); };
+        const pad = (n) => String(n).padStart(2, '0');
+        const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+        const DEF = [['Fajr', 5, 12], ['Dhuhr', 13, 5], ['Asr', 16, 56], ['Maghrib', 20, 17], ['Isha', 21, 43]];
+        const prayers = DEF.map(([name, h, m]) => ({ name, time: to12(h, m), ts: tsToday(h, m) }));
+        const sunrise = { time: to12(6, 34), ts: tsToday(6, 34) };
+        const now = Date.now();
+        let next = prayers.find((p) => p.ts > now);
+        if (!next) next = { ...prayers[0], ts: prayers[0].ts + DAY };
+
+        const today = ymd(new Date());
+        const log = { [today]: { Fajr: true, Dhuhr: true, Asr: true } };
+        const counts = [5, 5, 5, 5, 5, 4, 3, 5, 2, 5, 4, 5, 3, 5];
+        counts.forEach((c, i) => { const d = new Date(today + 'T12:00:00'); d.setDate(d.getDate() - (i + 1)); const day = {}; for (let k = 0; k < c; k++) day[PRAYER_ORDER[k]] = true; if (c) log[ymd(d)] = day; });
+
+        const state = {
+          settings: { enabled: true, focusMode: true, city, state: region, country, lat: 21.42, lon: 39.83, autoResumeMinutes: 5, leadSeconds: 30, method: 2, school: 0, showHijri: true, hijriOffset: 0 },
+          schedule: { date: today, prayers, sunrise, tz, fetchedAt: now },
+          nextPrayer: next,
+          paused: paused ? { active: true, prayer: 'Dhuhr', time: '01:05 PM', since: now, focus: false } : { active: false },
+          prayerLog: log,
+          installedAt: now - 60 * DAY,
+        };
+        const store = { lang, appearance: theme, clockStyle: clock };
+        const P = (v) => Promise.resolve(v);
+        async function handle(m) {
+          switch (m && m.type) {
+            case 'GET_STATE': return JSON.parse(JSON.stringify(state));
+            case 'TOGGLE_PRAYER': return { ok: true, prayerLog: state.prayerLog };
+            default: return { ok: true };
+          }
+        }
+        window.chrome = {
+          runtime: {
+            sendMessage: (m) => handle(m),
+            getURL: (p) => '/' + String(p).replace(/^\/+/, ''),
+            getManifest: () => ({ version: '2.0.0', name: 'Adhan Caster' }),
+            onMessage: { addListener() {} },
+          },
+          storage: { local: {
+            get: (k) => { if (k == null) return P({ ...store }); if (typeof k === 'string') return P({ [k]: store[k] }); if (Array.isArray(k)) { const o = {}; k.forEach((x) => (o[x] = store[x])); return P(o); } const o = { ...k }; Object.keys(k).forEach((x) => (x in store ? (o[x] = store[x]) : 0)); return P(o); },
+            set: (o) => { Object.assign(store, o); return P(); },
+          } },
+          i18n: { getUILanguage: () => 'en' },
+          alarms: { create() {}, clear() { return P(); } },
+          tabs: { query: () => P([]) },
+          action: { setBadgeText() { return P(); }, setBadgeBackgroundColor() { return P(); } },
+        };
+
+        fetch('/popup.html')
+          .then((r) => r.text())
+          .then((html) => {
+            const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)[1].replace(/<script[\s\S]*?<\/script>/gi, '');
+            document.body.insertAdjacentHTML('beforeend', body);
+            return import('/popup.js');
+          })
+          .then(() => {
+            // Switch to the requested view once the popup has wired its tabs + loaded state.
+            if (view !== 'home') setTimeout(() => { const tb = document.querySelector(`[data-tab="${view}"]`); if (tb) tb.click(); }, 700);
+            window.__ADHAN_READY__ = true;
+          })
+          .catch((e) => { document.body.innerHTML = '<pre style="color:#b00;padding:16px">store-popup error: ' + e + '</pre>'; });
+      })();
+    </script>
+  </body>
+</html>

@@ -123,7 +123,13 @@
       .flag .bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.22); overflow: hidden; }
       .flag .bar > i { display: block; height: 100%; width: 64%; background: #fff; border-radius: 999px; }
 
-      /* floating popup card (slides 3 & 5) */
+      /* the REAL v2.0.0 popup, scaled up inside a floating panel (slides 3, 5, 7) */
+      .device { width: 408px; height: 680px; border-radius: 28px; overflow: hidden; position: relative;
+        box-shadow: 0 55px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08); }
+      .light .device { box-shadow: 0 55px 120px rgba(13,70,50,.3), 0 0 0 1px rgba(13,70,50,.08); }
+      .device iframe { width: 300px; height: 500px; border: 0; display: block; transform: scale(1.36); transform-origin: top left; }
+
+      /* floating popup card (legacy mockup styles, no longer used) */
       .pop { width: 372px; border-radius: 20px; overflow: hidden; background: #fff; color: #15302a; box-shadow: 0 60px 120px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.05); }
       .dark .pop { box-shadow: 0 60px 130px rgba(0,0,0,.6); }
       .pop .ph { display: flex; align-items: center; gap: 11px; padding: 15px 17px; background: linear-gradient(135deg, #0f8a5f, #0a5c47); color: #fff; }
@@ -236,16 +242,7 @@
         <div class="chips"><span class="chip">🕐 Live clock</span><span class="chip">☀ Sunrise</span><span class="chip">🌍 Any city</span><span class="chip">⏱ Next-prayer countdown</span></div>
       </div>
       <div class="right">
-        <div class="pop">
-          <div class="ph"><span class="pl"><img src="../icons/icon48.png" alt="" /></span><span><strong>Adhan Caster</strong><span class="lo">Sunnyvale, California</span></span></div>
-          <div class="pn"><div class="ck">🕐 4:12:00 PM</div><div class="lb">Next prayer</div><div class="nm">Maghrib <small>08:24 PM</small></div><div class="cd">in 4h 12m</div></div>
-          <div class="row dim"><span>✓ Fajr</span><span class="t">04:20 AM</span></div>
-          <div class="row sun"><span>☀ Sunrise</span><span class="t">05:49 AM</span></div>
-          <div class="row dim"><span>✓ Dhuhr</span><span class="t">01:06 PM</span></div>
-          <div class="row"><span>Asr</span><span class="t">04:58 PM</span></div>
-          <div class="row nx"><b>Maghrib</b><span class="t">08:24 PM</span></div>
-          <div class="row"><span>Isha</span><span class="t">09:53 PM</span></div>
-        </div>
+        <div class="device"><iframe src="store-popup.html?view=home&theme=dark&clock=analog"></iframe></div>
       </div>
     </section>
 
@@ -283,16 +280,7 @@
         <div class="langline">English · العربية · اردو · Bahasa&nbsp;Indonesia · Türkçe · Français</div>
       </div>
       <div class="right">
-        <div class="pop" dir="rtl">
-          <div class="ph" style="flex-direction:row-reverse;text-align:right"><span class="pl"><img src="../icons/icon48.png" alt="" /></span><span><strong>أذان كاستر</strong><span class="lo">مكة المكرمة</span></span></div>
-          <div class="pn"><div class="ck" dir="ltr">🕐 1:14:00 PM</div><div class="lb">الصلاة القادمة</div><div class="nm">العصر <small dir="ltr">04:58 PM</small></div><div class="cd">بعد ٣ ساعات ٤٤ دقيقة</div></div>
-          <div class="row dim"><span>✓ الفجر</span><span class="t">04:20 AM</span></div>
-          <div class="row sun"><span>☀ الشروق</span><span class="t">05:49 AM</span></div>
-          <div class="row dim"><span>✓ الظهر</span><span class="t">01:06 PM</span></div>
-          <div class="row nx"><b>العصر</b><span class="t">04:58 PM</span></div>
-          <div class="row"><span>المغرب</span><span class="t">08:24 PM</span></div>
-          <div class="lang"><span>اللغة</span><span class="sel">العربية ▾</span></div>
-        </div>
+        <div class="device"><iframe src="store-popup.html?view=home&theme=dark&lang=ar"></iframe></div>
       </div>
     </section>
 
@@ -316,15 +304,7 @@
         <div class="chips"><span class="chip">📅 Monthly calendar</span><span class="chip">🔥 Streaks</span><span class="chip">✓ Tap any day to log</span><span class="chip">📴 On-device</span></div>
       </div>
       <div class="right">
-        <div class="pop">
-          <div class="ph"><span class="pl"><img src="../icons/icon48.png" alt="" /></span><span><strong>Adhan Caster</strong><span class="lo">Sunnyvale, California</span></span></div>
-          <div class="tk">
-            <div class="tkh"><strong>Prayer log</strong><span class="sk">🔥 9-day streak</span></div>
-            <div class="tnav"><span>‹</span><b>June 2026</b><span>›</span></div>
-            <div class="cal" id="cal7"></div>
-            <div class="leg">Less <i style="background:#fff;border:1px solid #e4ece9"></i><i style="background:rgba(15,138,95,.32)"></i><i style="background:rgba(15,138,95,.5)"></i><i style="background:rgba(15,138,95,.72)"></i><i style="background:#0f8a5f"></i> More</div>
-          </div>
-        </div>
+        <div class="device"><iframe src="store-popup.html?view=tracker&theme=light"></iframe></div>
       </div>
     </section>
 
@@ -334,14 +314,6 @@
       const st = document.getElementById('st1');
       if (st) for (let i = 0; i < 26; i++) { const e = document.createElement('span'); const z = 1.3 + Math.random() * 2.4;
         e.style.cssText = `left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*100).toFixed(1)}%;width:${z.toFixed(1)}px;height:${z.toFixed(1)}px;opacity:${(0.3+Math.random()*0.55).toFixed(2)}`; st.appendChild(e); }
-      // slide 7: build the June 2026 tracker calendar (Mon-start month, today = 30).
-      const cal = document.getElementById('cal7');
-      if (cal) {
-        ['S','M','T','W','T','F','S'].forEach((w) => { const e = document.createElement('div'); e.className = 'wd'; e.textContent = w; cal.appendChild(e); });
-        const counts = {1:5,2:5,3:4,4:5,5:5,6:5,7:5,8:3,9:5,10:5,11:5,12:5,13:4,14:5,15:5,16:5,17:2,18:5,19:5,20:5,21:4,22:5,23:5,24:5,25:5,26:5,27:5,28:5,29:5,30:5};
-        for (let i = 0; i < 1; i++) { const e = document.createElement('div'); e.className = 'd e'; cal.appendChild(e); } // June 1 2026 = Monday
-        for (let d = 1; d <= 30; d++) { const e = document.createElement('div'); e.className = 'd l' + (counts[d] || 0); if (d === 30) e.classList.add('today'); e.textContent = d; cal.appendChild(e); }
-      }
     </script>
   </body>
 </html>
