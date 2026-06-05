@@ -65,5 +65,15 @@
   "prev_month": "الشهر السابق",
   "next_month": "الشهر التالي",
   "cal_less": "أقل",
-  "cal_more": "أكثر"
+  "cal_more": "أكثر",
+  "tab_home": "الرئيسية",
+  "tab_tracker": "المتابعة",
+  "tab_settings": "الإعدادات",
+  "appearance": "المظهر",
+  "appearance_system": "النظام",
+  "appearance_light": "فاتح",
+  "appearance_dark": "داكن",
+  "clock_style": "الساعة",
+  "clock_analog": "عقارب",
+  "clock_digital": "رقمية"
 }

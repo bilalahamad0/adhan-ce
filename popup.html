@@ -7,136 +7,215 @@
     <title>Adhan Caster</title>
   </head>
   <body>
-    <header class="head">
-      <img src="icons/icon48.png" alt="" class="logo" />
-      <div class="head-title">
-        <strong data-i18n="app_name">Adhan Caster</strong>
-        <span id="locLabel" class="loc">—</span>
-        <span id="hijriLabel" class="hijri" hidden></span>
+    <div class="app" id="app">
+      <!-- Layered, time-of-day backdrop. Glass sits on top of this so the blur has
+           something to refract. Purely decorative. -->
+      <div class="bg" aria-hidden="true">
+        <span class="bg-orb bg-orb-1"></span>
+        <span class="bg-orb bg-orb-2"></span>
+        <span class="bg-orb bg-orb-3"></span>
+        <span class="bg-pattern"></span>
+        <span class="bg-veil"></span>
       </div>
-      <button id="logBtn" class="gear logbtn" title="Prayer log" aria-label="Prayer log" data-i18n-attr="title:prayer_log;aria-label:prayer_log">☑</button>
-      <button id="gear" class="gear" title="Settings" aria-label="Settings" data-i18n-attr="title:settings;aria-label:settings">⚙</button>
-    </header>
 
-    <section id="pausedBanner" class="paused-banner" hidden>
-      <span id="pausedText" data-i18n="media_paused">Media paused</span>
-      <span class="banner-actions">
-        <button id="focusBtn" class="focus-btn" data-i18n="focus">Focus</button>
-        <button id="resumeBtn" class="resume-btn" data-i18n="resume">Resume</button>
-      </span>
-    </section>
-
-    <section class="next-card">
-      <div id="clock" class="clock"></div>
-      <div class="next-label" data-i18n="next_prayer">Next prayer</div>
-      <div class="next-main">
-        <span id="nextName" class="next-name">—</span>
-        <span id="nextTime" class="next-time"></span>
-      </div>
-      <div id="nextCountdown" class="next-countdown"></div>
-    </section>
-
-    <section id="list" class="list"></section>
-
-    <section id="settings" class="settings" hidden>
-      <label class="field toggle">
-        <span data-i18n="enable_caster">Enable Adhan Caster</span>
-        <input type="checkbox" id="enabled" />
-      </label>
-      <label class="field toggle">
-        <span data-i18n="focus_fullscreen">Prayer focus fullscreen during Adhan</span>
-        <input type="checkbox" id="focusMode" />
-      </label>
-      <label class="field">
-        <span data-i18n="language">Language</span>
-        <select id="lang">
-          <option value="en">English</option>
-          <option value="ar">العربية</option>
-          <option value="ur">اردو</option>
-          <option value="id">Bahasa Indonesia</option>
-          <option value="tr">Türkçe</option>
-          <option value="fr">Français</option>
-        </select>
-      </label>
-      <label class="field field-stack">
-        <span data-i18n="location">Location</span>
-        <span class="city-wrap">
-          <input type="text" id="city" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
-          <div id="cityResults" class="suggest" hidden></div>
+      <header class="head">
+        <span class="brand">
+          <span class="brand-logo"><img src="icons/icon48.png" alt="" /></span>
+          <span class="brand-text">
+            <strong data-i18n="app_name">Adhan Caster</strong>
+            <span id="locLabel" class="loc">—</span>
+          </span>
         </span>
-      </label>
-      <label class="field">
-        <span data-i18n="calc_method">Calculation method</span>
-        <select id="method"></select>
-      </label>
-      <label class="field">
-        <span data-i18n="asr_method">Asr (juristic) method</span>
-        <select id="school">
-          <option value="0" data-i18n="asr_standard">Standard (Shafi, Maliki, Hanbali)</option>
-          <option value="1" data-i18n="asr_hanafi">Hanafi</option>
-        </select>
-      </label>
-      <label class="field toggle">
-        <span data-i18n="show_hijri">Show Hijri date</span>
-        <input type="checkbox" id="showHijri" />
-      </label>
-      <label class="field">
-        <span data-i18n="hijri_adjust">Hijri adjustment</span>
-        <select id="hijriOffset">
-          <option value="-1">−1</option>
-          <option value="0">0</option>
-          <option value="1">+1</option>
-        </select>
-      </label>
-      <label class="field">
-        <span data-i18n="heads_up">Heads-up before Adhan</span>
-        <select id="leadSeconds">
-          <option value="15" data-i18n="secs_15">15 sec</option>
-          <option value="30" data-i18n="secs_30">30 sec</option>
-          <option value="60" data-i18n="secs_60">60 sec</option>
-        </select>
-      </label>
-      <label class="field">
-        <span data-i18n="auto_resume_after">Auto-resume after (min)</span>
-        <input type="number" id="resumeMin" min="0" max="120" step="1" />
-      </label>
-      <div class="settings-actions">
-        <button id="save" class="save-btn" data-i18n="save">Save</button>
-        <span id="saveMsg" class="save-msg"></span>
-      </div>
-      <div class="dev-row">
-        <button id="testBtn" class="test-btn" data-i18n="test_adhan">Run test Adhan (30s)</button>
-        <span id="testMsg" class="save-msg"></span>
-      </div>
-    </section>
+        <span class="head-now" id="headDate"></span>
+      </header>
 
-    <section id="tracker" class="tracker" hidden>
-      <div class="tracker-head">
-        <strong data-i18n="prayer_log">Prayer log</strong>
-        <span id="trackerStreak" class="tracker-streak"></span>
-      </div>
-      <div class="cal-nav">
-        <button id="calPrev" class="cal-arrow" aria-label="Previous month" data-i18n-attr="aria-label:prev_month">‹</button>
-        <span id="calLabel" class="cal-label"></span>
-        <button id="calNext" class="cal-arrow" aria-label="Next month" data-i18n-attr="aria-label:next_month">›</button>
-      </div>
-      <div id="calGrid" class="cal-grid"></div>
-      <div class="cal-legend">
-        <span data-i18n="cal_less">Less</span>
-        <i class="lg lvl-1"></i><i class="lg lvl-2"></i><i class="lg lvl-3"></i><i class="lg lvl-4"></i><i class="lg lvl-5"></i>
-        <span data-i18n="cal_more">More</span>
-      </div>
-      <div id="dayDetail" class="day-detail" hidden>
-        <div id="ddDate" class="dd-date"></div>
-        <div id="ddPrayers" class="dd-prayers"></div>
-      </div>
-    </section>
+      <section id="pausedBanner" class="paused-banner glass" hidden>
+        <span class="paused-dot" aria-hidden="true"></span>
+        <span id="pausedText" data-i18n="media_paused">Media paused</span>
+        <span class="banner-actions">
+          <button id="focusBtn" class="chip-btn focus-btn" data-i18n="focus">Focus</button>
+          <button id="resumeBtn" class="chip-btn resume-btn" data-i18n="resume">Resume</button>
+        </span>
+      </section>
 
-    <footer class="foot">
-      <span id="updated"></span>
-      <span id="version" class="ver"></span>
-      <a href="#" id="refresh" data-i18n="refresh">Refresh</a>
-    </footer>
+      <main class="views" id="views">
+        <!-- ───────── HOME ───────── -->
+        <section class="view view-home is-active" id="view-home" data-view="home">
+          <div class="scroll">
+            <section class="hero glass" id="hero">
+              <div class="clock" id="clock" role="button" tabindex="0" title="Switch analog / digital" aria-label="Switch clock between analog and digital"><!-- injected by popup.js --></div>
+              <div class="hero-next">
+                <span class="hero-next-label" data-i18n="next_prayer">Next prayer</span>
+                <span id="nextName" class="next-name">—</span>
+                <span id="nextTime" class="next-time"></span>
+                <span id="nextCountdown" class="next-countdown"></span>
+              </div>
+            </section>
+
+            <section id="list" class="list" aria-label="Today's prayer times"></section>
+          </div>
+        </section>
+
+        <!-- ───────── TRACKER (prayer log) ───────── -->
+        <section class="view view-tracker" id="view-tracker" data-view="tracker" hidden>
+          <div class="scroll">
+            <div class="tracker-head">
+              <strong class="tracker-title" data-i18n="prayer_log">Prayer log</strong>
+              <span id="trackerStreak" class="tracker-streak"></span>
+            </div>
+            <div class="cal-block">
+              <div class="cal-nav glass">
+                <button id="calPrev" class="cal-arrow" type="button" aria-label="Previous month" data-i18n-attr="aria-label:prev_month">‹</button>
+                <span id="calLabel" class="cal-label"></span>
+                <button id="calNext" class="cal-arrow" type="button" aria-label="Next month" data-i18n-attr="aria-label:next_month">›</button>
+              </div>
+              <div id="calGrid" class="cal-grid"></div>
+              <div class="cal-legend">
+                <span data-i18n="cal_less">Less</span>
+                <i class="lg lvl-1"></i><i class="lg lvl-2"></i><i class="lg lvl-3"></i><i class="lg lvl-4"></i><i class="lg lvl-5"></i>
+                <span data-i18n="cal_more">More</span>
+              </div>
+            </div>
+            <div id="dayDetail" class="day-detail glass" hidden>
+              <div class="dd-head">
+                <span id="ddDate" class="dd-date"></span>
+                <span id="ddHijri" class="dd-hijri"></span>
+              </div>
+              <div id="ddPrayers" class="dd-prayers"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ───────── SETTINGS ───────── -->
+        <section class="view view-settings" id="view-settings" data-view="settings" hidden>
+          <div class="scroll">
+            <div class="set-group glass">
+              <div class="set-row col">
+                <span class="set-label" data-i18n="appearance">Appearance</span>
+                <div class="seg" id="appearance" role="group" aria-label="Appearance" style="--n:3">
+                  <span class="seg-thumb" aria-hidden="true"></span>
+                  <button type="button" class="seg-opt" data-val="system" data-i18n="appearance_system">System</button>
+                  <button type="button" class="seg-opt" data-val="light" data-i18n="appearance_light">Light</button>
+                  <button type="button" class="seg-opt" data-val="dark" data-i18n="appearance_dark">Dark</button>
+                </div>
+              </div>
+              <div class="set-row col">
+                <span class="set-label" data-i18n="clock_style">Clock style</span>
+                <div class="seg" id="clockStyle" role="group" aria-label="Clock style" style="--n:2">
+                  <span class="seg-thumb" aria-hidden="true"></span>
+                  <button type="button" class="seg-opt" data-val="analog" data-i18n="clock_analog">Analog</button>
+                  <button type="button" class="seg-opt" data-val="digital" data-i18n="clock_digital">Digital</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="cc-toggles" role="group" aria-label="Toggles">
+              <div class="cc-tile" id="enabledTile" role="button" tabindex="0">
+                <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.8 6a8.5 8.5 0 0 1 0 12" /></svg></span>
+                <span class="cc-label" data-i18n="enable_caster">Enable Adhan Caster</span>
+                <input type="checkbox" id="enabled" class="cc-input" tabindex="-1" aria-hidden="true" />
+              </div>
+              <div class="cc-tile" id="focusTile" role="button" tabindex="0">
+                <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" /></svg></span>
+                <span class="cc-label" data-i18n="focus_fullscreen">Prayer focus fullscreen during Adhan</span>
+                <input type="checkbox" id="focusMode" class="cc-input" tabindex="-1" aria-hidden="true" />
+              </div>
+              <div class="cc-tile" id="hijriTile" role="button" tabindex="0">
+                <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12.8A8 8 0 1 1 11.2 3a6.3 6.3 0 0 0 9.8 9.8z" /></svg></span>
+                <span class="cc-label" data-i18n="show_hijri">Show Hijri date</span>
+                <input type="checkbox" id="showHijri" class="cc-input" tabindex="-1" aria-hidden="true" />
+              </div>
+            </div>
+
+            <div class="set-group glass">
+              <label class="set-row col field-stack">
+                <span class="set-label" data-i18n="location">Location</span>
+                <span class="city-wrap">
+                  <input type="text" id="city" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
+                  <div id="cityResults" class="suggest" hidden></div>
+                </span>
+              </label>
+              <label class="set-row col">
+                <span class="set-label" data-i18n="language">Language</span>
+                <select id="lang">
+                  <option value="en">English</option>
+                  <option value="ar">العربية</option>
+                  <option value="ur">اردو</option>
+                  <option value="id">Bahasa Indonesia</option>
+                  <option value="tr">Türkçe</option>
+                  <option value="fr">Français</option>
+                </select>
+              </label>
+              <label class="set-row col">
+                <span class="set-label" data-i18n="calc_method">Calculation method</span>
+                <select id="method"></select>
+              </label>
+              <label class="set-row col">
+                <span class="set-label" data-i18n="asr_method">Asr (juristic) method</span>
+                <select id="school">
+                  <option value="0" data-i18n="asr_standard">Standard (Shafi, Maliki, Hanbali)</option>
+                  <option value="1" data-i18n="asr_hanafi">Hanafi</option>
+                </select>
+              </label>
+              <label class="set-row">
+                <span class="set-label" data-i18n="hijri_adjust">Hijri adjustment</span>
+                <select id="hijriOffset">
+                  <option value="-1">−1</option>
+                  <option value="0">0</option>
+                  <option value="1">+1</option>
+                </select>
+              </label>
+              <label class="set-row">
+                <span class="set-label" data-i18n="heads_up">Heads-up before Adhan</span>
+                <select id="leadSeconds">
+                  <option value="15" data-i18n="secs_15">15 sec</option>
+                  <option value="30" data-i18n="secs_30">30 sec</option>
+                  <option value="60" data-i18n="secs_60">60 sec</option>
+                </select>
+              </label>
+              <label class="set-row">
+                <span class="set-label" data-i18n="auto_resume_after">Auto-resume after (min)</span>
+                <input type="number" id="resumeMin" min="0" max="120" step="1" />
+              </label>
+            </div>
+
+            <div class="settings-actions">
+              <button id="save" class="btn-primary" data-i18n="save">Save</button>
+              <span id="saveMsg" class="save-msg"></span>
+            </div>
+
+            <div class="dev-row">
+              <button id="testBtn" class="btn-ghost" data-i18n="test_adhan">Run test Adhan (30s)</button>
+              <span id="testMsg" class="save-msg"></span>
+            </div>
+
+            <div class="about">
+              <span id="updated"></span>
+              <span class="about-sep" aria-hidden="true">·</span>
+              <span class="about-name" data-i18n="app_name">Adhan Caster</span>
+              <span id="version" class="ver"></span>
+              <span class="about-sep" aria-hidden="true">·</span>
+              <a href="#" id="refresh" data-i18n="refresh">Refresh</a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <nav class="tabbar glass" id="tabbar" role="tablist" aria-label="Sections">
+        <button class="tab is-active" data-tab="home" role="tab" aria-selected="true" type="button">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5" /><path d="M6 10.5V20h12v-9.5" /></svg>
+          <span data-i18n="tab_home">Home</span>
+        </button>
+        <button class="tab" data-tab="tracker" role="tab" aria-selected="false" type="button">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" /><path d="M8.5 14.5 11 17l4.5-4.5" /></svg>
+          <span data-i18n="tab_tracker">Tracker</span>
+        </button>
+        <button class="tab" data-tab="settings" role="tab" aria-selected="false" type="button">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" /><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6" /></svg>
+          <span data-i18n="tab_settings">Settings</span>
+        </button>
+      </nav>
+    </div>
 
     <script type="module" src="popup.js"></script>
   </body>

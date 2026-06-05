@@ -65,5 +65,15 @@
   "prev_month": "Previous month",
   "next_month": "Next month",
   "cal_less": "Less",
-  "cal_more": "More"
+  "cal_more": "More",
+  "tab_home": "Home",
+  "tab_tracker": "Tracker",
+  "tab_settings": "Settings",
+  "appearance": "Appearance",
+  "appearance_system": "System",
+  "appearance_light": "Light",
+  "appearance_dark": "Dark",
+  "clock_style": "Clock",
+  "clock_analog": "Analog",
+  "clock_digital": "Digital"
 }

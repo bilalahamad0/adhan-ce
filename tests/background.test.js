@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeChrome, flush } from './helpers/chrome-mock.js';
 import { makeFetch, aladhanPayload } from './helpers/fetch-mock.js';
-import { ymd } from '../lib/schedule.js';
+import { ymd, ymdInTz } from '../lib/schedule.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -62,7 +62,7 @@ function scheduleAround(now) {
     { name: 'Maghrib', time: '08:17 PM', ts: now + 6 * 3600e3 },
     { name: 'Isha', time: '09:43 PM', ts: now + 8 * 3600e3 },
   ];
-  return { date: ymd(new Date(now)), prayers, sunrise: { time: '06:01 AM', ts: now - 5 * 3600e3 }, tz: 'America/Los_Angeles', fetchedAt: now };
+  return { date: ymdInTz('America/Los_Angeles', new Date(now)), prayers, sunrise: { time: '06:01 AM', ts: now - 5 * 3600e3 }, tz: 'America/Los_Angeles', fetchedAt: now };
 }
 
 let warnSpy;
@@ -322,6 +322,26 @@ describe('message router', () => {
     const state = await h.sendRuntimeMessage({ type: 'GET_STATE' });
     expect(state.settings).toEqual(DEFAULTS); // defaults applied when none stored
     expect(state.schedule.tz).toBe('America/Los_Angeles');
+  });
+
+  it('GET_STATE refetches when the stored day has rolled over (location tz)', async () => {
+    const now = Date.now();
+    const stale = { ...scheduleAround(now), date: ymdInTz('America/Los_Angeles', new Date(now - 24 * 3600e3)) };
+    const { h, fetch } = await loadBackground({ storage: { settings: DEFAULTS, schedule: stale } });
+    const before = fetch.calls.filter((u) => u.includes('aladhan')).length;
+    await h.sendRuntimeMessage({ type: 'GET_STATE' });
+    await flush();
+    expect(fetch.calls.filter((u) => u.includes('aladhan')).length).toBeGreaterThan(before); // refetched the new day
+    expect(h.store.schedule.date).toBe(ymdInTz('America/Los_Angeles')); // now today's (location) date
+  });
+
+  it('GET_STATE recomputes nextPrayer without refetching when the day is current', async () => {
+    const now = Date.now();
+    const { h, fetch } = await loadBackground({ storage: { settings: DEFAULTS, schedule: scheduleAround(now) } });
+    const before = fetch.calls.filter((u) => u.includes('aladhan')).length;
+    await h.sendRuntimeMessage({ type: 'GET_STATE' });
+    expect(fetch.calls.filter((u) => u.includes('aladhan')).length).toBe(before); // no refetch
+    expect(h.store.nextPrayer).toBeTruthy();
   });
 
   it('GET_I18N resolves direction from the saved language (Arabic → rtl)', async () => {

@@ -65,5 +65,15 @@
   "prev_month": "Bulan sebelumnya",
   "next_month": "Bulan berikutnya",
   "cal_less": "Sedikit",
-  "cal_more": "Banyak"
+  "cal_more": "Banyak",
+  "tab_home": "Beranda",
+  "tab_tracker": "Pelacak",
+  "tab_settings": "Pengaturan",
+  "appearance": "Tampilan",
+  "appearance_system": "Sistem",
+  "appearance_light": "Terang",
+  "appearance_dark": "Gelap",
+  "clock_style": "Jam",
+  "clock_analog": "Analog",
+  "clock_digital": "Digital"
 }

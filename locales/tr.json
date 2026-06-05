@@ -65,5 +65,15 @@
   "prev_month": "Önceki ay",
   "next_month": "Sonraki ay",
   "cal_less": "Az",
-  "cal_more": "Çok"
+  "cal_more": "Çok",
+  "tab_home": "Ana Sayfa",
+  "tab_tracker": "Takip",
+  "tab_settings": "Ayarlar",
+  "appearance": "Görünüm",
+  "appearance_system": "Sistem",
+  "appearance_light": "Açık",
+  "appearance_dark": "Koyu",
+  "clock_style": "Saat",
+  "clock_analog": "Analog",
+  "clock_digital": "Dijital"
 }
