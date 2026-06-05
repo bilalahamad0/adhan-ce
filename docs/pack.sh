@@ -13,11 +13,10 @@ VER="$(node -e "process.stdout.write(require('$HERE/manifest.json').version)")"
 OUT="$HERE/adhan-caster-pro-$VER.zip"
 rm -f "$OUT"
 
-# Include only the files Chrome needs at runtime.
-( cd "$HERE" && zip -rq "$OUT" \
-  manifest.json background.js content.js content.css \
-  popup.html popup.js popup.css \
-  icons/icon16.png icons/icon48.png icons/icon128.png \
-  lib locales )
+# Include only the files Chrome needs at runtime — sourced from the single
+# source of truth (scripts/runtime-files.mjs) shared with the CRX packer, so the
+# zip and CRX can never disagree on what ships.
+FILES="$(cd "$HERE" && node -e "import('./scripts/runtime-files.mjs').then(m=>m.runtimeFiles()).then(f=>process.stdout.write(f.join('\n')))")"
+( cd "$HERE" && printf '%s\n' "$FILES" | zip -rq "$OUT" -@ )
 
 echo "✓ Qualified and packaged: $OUT"
