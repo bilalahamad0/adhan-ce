@@ -138,7 +138,7 @@
 }
 
 /* ---------------------------------------------------------------- frame --- */
-html, body { width: 360px; }
+html, body { width: 300px; }
 body {
   height: 500px;
   overflow: hidden;
@@ -246,20 +246,20 @@ body {
 
 /* ============================== HOME ====================================== */
 /* Clock + next-prayer sit side by side, centered as a group (no side gaps). */
-.hero { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 15px; margin-bottom: 8px; }
+/* Even spacing: <space> clock <space> next-prayer <space>. */
+.hero { display: flex; align-items: center; justify-content: space-evenly; padding: 13px 4px; margin-bottom: 8px; }
 /* Fixed slot so switching analog↔digital never resizes the card. */
 .clock {
-  flex: 0 0 auto; width: 110px; height: 104px;
+  flex: 0 0 auto; width: 96px; height: 96px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .12s var(--ease);
 }
 .clock:hover { transform: scale(1.03); }
 .clock:active { transform: scale(.98); }
 .clock:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 16px; }
-.clock-face { width: 104px; height: 104px; display: block; filter: drop-shadow(0 8px 16px rgba(6, 50, 38, .22)); }
+.clock-face { width: 92px; height: 92px; display: block; filter: drop-shadow(0 8px 16px rgba(6, 50, 38, .22)); }
 .clock.is-digital .clock-face { display: none; }
 .cf-track { fill: none; stroke: var(--seg-bg); stroke-width: 6; }
-.cf-prog { fill: none; stroke: var(--gold-bright); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset .8s var(--ease); }
 .cf-tick { stroke: var(--faint); stroke-width: 1.5; }
 .cf-tick.maj { stroke: var(--muted); stroke-width: 2.5; }
 .cf-hand { stroke-linecap: round; }
@@ -271,7 +271,7 @@ body {
 .clock-digital { display: none; }
 .clock.is-digital .clock-digital {
   display: block; text-align: center;
-  font-size: 27px; font-weight: 300; letter-spacing: .5px; color: var(--text-strong);
+  font-size: 24px; font-weight: 300; letter-spacing: .3px; color: var(--text-strong);
   font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate;
 }
 .clock.is-digital .clock-digital .ampm { font-size: 14px; font-weight: 600; margin-inline-start: 4px; color: var(--muted); }

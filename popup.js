@@ -127,7 +127,6 @@ function buildClockFace() {
   el.innerHTML =
     `<svg class="clock-face" viewBox="0 0 200 200" role="img" aria-label="Clock">` +
     `<circle class="cf-track" cx="100" cy="100" r="92"/>` +
-    `<circle class="cf-prog" id="ringFg" cx="100" cy="100" r="92" transform="rotate(-90 100 100)"/>` +
     `<g class="cf-ticks">${ticks}</g>` +
     `<line class="cf-hand cf-hour" id="handHour" x1="100" y1="110" x2="100" y2="52"/>` +
     `<line class="cf-hand cf-min" id="handMin" x1="100" y1="113" x2="100" y2="36"/>` +
@@ -161,21 +160,6 @@ function fmtDigital(tz, withSeconds) {
   }
 }
 
-// Fraction (0..1) of the interval between the previous prayer and the next one.
-function nextFraction() {
-  if (!st || !st.nextPrayer || !st.schedule || !st.schedule.prayers) return 0;
-  const now = Date.now();
-  const np = st.nextPrayer;
-  let prev = null;
-  for (const p of st.schedule.prayers) if (p.ts <= now) prev = p.ts;
-  if (prev == null) prev = np.ts - 6 * 3600e3;
-  const span = np.ts - prev;
-  if (span <= 0) return 0;
-  return Math.min(1, Math.max(0, (now - prev) / span));
-}
-
-const CIRC = 2 * Math.PI * 92;
-
 function updateClock() {
   const tz = st && st.schedule && st.schedule.tz;
   const digital = $('clock') && $('clock').classList.contains('is-digital');
@@ -188,12 +172,6 @@ function updateClock() {
   setHand('handHour', h * 30 + m * 0.5);
   setHand('handMin', m * 6 + s * 0.1);
   setHand('handSec', s * 6);
-
-  const ring = $('ringFg');
-  if (ring) {
-    ring.style.strokeDasharray = String(CIRC);
-    ring.style.strokeDashoffset = String(CIRC * (1 - nextFraction()));
-  }
 
   const dig = $('clockDigital');
   if (dig) {
