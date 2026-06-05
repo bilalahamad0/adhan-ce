@@ -43,23 +43,16 @@
         <section class="view view-home is-active" id="view-home" data-view="home">
           <div class="scroll">
             <section class="hero glass" id="hero">
-              <div class="clock" id="clock"><!-- analog + digital injected by popup.js --></div>
+              <div class="clock" id="clock" role="button" tabindex="0" title="Switch analog / digital" aria-label="Switch clock between analog and digital"><!-- injected by popup.js --></div>
               <div class="hero-next">
                 <span class="hero-next-label" data-i18n="next_prayer">Next prayer</span>
-                <span class="hero-next-main">
-                  <span id="nextName" class="next-name">—</span>
-                  <span id="nextTime" class="next-time"></span>
-                </span>
+                <span id="nextName" class="next-name">—</span>
+                <span id="nextTime" class="next-time"></span>
                 <span id="nextCountdown" class="next-countdown"></span>
               </div>
             </section>
 
             <section id="list" class="list" aria-label="Today's prayer times"></section>
-
-            <div class="home-foot">
-              <span id="updated"></span>
-              <a href="#" id="refresh" data-i18n="refresh">Refresh</a>
-            </div>
           </div>
         </section>
 
@@ -67,10 +60,7 @@
         <section class="view view-tracker" id="view-tracker" data-view="tracker" hidden>
           <div class="scroll">
             <div class="tracker-head">
-              <div class="tracker-title">
-                <strong data-i18n="prayer_log">Prayer log</strong>
-                <span id="calHijri" class="cal-hijri"></span>
-              </div>
+              <strong class="tracker-title" data-i18n="prayer_log">Prayer log</strong>
               <span id="trackerStreak" class="tracker-streak"></span>
             </div>
             <div class="cal-nav glass">
@@ -204,8 +194,12 @@
             </div>
 
             <div class="about">
+              <span id="updated"></span>
+              <span class="about-sep" aria-hidden="true">·</span>
               <span class="about-name" data-i18n="app_name">Adhan Caster</span>
               <span id="version" class="ver"></span>
+              <span class="about-sep" aria-hidden="true">·</span>
+              <a href="#" id="refresh" data-i18n="refresh">Refresh</a>
             </div>
           </div>
         </section>

@@ -168,9 +168,11 @@ describe('saving settings', () => {
   it('shows the Hijri date in the Tracker (not the header) and saves the toggle + offset', async () => {
     await load();
     expect($('showHijri').checked).toBe(true);
-    // The Hijri date lives in the Tracker header now, not the popup header.
+    // The Hijri date lives only in the Tracker day-detail now (not the popup header,
+    // and no longer duplicated in the Tracker month header).
     document.querySelector('[data-tab="tracker"]').click();
-    expect($('calHijri').textContent).toMatch(/\d{4}/); // e.g. "Dhuʻl-Hijjah 1447 AH"
+    expect($('calHijri')).toBeNull(); // header month Hijri removed as redundant
+    expect($('ddHijri').textContent).toMatch(/\d{4}/); // e.g. "Dhuʻl-Hijjah 18, 1447 AH"
     // Turn it off, nudge the offset, and save.
     $('showHijri').checked = false;
     $('hijriOffset').value = '1';
@@ -384,5 +386,16 @@ describe('appearance & clock style', () => {
     document.querySelector('#clockStyle [data-val="digital"]').click();
     expect($('clock').classList.contains('is-digital')).toBe(true);
     expect(chrome.__.store.clockStyle).toBe('digital');
+  });
+
+  it('clicking the clock toggles analog ↔ digital (analog by default) and persists', async () => {
+    await load();
+    expect($('clock').classList.contains('is-digital')).toBe(false); // analog default
+    $('clock').click();
+    expect($('clock').classList.contains('is-digital')).toBe(true);
+    expect(chrome.__.store.clockStyle).toBe('digital');
+    $('clock').click();
+    expect($('clock').classList.contains('is-digital')).toBe(false);
+    expect(chrome.__.store.clockStyle).toBe('analog');
   });
 });

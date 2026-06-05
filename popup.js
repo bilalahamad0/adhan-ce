@@ -449,17 +449,6 @@ function fmtLogDate(date) {
     return date;
   }
 }
-// On-device Hijri month label ("Dhuʻl-Hijjah 1447 AH") for the viewed month.
-function fmtHijriMonth(d, offset) {
-  try {
-    const dd = new Date(d);
-    dd.setDate(dd.getDate() + (Number(offset) || 0));
-    return new Intl.DateTimeFormat(`${localeFor()}-u-ca-islamic-umalqura`, { month: 'long', year: 'numeric' }).format(dd);
-  } catch (_) {
-    return '';
-  }
-}
-
 // ───────────────────────────── tracker (month heatmap) ────────────────────
 let viewYM = null; // { year, month } currently shown
 let selDate = null; // selected day (YYYY-MM-DD) whose detail strip is shown
@@ -503,7 +492,6 @@ function renderTracker() {
   $('trackerStreak').textContent = streak > 0 ? t('streak_days', { n: streak }) : total > 0 ? t('total_logged', { n: total }) : '';
 
   $('calLabel').textContent = new Intl.DateTimeFormat(localeFor(), { month: 'long', year: 'numeric' }).format(new Date(viewYM.year, viewYM.month, 1));
-  $('calHijri').textContent = showH ? fmtHijriMonth(new Date(viewYM.year, viewYM.month, 15), off) : '';
   $('calPrev').disabled = monthKey(viewYM) <= monthKey(instYM);
   $('calNext').disabled = monthKey(viewYM) >= monthKey(curYM);
 
@@ -617,6 +605,21 @@ $('refresh').addEventListener('click', async (e) => {
 
 // Tabs
 document.querySelectorAll('.tab').forEach((tb) => tb.addEventListener('click', () => showView(tb.dataset.tab)));
+
+// Click (or Enter/Space on) the clock to flip analog ↔ digital — routed through
+// the Settings control so the two stay in sync and the choice is persisted.
+function toggleClock() {
+  const next = $('clock').classList.contains('is-digital') ? 'analog' : 'digital';
+  const opt = document.querySelector(`#clockStyle [data-val="${next}"]`);
+  if (opt) opt.click();
+}
+$('clock').addEventListener('click', toggleClock);
+$('clock').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    toggleClock();
+  }
+});
 
 // Tracker month navigation
 $('calPrev').addEventListener('click', () => {
