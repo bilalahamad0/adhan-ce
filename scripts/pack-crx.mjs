@@ -13,6 +13,7 @@
 // resulting CRX never contains dev-only files (tests, docs, package.json).
 
 import crx3 from 'crx3';
+import { runtimeFiles } from './runtime-files.mjs';
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -21,30 +22,9 @@ import { fileURLToPath } from 'node:url';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const STAGE = join(REPO, 'dist', 'extension');
 
-// Runtime file manifest — kept in sync with docs/pack.sh's ZIP build.
-// IMPORTANT: keep these two lists aligned or `npm run pack` and
-// `npm run pack:crx` will disagree on what ships.
-const RUNTIME_FILES = [
-  'manifest.json',
-  'background.js',
-  'content.js',
-  'content.css',
-  'popup.html',
-  'popup.js',
-  'popup.css',
-  'icons/icon16.png',
-  'icons/icon48.png',
-  'icons/icon128.png',
-  'lib/schedule.js',
-  'lib/geocode.js',
-  'lib/i18n.js',
-  'locales/en.json',
-  'locales/ar.json',
-  'locales/ur.json',
-  'locales/id.json',
-  'locales/tr.json',
-  'locales/fr.json',
-];
+// The packaged file set lives in scripts/runtime-files.mjs (single source of
+// truth, shared with tests/pack.test.js which guards it). lib/ + locales/ ship
+// in full, so a newly-added module/locale can never be silently dropped.
 
 async function readManifestVersion() {
   const txt = await readFile(join(REPO, 'manifest.json'), 'utf8');
@@ -54,7 +34,7 @@ async function readManifestVersion() {
 async function stage() {
   // Fresh dir every run — avoids stale files from a previous pack.
   await rm(STAGE, { recursive: true, force: true });
-  for (const rel of RUNTIME_FILES) {
+  for (const rel of await runtimeFiles()) {
     const src = join(REPO, rel);
     const dst = join(STAGE, rel);
     if (!existsSync(src)) {
@@ -94,7 +74,11 @@ async function main() {
   console.log(`✓ Packed ${crxPath} (${s.size} bytes, v${version})`);
 }
 
-main().catch((e) => {
-  console.error('Pack failed:', e.message);
-  process.exit(1);
-});
+// Only pack when run directly (e.g. `node scripts/pack-crx.mjs`); importing this
+// module (e.g. from tests/pack.test.js) must not kick off a build.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    console.error('Pack failed:', e.message);
+    process.exit(1);
+  });
+}
