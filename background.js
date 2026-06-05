@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, computeNext, buildPrayers, isStaleFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
+import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
@@ -94,12 +94,15 @@ async function fetchAndStoreSchedule() {
     Maghrib: hhmmTo12h(tmg.Maghrib),
     Isha: hhmmTo12h(tmg.Isha),
   };
-  const prayers = buildPrayers(five, base);
+  // Anchor every prayer's epoch to the LOCATION's timezone (data.meta.timezone),
+  // so "next prayer" / countdown / firing are correct even when the chosen city is
+  // in a different timezone than this machine.
+  const tz = (data.meta && data.meta.timezone) || null;
+  const prayers = buildPrayers(five, base, tz);
   // Sunrise is informational only (no pause/notification), shown greyed in the popup.
   const sunriseTime = tmg.Sunrise ? hhmmTo12h(tmg.Sunrise) : null;
-  const sunrise = sunriseTime ? { time: sunriseTime, ts: parseTimeToday(sunriseTime, base) } : null;
-  const tz = (data.meta && data.meta.timezone) || null;
-  const schedule = { date: ymd(base), prayers, sunrise, tz, fetchedAt: Date.now() };
+  const sunrise = sunriseTime ? { time: sunriseTime, ts: parseTimeToday(sunriseTime, base, tz) } : null;
+  const schedule = { date: ymdInTz(tz, base), prayers, sunrise, tz, fetchedAt: Date.now() };
   const nextPrayer = computeNext(prayers, Date.now());
   await chrome.storage.local.set({ schedule, nextPrayer });
   return { schedule, nextPrayer };
@@ -108,7 +111,8 @@ async function fetchAndStoreSchedule() {
 // Recompute "next" from the stored schedule; refetch if the day rolled over.
 async function refreshNext() {
   const { schedule } = await chrome.storage.local.get('schedule');
-  if (!schedule || schedule.date !== ymd()) {
+  // Rolled over to a new day *in the location's timezone* → refetch the new day.
+  if (!schedule || schedule.date !== ymdInTz(schedule.tz)) {
     return fetchAndStoreSchedule();
   }
   const nextPrayer = computeNext(schedule.prayers, Date.now());
@@ -398,6 +402,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     switch (msg && msg.type) {
       case 'GET_STATE':
+        // Self-heal on open: if the day rolled over (location tz) refetch; otherwise
+        // just recompute nextPrayer. Failures fall back to the stored state.
+        try {
+          await refreshNext();
+        } catch (_) {}
         sendResponse(await getState());
         break;
       case 'GET_I18N': {

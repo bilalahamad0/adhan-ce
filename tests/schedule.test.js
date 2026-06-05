@@ -1,5 +1,7 @@
 import {
   ymd,
+  ymdInTz,
+  zonedToEpoch,
   parseTimeToday,
   buildPrayers,
   computeNext,
@@ -100,6 +102,39 @@ describe('default base date', () => {
     expect(typeof ymd()).toBe('string');
     expect(parseTimeToday('12:00 PM')).toEqual(expect.any(Number));
     expect(buildPrayers(ALL).length).toBe(5);
+  });
+});
+
+describe('timezone-aware scheduling (location tz)', () => {
+  it('ymdInTz reads the calendar date in the given zone', () => {
+    const t = new Date('2026-06-05T05:00:00Z'); // 22:00 (prev day) in LA, 14:00 in Tokyo
+    expect(ymdInTz('America/Los_Angeles', t)).toBe('2026-06-04');
+    expect(ymdInTz('Asia/Tokyo', t)).toBe('2026-06-05');
+    expect(ymdInTz(null, new Date(2026, 0, 5))).toBe('2026-01-05'); // falls back to local
+  });
+
+  it('zonedToEpoch / parseTimeToday anchor wall-clock time to the zone (DST-aware)', () => {
+    // 04:30 in Los Angeles on 2026-06-05 is PDT (UTC-7) → 11:30 UTC.
+    expect(new Date(zonedToEpoch(2026, 6, 5, 4, 30, 'America/Los_Angeles')).toISOString()).toBe('2026-06-05T11:30:00.000Z');
+    const la = parseTimeToday('04:30 AM', new Date('2026-06-05T18:00:00Z'), 'America/Los_Angeles');
+    expect(new Date(la).toISOString()).toBe('2026-06-05T11:30:00.000Z');
+    // 06:00 in Tokyo (UTC+9, no DST) on 2026-06-05 → 21:00 UTC the day before.
+    const tk = parseTimeToday('06:00 AM', new Date('2026-06-05T00:00:00Z'), 'Asia/Tokyo');
+    expect(new Date(tk).toISOString()).toBe('2026-06-04T21:00:00.000Z');
+  });
+
+  it('picks the correct next prayer for a location in another timezone (regression: remote city)', () => {
+    // Machine could be anywhere; the location is in PDT. At 10:00 PDT, Fajr has
+    // passed and Dhuhr is next — even if the machine clock reads a different tz.
+    const now = new Date('2026-06-05T17:00:00Z'); // 10:00 PDT
+    const prayers = buildPrayers(
+      { Fajr: '04:19 AM', Dhuhr: '01:07 PM', Asr: '04:59 PM', Maghrib: '08:25 PM', Isha: '09:55 PM' },
+      now,
+      'America/Los_Angeles'
+    );
+    expect(computeNext(prayers, now.getTime()).name).toBe('Dhuhr');
+    // sanity: Fajr's epoch really is before "now"
+    expect(prayers[0].ts).toBeLessThan(now.getTime());
   });
 });
 
