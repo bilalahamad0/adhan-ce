@@ -6,6 +6,7 @@
 // Hijri dates. Pure helpers live in ./lib.
 import { formatCountdown, ymd, PRAYER_ORDER } from './lib/schedule.js';
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
+import { emptyUsage, recent, activeDays } from './lib/usage.js';
 import { searchPlaces } from './lib/geocode.js';
 import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
@@ -299,6 +300,7 @@ function renderAll() {
   renderList();
   updateClock();
   if (trackerActive()) renderTracker();
+  renderUsage();
 
   $('updated').textContent =
     schedule && schedule.fetchedAt
@@ -530,6 +532,33 @@ function renderTracker() {
       wrap.appendChild(cell);
     }
   }
+}
+
+// ───────────────────────────── usage (local-only) ─────────────────────────
+// Activity counts kept on this device (see lib/usage.js), surfaced in Settings.
+// They are never transmitted; before anything is recorded we show an empty state.
+function renderUsage() {
+  if (!$('usageCard')) return;
+  const u = (st && st.usage) || emptyUsage();
+  const totals = u.totals || {};
+  const pauses = totals.pauses || 0;
+  const alerts = totals.notifications || 0;
+  const days = activeDays(u);
+  const isEmpty = days === 0 && pauses === 0 && alerts === 0;
+  $('usageEmpty').hidden = !isEmpty;
+  $('usageGrid').hidden = isEmpty;
+  $('usageSince').hidden = isEmpty;
+  if (isEmpty) return;
+  $('usagePaused').textContent = String(pauses);
+  $('usageAlerts').textContent = String(alerts);
+  $('usageActiveDays').textContent = String(days);
+  // perDay buckets are keyed by the worker's local date (ymd()), so measure the
+  // trailing week against the same clock — not the location-tz schedule date.
+  $('usageWeek').textContent = t('usage_this_week', { n: recent(u, 'pauses', ymd(), 7) });
+  const since = st && st.installedAt ? new Date(st.installedAt) : null;
+  $('usageSince').textContent = since
+    ? t('usage_since', { date: since.toLocaleDateString(localeFor(), { month: 'short', year: 'numeric' }) })
+    : '';
 }
 
 // ───────────────────────────── wiring ─────────────────────────────────────

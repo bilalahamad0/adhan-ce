@@ -75,5 +75,13 @@
   "appearance_dark": "گہرا",
   "clock_style": "گھڑی",
   "clock_analog": "اینالاگ",
-  "clock_digital": "ڈیجیٹل"
+  "clock_digital": "ڈیجیٹل",
+  "usage_title": "اس آلے پر سرگرمی",
+  "usage_note": "آپ کے آلے پر رہتا ہے — کبھی نہیں بھیجا جاتا",
+  "usage_paused": "میڈیا خودکار طور پر روکا گیا",
+  "usage_alerts": "نماز کی اطلاعات",
+  "usage_active_days": "سرگرم دن",
+  "usage_this_week": "اس ہفتے {n}",
+  "usage_since": "{date} سے",
+  "usage_empty": "ابھی کوئی سرگرمی نہیں"
 }

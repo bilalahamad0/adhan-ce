@@ -75,5 +75,13 @@
   "appearance_dark": "Koyu",
   "clock_style": "Saat",
   "clock_analog": "Analog",
-  "clock_digital": "Dijital"
+  "clock_digital": "Dijital",
+  "usage_title": "Bu cihazdaki etkinlik",
+  "usage_note": "Cihazınızda kalır — asla gönderilmez",
+  "usage_paused": "Medya otomatik duraklatıldı",
+  "usage_alerts": "Namaz uyarıları",
+  "usage_active_days": "Etkin günler",
+  "usage_this_week": "Bu hafta {n}",
+  "usage_since": "{date} tarihinden beri",
+  "usage_empty": "Henüz etkinlik yok"
 }

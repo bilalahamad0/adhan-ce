@@ -3,8 +3,9 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
+import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
+import { emptyUsage, bump, prune } from './lib/usage.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
 // settings (defaults method=2 ISNA, school=0 Standard — unchanged from before);
@@ -59,6 +60,7 @@ async function getState() {
     'paused',
     'prayerLog',
     'installedAt',
+    'usage',
   ]);
   return {
     settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
@@ -67,7 +69,28 @@ async function getState() {
     paused: data.paused || { active: false },
     prayerLog: data.prayerLog || {},
     installedAt: data.installedAt || null,
+    usage: data.usage || null,
   };
+}
+
+// ---------- local-only usage counters (never transmitted) ----------
+// Bump a small set of activity counts kept in chrome.storage.local and shown only
+// in the popup — see lib/usage.js. Writes are serialized through one promise chain
+// because chrome.storage get/set isn't atomic and several worker events can fire
+// close together; without this, concurrent read-modify-writes would lose counts.
+// Errors are swallowed so a telemetry hiccup can never break a real action.
+// `pauses`/`resumes` are recorded from the `paused` state transition (see the
+// storage.onChanged listener) rather than here, so they're counted once per prayer
+// even when both pause paths fire; `notifications`/`focusUsed` are recorded inline.
+let usageWrite = Promise.resolve();
+function recordUsage(event) {
+  usageWrite = usageWrite
+    .then(async () => {
+      const { usage } = await chrome.storage.local.get('usage');
+      await chrome.storage.local.set({ usage: prune(bump(usage || emptyUsage(), event)) });
+    })
+    .catch(() => {});
+  return usageWrite;
 }
 
 // ---------- schedule fetch ----------
@@ -188,6 +211,20 @@ async function handlePrayerFire() {
     return;
   }
 
+  // The mirror of the stale check: a fire whose prayer time is still in the FUTURE
+  // is spurious — a delayed/duplicate ALARM_PRAYER for a prayer that a prior fire
+  // (or the content-script fallback in handleFallbackPause) already handled and
+  // advanced `nextPrayer` past. Acting on it would pause/notify/advance for the
+  // WRONG (upcoming) prayer and clobber an in-progress pause, so skip it; re-arm so
+  // the real upcoming alarm still stands. A blanket `paused.active` guard would
+  // instead wrongly swallow a genuine new prayer that fires while a previous
+  // prayer's pause is still open under a long auto-resume window. Test fires
+  // (scheduled for "now") are exempt.
+  if (!nextPrayer.test && isPrematureFire(firedTs)) {
+    await armAlarms();
+    return;
+  }
+
   const focus = settings.focusMode === true;
   const paused = { active: true, prayer: nextPrayer.name, time: nextPrayer.time, since: Date.now(), focus };
   await chrome.storage.local.set({ paused });
@@ -204,6 +241,7 @@ async function handlePrayerFire() {
       priority: 2,
       buttons: [{ title: M.btn_focus }, { title: M.btn_resume }],
     });
+    await recordUsage('notifications');
   } catch (_) {}
 
   await broadcast({ type: 'PRAYER_NOW', prayer: nextPrayer.name, time: nextPrayer.time, focus, since: paused.since });
@@ -290,6 +328,7 @@ async function enableFocus() {
   const { paused } = await getState();
   if (!paused.active) return;
   await chrome.storage.local.set({ paused: { ...paused, focus: true } });
+  await recordUsage('focusUsed');
   await broadcast({ type: 'FOCUS_ON', prayer: paused.prayer, time: paused.time, since: paused.since });
 }
 
@@ -397,6 +436,20 @@ if (chrome.commands && chrome.commands.onCommand) {
     if (cmd === 'toggle-focus') toggleFocus();
   });
 }
+
+// Count pause/resume activity from the single source of truth — the `paused` state
+// transition — rather than at each call site. background.js is the only writer of
+// `paused`, and the two pause paths (the alarm in handlePrayerFire and the
+// content-script fallback in handleFallbackPause) can both fire for one prayer;
+// counting the false→true edge means the second (true→true) write is a no-op, so a
+// prayer is counted exactly once. Resumes count on the true→false edge.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.paused) return;
+  const was = !!(changes.paused.oldValue && changes.paused.oldValue.active);
+  const now = !!(changes.paused.newValue && changes.paused.newValue.active);
+  if (!was && now) recordUsage('pauses');
+  else if (was && !now) recordUsage('resumes');
+});
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {

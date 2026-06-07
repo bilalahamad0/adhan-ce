@@ -75,5 +75,13 @@
   "appearance_dark": "Gelap",
   "clock_style": "Jam",
   "clock_analog": "Analog",
-  "clock_digital": "Digital"
+  "clock_digital": "Digital",
+  "usage_title": "Aktivitas di perangkat ini",
+  "usage_note": "Tetap di perangkat Anda — tidak pernah dikirim",
+  "usage_paused": "Media dijeda otomatis",
+  "usage_alerts": "Peringatan salat",
+  "usage_active_days": "Hari aktif",
+  "usage_this_week": "{n} minggu ini",
+  "usage_since": "Sejak {date}",
+  "usage_empty": "Belum ada aktivitas"
 }
