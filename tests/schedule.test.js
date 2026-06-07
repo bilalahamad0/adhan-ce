@@ -9,6 +9,8 @@ import {
   hhmmTo12h,
   isStaleFire,
   STALE_FIRE_MS,
+  isPrematureFire,
+  PREMATURE_FIRE_MS,
   PRAYER_ORDER,
   DAY_MS,
 } from '../lib/schedule.js';
@@ -94,6 +96,23 @@ describe('isStaleFire', () => {
   it('honors a custom grace window', () => {
     expect(isStaleFire(0, 5000, 10000)).toBe(false);
     expect(isStaleFire(0, 15000, 10000)).toBe(true);
+  });
+});
+
+describe('isPrematureFire', () => {
+  const t = 1_700_000_000_000; // fixed reference instant
+  it('never flags an on-time or late fire (scheduledTs <= now)', () => {
+    expect(isPrematureFire(t, t)).toBe(false); // exactly on time
+    expect(isPrematureFire(t, t + 1000)).toBe(false); // fired late
+    expect(isPrematureFire(t, t - PREMATURE_FIRE_MS)).toBe(false); // within the lead grace
+  });
+  it('flags a fire whose prayer time is still meaningfully in the future', () => {
+    expect(isPrematureFire(t, t - PREMATURE_FIRE_MS - 1)).toBe(true); // just past the lead
+    expect(isPrematureFire(t + 3 * 3600e3, t)).toBe(true); // an advanced (next) prayer hours away
+  });
+  it('honors a custom lead grace', () => {
+    expect(isPrematureFire(15000, 5000, 10000)).toBe(false); // 10s early == the grace, not over
+    expect(isPrematureFire(16000, 5000, 10000)).toBe(true); // 11s early, over the grace
   });
 });
 

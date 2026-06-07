@@ -399,3 +399,28 @@ describe('appearance & clock style', () => {
     expect(chrome.__.store.clockStyle).toBe('analog');
   });
 });
+
+describe('usage card (local-only activity)', () => {
+  it('shows recorded totals + active days from GET_STATE', async () => {
+    const state = defaultState();
+    state.installedAt = new Date('2026-05-10T12:00:00').getTime();
+    state.usage = {
+      totals: { pauses: 12, resumes: 9, notifications: 11, focusUsed: 3 },
+      perDay: { '2026-05-22': { pauses: 2 }, '2026-05-23': { pauses: 1 } },
+    };
+    await load({ state });
+    document.querySelector('[data-tab="settings"]').click();
+    expect($('usageGrid').hidden).toBe(false);
+    expect($('usageEmpty').hidden).toBe(true);
+    expect($('usagePaused').textContent).toBe('12'); // totals.pauses
+    expect($('usageAlerts').textContent).toBe('11'); // totals.notifications
+    expect($('usageActiveDays').textContent).toBe('2'); // distinct perDay keys
+    expect($('usageSince').textContent).toMatch(/May 2026/); // from installedAt
+  });
+
+  it('shows an empty state before anything is recorded', async () => {
+    await load(); // defaultState carries no usage
+    expect($('usageEmpty').hidden).toBe(false);
+    expect($('usageGrid').hidden).toBe(true);
+  });
+});

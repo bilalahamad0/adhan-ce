@@ -184,6 +184,30 @@
               <span id="saveMsg" class="save-msg"></span>
             </div>
 
+            <div class="set-group glass usage-card" id="usageCard">
+              <div class="usage-head">
+                <strong class="usage-title" data-i18n="usage_title">Activity on this device</strong>
+                <span class="usage-note" data-i18n="usage_note">Stays on your device — never sent</span>
+              </div>
+              <div class="usage-grid" id="usageGrid">
+                <div class="usage-stat">
+                  <span class="usage-num" id="usagePaused">0</span>
+                  <span class="usage-lbl" data-i18n="usage_paused">Media auto-paused</span>
+                  <span class="usage-sub" id="usageWeek"></span>
+                </div>
+                <div class="usage-stat">
+                  <span class="usage-num" id="usageAlerts">0</span>
+                  <span class="usage-lbl" data-i18n="usage_alerts">Prayer alerts</span>
+                </div>
+                <div class="usage-stat">
+                  <span class="usage-num" id="usageActiveDays">0</span>
+                  <span class="usage-lbl" data-i18n="usage_active_days">Active days</span>
+                </div>
+              </div>
+              <div class="usage-empty" id="usageEmpty" data-i18n="usage_empty" hidden>No activity yet</div>
+              <div class="usage-since" id="usageSince"></div>
+            </div>
+
             <div class="dev-row">
               <button id="testBtn" class="btn-ghost" data-i18n="test_adhan">Run test Adhan (30s)</button>
               <span id="testMsg" class="save-msg"></span>

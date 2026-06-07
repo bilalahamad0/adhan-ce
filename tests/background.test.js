@@ -193,6 +193,30 @@ describe('handlePrayerFire', () => {
     await flush();
     expect(h.store.paused).toEqual({ active: false });
   });
+
+  it('ignores a premature/duplicate fire for an already-advanced (future) prayer', async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      storage: {
+        settings: DEFAULTS,
+        schedule: scheduleAround(now),
+        // A prior fire (or the content fallback) already paused Dhuhr and advanced
+        // nextPrayer to Asr, whose time is still hours away.
+        paused: { active: true, prayer: 'Dhuhr', time: '01:05 PM', since: now, focus: true },
+        nextPrayer: { name: 'Asr', time: '04:56 PM', ts: now + 3 * 3600e3 },
+        lang: 'en',
+      },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    expect(h.notifications).toHaveLength(0); // no wrong-prayer notification
+    expect(h.broadcasts).toHaveLength(0); // no re-broadcast
+    expect(h.store.paused.prayer).toBe('Dhuhr'); // pause state not clobbered to Asr
+    expect(h.store.paused.active).toBe(true);
+    expect(h.store.nextPrayer.name).toBe('Asr'); // nextPrayer not re-advanced
+    expect(h.alarms.has(ALARM_RESUME)).toBe(false); // no fresh auto-resume armed
+    expect(h.store.usage).toBeUndefined(); // and nothing counted
+  });
 });
 
 describe('handleFallbackPause (content-script safety net)', () => {
@@ -467,5 +491,77 @@ describe('prayer tracking', () => {
     const res = await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Brunch' });
     expect(res).toEqual({ ok: false, error: 'bad prayer' });
     expect(h.store.prayerLog).toBeUndefined();
+  });
+});
+
+describe('usage counters (local-only)', () => {
+  it('a fresh fire bumps pauses + notifications; auto-resume bumps resumes', async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      storage: { settings: DEFAULTS, schedule: scheduleAround(now), nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 }, lang: 'en' },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    expect(h.store.usage.totals.pauses).toBe(1);
+    expect(h.store.usage.totals.notifications).toBe(1);
+
+    await h.fireAlarm(ALARM_RESUME);
+    await flush();
+    expect(h.store.usage.totals.resumes).toBe(1);
+    // The same day's per-day bucket accumulates each event (keyed by local date).
+    const day = Object.values(h.store.usage.perDay)[0];
+    expect(day).toMatchObject({ pauses: 1, notifications: 1, resumes: 1 });
+  });
+
+  it('counts a pause once when the alarm AND the content fallback fire for one prayer', async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      storage: { settings: DEFAULTS, schedule: scheduleAround(now), nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 }, paused: { active: false }, lang: 'en' },
+    });
+    // Both paths handle the same prayer; whichever writes paused second is a
+    // true->true edge, so the transition listener counts the pause exactly once.
+    await Promise.all([
+      h.fireAlarm(ALARM_PRAYER),
+      h.sendRuntimeMessage({ type: 'PRAYER_FALLBACK', prayer: 'Dhuhr', time: '01:05 PM', focus: true }),
+    ]);
+    await flush();
+    expect(h.store.usage.totals.pauses).toBe(1);
+  });
+
+  it('does not re-count a pause on a duplicate/delayed fire while already paused', async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      storage: { settings: DEFAULTS, schedule: scheduleAround(now), nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 }, lang: 'en' },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    expect(h.store.usage.totals.pauses).toBe(1);
+    // A second fire arrives while the pause is still active (true->true edge) → no new pause.
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    expect(h.store.usage.totals.pauses).toBe(1);
+  });
+
+  it('a missed (stale) fire records nothing', async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      storage: { settings: DEFAULTS, schedule: scheduleAround(now), paused: { active: false }, nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 100000 } },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    expect(h.store.usage).toBeUndefined();
+  });
+
+  it('FOCUS_NOW bumps focusUsed', async () => {
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS, paused: { active: true, prayer: 'Asr', time: '4:56 PM', since: Date.now(), focus: false } } });
+    await h.sendRuntimeMessage({ type: 'FOCUS_NOW' });
+    await flush();
+    expect(h.store.usage.totals.focusUsed).toBe(1);
+  });
+
+  it('GET_STATE exposes usage (null when absent)', async () => {
+    const { h } = await loadBackground({ storage: {} });
+    const s = await h.sendRuntimeMessage({ type: 'GET_STATE' });
+    expect(s.usage).toBeNull();
   });
 });

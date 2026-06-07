@@ -75,5 +75,13 @@
   "appearance_dark": "Dark",
   "clock_style": "Clock",
   "clock_analog": "Analog",
-  "clock_digital": "Digital"
+  "clock_digital": "Digital",
+  "usage_title": "Activity on this device",
+  "usage_note": "Stays on your device — never sent",
+  "usage_paused": "Media auto-paused",
+  "usage_alerts": "Prayer alerts",
+  "usage_active_days": "Active days",
+  "usage_this_week": "{n} this week",
+  "usage_since": "Since {date}",
+  "usage_empty": "No activity yet"
 }
