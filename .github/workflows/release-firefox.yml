@@ -1,0 +1,125 @@
+name: Release (Firefox)
+
+# Builds and AMO-signs the Firefox XPI when a firefox-v*.*.* tag is pushed, and
+# attaches the XPI to a draft GitHub Release. Manual workflow_dispatch runs
+# produce the unsigned XPI as an artifact only (no release, no AMO submission).
+#
+# Tag convention (see RELEASING.md): firefox-v* releases to Firefox/AMO;
+# chrome-v* releases to Chrome (release.yml). This workflow contains NO Chrome
+# Web Store step, so a Firefox release can never touch the live CWS listing.
+#
+# AMO submission is opt-in: without the AMO_JWT_* secrets the sign step no-ops
+# and you upload the XPI at addons.mozilla.org manually. See RELEASE_SETUP.md.
+
+on:
+  push:
+    tags:
+      - 'firefox-v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit to build (defaults to current branch HEAD). No release or AMO submission on manual dispatch — the XPI is an artifact only.'
+        required: false
+
+permissions:
+  contents: write  # needed for the release step to create draft releases
+
+jobs:
+  release-firefox:
+    name: Build & AMO-sign XPI
+    runs-on: ubuntu-latest  # the XPI staging shells out to `zip`
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run jest tests with coverage (enforces thresholds)
+        run: npm run test:cov
+
+      - name: Verify tag matches manifest/package/lock versions (tag push only)
+        if: startsWith(github.ref, 'refs/tags/firefox-v')
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#firefox-v}"
+          MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
+          LOCK_PKG_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+          DRIFT=0
+          for v in "$MANIFEST_VERSION" "$PKG_VERSION" "$LOCK_VERSION" "$LOCK_PKG_VERSION"; do
+            [ "$TAG_VERSION" = "$v" ] || DRIFT=1
+          done
+          if [ "$DRIFT" = "1" ]; then
+            echo "::error::Version drift — tag=$TAG_VERSION manifest=$MANIFEST_VERSION package=$PKG_VERSION lock=$LOCK_VERSION lock.packages[\"\"]=$LOCK_PKG_VERSION. All four must equal the tag. (AMO versions are immutable and must strictly increase.)"
+            exit 1
+          fi
+          echo "Tag ↔ manifest/package/lock all match: $TAG_VERSION"
+
+      - name: Lint + build the Firefox XPI (addons-linter gate)
+        id: ver
+        run: |
+          set -euo pipefail
+          # Stages dist/firefox (DEV=false + the 45-char AMO name), builds the
+          # XPI, and lints the staged tree — fails on any AMO error BEFORE any
+          # submission, so a blocker never reaches the live listing.
+          npm run lint:firefox
+          VERSION="$(node -p "require('./manifest.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "xpi_path=adhan-caster-pro-$VERSION.xpi" >> "$GITHUB_OUTPUT"
+          ls -la "adhan-caster-pro-$VERSION.xpi"
+
+      - name: Upload XPI as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: adhan-caster-pro-${{ steps.ver.outputs.version }}.xpi
+          path: ${{ steps.ver.outputs.xpi_path }}
+          retention-days: 14
+          if-no-files-found: error
+
+      # Sign + submit the staged tree to AMO (listed channel). web-ext reads the
+      # API credentials from WEB_EXT_API_KEY / WEB_EXT_API_SECRET, so they never
+      # appear on the command line. The extension ships unminified, so no
+      # --upload-source-code is needed. --approval-timeout 0 returns right after
+      # submission instead of blocking the job on AMO's human review.
+      #
+      # NOTE: the FIRST submission of a new add-on id must be done once in the
+      # AMO dashboard (to create the listing); web-ext sign then automates every
+      # subsequent version. No-ops (job still succeeds) when the secrets are
+      # unset — see .github/RELEASE_SETUP.md → "Automating AMO submission".
+      - name: AMO sign + submit for review (tag push only)
+        if: startsWith(github.ref, 'refs/tags/firefox-v')
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEB_EXT_API_KEY:-}" ] || [ -z "${WEB_EXT_API_SECRET:-}" ]; then
+            echo "::notice::AMO API secrets (AMO_JWT_ISSUER / AMO_JWT_SECRET) not set — skipping AMO submission. The XPI is on the GitHub Release; upload it at addons.mozilla.org, or set the secrets to automate this (see .github/RELEASE_SETUP.md)."
+            exit 0
+          fi
+          npx --yes web-ext@10 sign \
+            --channel listed \
+            --source-dir dist/firefox \
+            --artifacts-dir web-ext-artifacts \
+            --approval-timeout 0
+          echo "✓ Submitted to AMO for review."
+
+      - name: Create draft GitHub Release with XPI attached (tag push only)
+        if: startsWith(github.ref, 'refs/tags/firefox-v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.ver.outputs.xpi_path }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          name: ${{ github.ref_name }}

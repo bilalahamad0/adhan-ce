@@ -1,8 +1,13 @@
 # Release workflow — one-time setup
 
-The [`Release` workflow](workflows/release.yml) packs a signed `.crx` and
-attaches it to a draft GitHub Release whenever a `v*.*.*` tag is pushed. It
-needs one repo secret to do that.
+Releases are triggered by **prefixed** tags (a bare `v*` is retired):
+`chrome-v<version>` → Chrome Web Store, `firefox-v<version>` → Firefox/AMO. See
+[RELEASING.md](../RELEASING.md) for the full flow.
+
+The [`Release (Chrome)` workflow](workflows/release.yml) packs a signed `.crx`
+and attaches it to a draft GitHub Release whenever a `chrome-v*.*.*` tag is
+pushed. It needs one repo secret to do that. (Firefox/AMO setup is a separate
+section at the bottom of this file.)
 
 ## 1. Encode the private key
 
@@ -130,13 +135,56 @@ Refresh tokens can be revoked or (for a test-mode consent screen) expire. The
 script fails with `OAuth token refresh failed (HTTP 401)`. Regenerate it
 (step 4) and update the `CWS_REFRESH_TOKEN` secret. No code change needed.
 
-## What the workflow does NOT do
+## Automating AMO submission (Firefox, optional)
 
-- **It does not publish the GitHub Release.** Releases are created as drafts
+The [`Release (Firefox)` workflow](workflows/release-firefox.yml) fires on a
+`firefox-v*.*.*` tag: it lints + builds the XPI, attaches it to a draft GitHub
+Release, and — if the two secrets below are set — **AMO-signs and submits it for
+review** via `web-ext sign`. Without them the sign step **no-ops** (the XPI is on
+the GitHub Release for a manual upload), so you can configure this whenever.
+
+> **First submission is manual.** AMO won't create a *listed* add-on from the
+> API, so the very first version must be uploaded once at
+> [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) to
+> create the listing (this locks in the add-on id
+> `adhan-caster@bilalahamad.com`). After that, tagging automates new versions.
+
+### One-time AMO API credentials
+
+1. Sign in at [addons.mozilla.org/developers](https://addons.mozilla.org/developers/)
+   as the add-on owner.
+2. **Manage API Keys** (under your account/tools) → **Generate new credentials**.
+3. Copy the **JWT issuer** (looks like `user:12345:67`) and the **JWT secret**
+   (a long hex string — shown only once).
+
+### Add the secrets
+
+**Settings → Secrets and variables → Actions → New repository secret:**
+
+| Secret | Value |
+| --- | --- |
+| `AMO_JWT_ISSUER` | JWT issuer from step 3 (web-ext reads it as `--api-key`) |
+| `AMO_JWT_SECRET` | JWT secret from step 3 (web-ext reads it as `--api-secret`) |
+
+The workflow passes these to `web-ext sign` via `WEB_EXT_API_KEY` /
+`WEB_EXT_API_SECRET`, so they never appear on a command line. The extension ships
+unminified, so AMO needs no separate source-code upload. A JWT secret is as
+sensitive as a password — anyone with it can publish to your AMO listing.
+
+### Test it without cutting a release
+
+**Actions → Release (Firefox) → Run workflow** (leave `ref` blank). It builds and
+lints the XPI and uploads it as an artifact — no release, no AMO submission.
+
+## What the workflows do NOT do
+
+- **They do not publish the GitHub Release.** Releases are created as drafts
   so the auto-generated notes can be reviewed first.
-- **It does not bump versions.** Version bumps still happen in a PR before
-  the tag is pushed. The workflow only verifies that the tag matches the
-  manifest version and fails fast if they disagree.
-- **CWS submission is opt-in.** Without the OAuth secrets above, it does not
-  touch the Chrome Web Store — the signed CRX is on the GitHub Release for a
-  manual dashboard upload.
+- **They do not bump versions.** Version bumps still happen in a PR before
+  the tag is pushed. The workflows only verify that the tag matches the
+  manifest/package/lock version and fail fast if they disagree.
+- **Store submission is opt-in.** Without the OAuth secrets (Chrome) or the
+  `AMO_JWT_*` secrets (Firefox), the workflows don't touch the stores — the
+  signed CRX / built XPI is on the GitHub Release for a manual upload.
+- **A bare `v*` tag does nothing** except fail the
+  [tag guard](workflows/release-tag-guard.yml). Use `chrome-v*` or `firefox-v*`.
