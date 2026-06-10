@@ -11,12 +11,15 @@ echo "▶ Qualification: unit + manifest tests"
 
 VER="$(node -e "process.stdout.write(require('$HERE/manifest.json').version)")"
 OUT="$HERE/adhan-caster-pro-$VER.zip"
+STAGE="$HERE/dist/extension"
 rm -f "$OUT"
 
-# Include only the files Chrome needs at runtime — sourced from the single
-# source of truth (scripts/runtime-files.mjs) shared with the CRX packer, so the
-# zip and CRX can never disagree on what ships.
-FILES="$(cd "$HERE" && node -e "import('./scripts/runtime-files.mjs').then(m=>m.runtimeFiles()).then(f=>process.stdout.write(f.join('\n')))")"
-( cd "$HERE" && printf '%s\n' "$FILES" | zip -rq "$OUT" -@ )
+# Stage the runtime files (this also forces lib/buildinfo.js to DEV=false), then
+# zip the STAGED tree — never the source — so the store ZIP can't carry the dev
+# Test trigger. Same stageExtension() helper the CRX packer uses, so the ZIP and
+# CRX can never disagree on contents or on the build flag. Zipping `.` from inside
+# STAGE keeps the flat layout (manifest.json at the archive root).
+( cd "$HERE" && node -e "import('./scripts/runtime-files.mjs').then(m=>m.stageExtension('$STAGE'))" )
+( cd "$STAGE" && zip -rq "$OUT" . )
 
 echo "✓ Qualified and packaged: $OUT"

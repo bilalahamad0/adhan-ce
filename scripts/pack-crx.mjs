@@ -13,8 +13,8 @@
 // resulting CRX never contains dev-only files (tests, docs, package.json).
 
 import crx3 from 'crx3';
-import { runtimeFiles } from './runtime-files.mjs';
-import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { stageExtension } from './runtime-files.mjs';
+import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,27 +22,15 @@ import { fileURLToPath } from 'node:url';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const STAGE = join(REPO, 'dist', 'extension');
 
-// The packaged file set lives in scripts/runtime-files.mjs (single source of
-// truth, shared with tests/pack.test.js which guards it). lib/ + locales/ ship
-// in full, so a newly-added module/locale can never be silently dropped.
+// The packaged file set and staging logic live in scripts/runtime-files.mjs
+// (single source of truth, shared with docs/pack.sh and guarded by
+// tests/pack.test.js). lib/ + locales/ ship in full, so a newly-added
+// module/locale can never be silently dropped; stageExtension() also forces
+// lib/buildinfo.js to DEV=false so no signed CRX ships the dev Test trigger.
 
 async function readManifestVersion() {
   const txt = await readFile(join(REPO, 'manifest.json'), 'utf8');
   return JSON.parse(txt).version;
-}
-
-async function stage() {
-  // Fresh dir every run — avoids stale files from a previous pack.
-  await rm(STAGE, { recursive: true, force: true });
-  for (const rel of await runtimeFiles()) {
-    const src = join(REPO, rel);
-    const dst = join(STAGE, rel);
-    if (!existsSync(src)) {
-      throw new Error(`Missing runtime file: ${rel}`);
-    }
-    await mkdir(dirname(dst), { recursive: true });
-    await copyFile(src, dst);
-  }
 }
 
 async function main() {
@@ -56,7 +44,7 @@ async function main() {
     process.exit(2);
   }
 
-  await stage();
+  await stageExtension(STAGE);
 
   // crx3 walks the directory containing the manifest.json passed to it.
   await crx3([join(STAGE, 'manifest.json')], {
