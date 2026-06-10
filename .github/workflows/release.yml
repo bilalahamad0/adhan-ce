@@ -1,8 +1,13 @@
-name: Release
+name: Release (Chrome)
 
-# Builds a signed CRX when a v*.*.* tag is pushed and attaches it to a draft
-# GitHub Release. Also supports manual workflow_dispatch runs that produce the
-# CRX as a workflow artifact only (no release) — useful for dry-runs.
+# Builds a signed CRX when a chrome-v*.*.* tag is pushed, attaches it to a draft
+# GitHub Release, and (if the CWS secrets are set) submits it to the Chrome Web
+# Store. Manual workflow_dispatch runs produce the CRX as an artifact only.
+#
+# Tag convention (see RELEASING.md): chrome-v* releases to Chrome; firefox-v*
+# releases to Firefox/AMO (release-firefox.yml). The bare v* trigger is RETIRED
+# — release-tag-guard.yml fails loudly if a bare v* tag is pushed, so the live
+# Chrome Web Store can never be hit by an ambiguous tag.
 #
 # Required repo secret:
 #   CRX_PRIVATE_KEY_B64 — base64-encoded contents of adhan-caster-pro-private.pem.
@@ -11,7 +16,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'chrome-v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       ref:
@@ -44,10 +49,10 @@ jobs:
         run: npm run test:cov
 
       - name: Verify tag matches manifest/package/lock versions (tag push only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/chrome-v')
         run: |
           set -euo pipefail
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${GITHUB_REF_NAME#chrome-v}"
           MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
@@ -104,7 +109,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create draft GitHub Release with CRX attached (tag push only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/chrome-v')
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.ver.outputs.crx_path }}
@@ -119,7 +124,7 @@ jobs:
       # working even before — or without — store automation set up. See
       # .github/RELEASE_SETUP.md → "Automating CWS submission" for the secrets.
       - name: Submit to Chrome Web Store (tag push only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/chrome-v')
         env:
           CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}

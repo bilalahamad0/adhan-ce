@@ -1,10 +1,24 @@
-# Releasing Adhan Caster Pro
+# Releasing Adhan Caster
 
-How to publish a new version to the Chrome Web Store.
+How to publish a new version to the Chrome Web Store and to Firefox/AMO.
 
-> **Verified CRX uploads is enabled** on this listing. Every upload must be a
-> `.crx` signed with the project's verified-uploads private key. Plain `.zip`
-> uploads will be rejected.
+> **⚠️ Tag namespaces decide the store.** Releases are triggered by **prefixed**
+> tags, never a bare `v*`:
+> - **`chrome-v<version>`** → [`Release (Chrome)`](.github/workflows/release.yml):
+>   signs the CRX and submits to the **live Chrome Web Store**.
+> - **`firefox-v<version>`** → [`Release (Firefox)`](.github/workflows/release-firefox.yml):
+>   builds + AMO-signs the XPI and submits to **addons.mozilla.org**.
+>
+> A bare `v<version>` tag is **retired** — it triggers no release and
+> [`release-tag-guard.yml`](.github/workflows/release-tag-guard.yml) fails it on
+> purpose. This keeps a Firefox release from ever touching the Chrome store and
+> vice versa. The two stores share one `manifest.json` version, so you can tag
+> the same commit `chrome-v2.1.0` and `firefox-v2.1.0`.
+
+> **Verified CRX uploads is enabled** on the Chrome listing. Every CWS upload
+> must be a `.crx` signed with the project's verified-uploads private key. Plain
+> `.zip` uploads will be rejected. (Firefox is different — AMO signs the XPI
+> server-side, so there is no local Firefox key.)
 
 There are two release paths:
 
@@ -53,19 +67,22 @@ mistakes (missing icons, bad permissions, etc.).
 
 ### 3. Commit and merge to `main`
 
-Open a PR, get it reviewed, merge. Tag the merge commit:
+Open a PR, get it reviewed, merge. Tag the merge commit with the **`chrome-v`**
+prefix (for Firefox, see [§6](#6-firefox--amo-release) — usually the same commit
+tagged `firefox-v<version>`):
 
 ```bash
-git tag v1.6.4 <merge-commit-sha>
-git push origin v1.6.4
+git tag chrome-v1.6.4 <merge-commit-sha>
+git push origin chrome-v1.6.4
 ```
 
-Pushing the tag fires the [`Release` workflow](.github/workflows/release.yml).
-It runs tests, verifies the tag matches `manifest.json`, packs a signed CRX,
-and attaches it to a **draft** GitHub Release named after the tag.
+Pushing the tag fires the [`Release (Chrome)` workflow](.github/workflows/release.yml).
+It runs tests, verifies the tag matches `manifest.json`/`package.json`/the
+lockfile, packs a signed CRX, and attaches it to a **draft** GitHub Release named
+after the tag.
 
 If anything fails, the workflow surfaces the error in the run summary —
-fix and re-push (`git tag -d v1.6.4 && git push --delete origin v1.6.4 && git tag v1.6.4 <sha> && git push origin v1.6.4`).
+fix and re-push (`git tag -d chrome-v1.6.4 && git push --delete origin chrome-v1.6.4 && git tag chrome-v1.6.4 <sha> && git push origin chrome-v1.6.4`).
 
 ### 4. Chrome Web Store submission
 
@@ -78,9 +95,9 @@ GitHub Release notes. Skip to [Wait for review](#wait-for-review).
 
 **Otherwise, submit manually:**
 
-1. **Releases** tab → draft `v1.6.4` → review the auto-generated notes → **Publish**
+1. **Releases** tab → draft `chrome-v1.6.4` → review the auto-generated notes → **Publish**
 2. Download `adhan-caster-pro-1.6.4.crx` from the release's attached assets
-3. [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster Pro → **Package** → **Upload new package** → pick the CRX → **Submit for review**
+3. [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster → **Package** → **Upload new package** → pick the CRX → **Submit for review**
 
    Or from your machine, with the OAuth `.env` set up:
    ```bash
@@ -133,6 +150,42 @@ upload the CRX through the Developer Dashboard.
 - The new version replaces the published one for all users automatically.
 - Verify the listing shows the new version number.
 - Smoke-test by installing/updating from the store.
+
+## 6. Firefox / AMO release
+
+The Firefox build shares this repo and `manifest.json`. Differences from Chrome:
+no local signing key (AMO signs server-side), a separate `firefox-v*` tag, and a
+shorter listing name (AMO caps it at 45 chars — handled automatically by the XPI
+packer; the Chrome name is untouched).
+
+**First time only — create the AMO listing.** AMO won't auto-create a *listed*
+add-on from the API, so the very first submission is manual:
+
+1. Build the XPI locally: `npm run pack:xpi` → `adhan-caster-pro-<version>.xpi`.
+   Lint it first with `npm run lint:firefox` (0 errors required; warnings are OK).
+2. At [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) →
+   **Submit a New Add-on** → upload the XPI → fill in the listing (reuse the
+   store description and `docs/store/` screenshots; privacy policy URL
+   `https://adhan.bilalahamad.com/privacy-policy.html`).
+3. This locks in the add-on id `adhan-caster@bilalahamad.com`
+   (`browser_specific_settings.gecko.id`) — **permanent**, can't be changed later.
+
+**Every version after that — tag it.** Once the listing exists and the AMO API
+secrets are configured (see [`RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) →
+"Automating AMO submission"):
+
+```bash
+git tag firefox-v1.6.4 <merge-commit-sha>
+git push origin firefox-v1.6.4
+```
+
+The [`Release (Firefox)` workflow](.github/workflows/release-firefox.yml) tests,
+verifies the tag matches the version, lints + builds the XPI, **AMO-signs and
+submits it for review** via `web-ext sign`, and attaches the XPI to a draft
+GitHub Release. Without the AMO secrets the sign step no-ops and you upload the
+XPI from the draft release manually. AMO review is publish-first (often minutes);
+**AMO version numbers are immutable** — a botched upload burns that number, so
+bump and re-tag rather than re-pushing.
 
 ## Common upload errors
 
