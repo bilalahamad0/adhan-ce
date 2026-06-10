@@ -32,7 +32,8 @@ You need the verified-uploads private key: `adhan-caster-pro-private.pem`.
 ### 1. Bump the version
 
 Update `version` in **all three** files (they must stay in sync — the release
-workflow's tag-vs-manifest check fails fast if they drift):
+workflow verifies the tag against all three, including both `package-lock.json`
+fields, and fails fast if any of them drift):
 
 - `manifest.json` — source of truth for the extension
 - `package.json` — npm tooling
@@ -116,7 +117,7 @@ key.
 
 ### Upload to the Chrome Web Store
 
-Same as [step 4 above](#4-publish-the-release--upload-to-chrome-web-store) —
+Same as [step 4 above](#4-chrome-web-store-submission) —
 upload the CRX through the Developer Dashboard.
 
 ## Wait for review
