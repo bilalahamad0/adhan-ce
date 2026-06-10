@@ -43,17 +43,24 @@ jobs:
       - name: Run jest tests with coverage (enforces thresholds)
         run: npm run test:cov
 
-      - name: Verify tag matches manifest version (tag push only)
+      - name: Verify tag matches manifest/package/lock versions (tag push only)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
-          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match manifest.json version $MANIFEST_VERSION"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
+          LOCK_PKG_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+          DRIFT=0
+          for v in "$MANIFEST_VERSION" "$PKG_VERSION" "$LOCK_VERSION" "$LOCK_PKG_VERSION"; do
+            [ "$TAG_VERSION" = "$v" ] || DRIFT=1
+          done
+          if [ "$DRIFT" = "1" ]; then
+            echo "::error::Version drift — tag=$TAG_VERSION manifest=$MANIFEST_VERSION package=$PKG_VERSION lock=$LOCK_VERSION lock.packages[\"\"]=$LOCK_PKG_VERSION. All four must equal the tag (v2.0.0 shipped with a stale lockfile; this check prevents a repeat)."
             exit 1
           fi
-          echo "Tag ↔ manifest match: $MANIFEST_VERSION"
+          echo "Tag ↔ manifest/package/lock all match: $TAG_VERSION"
 
       - name: Compute output paths
         id: ver
@@ -98,7 +105,7 @@ jobs:
 
       - name: Create draft GitHub Release with CRX attached (tag push only)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.ver.outputs.crx_path }}
           draft: true

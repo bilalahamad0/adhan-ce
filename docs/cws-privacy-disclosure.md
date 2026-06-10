@@ -91,9 +91,10 @@ Check **only** the data type that actually leaves the device:
 
 ## Privacy policy URL
 
-`https://<your-pages-domain>/privacy-policy.html` (source: `docs/privacy-policy.html`).
+`https://adhan.bilalahamad.com/privacy-policy.html` (source: `docs/privacy-policy.html`).
 
-> **Naming consistency check:** the manifest name is "Adhan Caster: Muslim Prayer
-> Times & Auto-Pause" while `docs/privacy-policy.html` and `docs/index.html` say
-> "Adhan Caster Pro". Pick one and make the store listing, manifest, and docs
-> agree before submitting — reviewers flag listing/policy name mismatches.
+> **Naming:** aligned 2026-06-10 — the manifest/store listing use the full title
+> "Adhan Caster: Muslim Prayer Times & Auto-Pause"; the privacy policy and
+> landing page use the short name "Adhan Caster" and reference the full listing
+> title once. The old "Adhan Caster Pro" branding is retired from user-facing
+> docs (it survives only in internal artifact/package names).
