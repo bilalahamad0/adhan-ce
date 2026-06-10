@@ -6,6 +6,7 @@
 import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
+import { DEV } from './lib/buildinfo.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
 // settings (defaults method=2 ISNA, school=0 Standard — unchanged from before);
@@ -36,16 +37,6 @@ const DEFAULT_SETTINGS = {
 const ALARM_PRAYER = 'adhan-prayer-fire';
 const ALARM_RESUME = 'adhan-auto-resume';
 const ALARM_TICK = 'adhan-tick';
-
-// Store-installed builds get an `update_url` injected into the manifest;
-// unpacked/dev builds do not. Used to keep the test trigger out of production.
-function isDevBuild() {
-  try {
-    return !('update_url' in chrome.runtime.getManifest());
-  } catch (_) {
-    return false;
-  }
-}
 
 // ---------- storage helpers ----------
 async function getSettings() {
@@ -233,14 +224,30 @@ async function handlePrayerFire() {
     const { lang } = await chrome.storage.local.get('lang');
     const M = await getCatalog(lang || 'en');
     const pname = M['prayer_' + nextPrayer.name] || nextPrayer.name;
-    await chrome.notifications.create(`adhan-${firedTs}`, {
+    // Chrome supports notification action buttons (+ priority); Firefox's
+    // WebExtensions schema rejects the `buttons` property and ignores `priority`.
+    // create() can fail synchronously (Firefox throws on schema validation) or
+    // asynchronously (rejected promise), so attempt the rich Chrome notification
+    // and on ANY failure retry a plain toast — behavior detection, not UA
+    // sniffing — so Firefox shows the alert instead of nothing. The
+    // onButtonClicked listener is a harmless no-op stub on Firefox, left as-is.
+    const base = {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: interpolate(M.notif_title, { prayer: pname }),
       message: interpolate(M.notif_body, { prayer: pname, time: nextPrayer.time }),
-      priority: 2,
-      buttons: [{ title: M.btn_focus }, { title: M.btn_resume }],
-    });
+    };
+    try {
+      await chrome.notifications.create(`adhan-${firedTs}`, {
+        ...base,
+        priority: 2,
+        buttons: [{ title: M.btn_focus }, { title: M.btn_resume }],
+      });
+    } catch (_) {
+      await chrome.notifications.create(`adhan-${firedTs}`, base);
+    }
+    // Counted once a toast was shown (either variant). Kept after the retry so a
+    // Firefox buttons-throw can't zero the popup's Alerts stat.
     await recordUsage('notifications');
   } catch (_) {}
 
@@ -487,7 +494,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ ok: true });
         break;
       case 'TEST_ADHAN':
-        if (!isDevBuild()) {
+        if (!DEV) {
           sendResponse({ ok: false, error: 'dev only' });
           break;
         }

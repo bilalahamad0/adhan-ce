@@ -429,18 +429,16 @@ describe('message router', () => {
 });
 
 describe('TEST_ADHAN dev gate', () => {
-  it('schedules a simulated Adhan in unpacked/dev builds (no update_url)', async () => {
-    const { h } = await loadBackground({ storage: { settings: DEFAULTS }, manifest: { version: '1.7.4' } });
+  // The gate is now the compile-time DEV flag from lib/buildinfo.js (DEV=true in
+  // source). The DEV=false store-build refusal is covered behaviorally in
+  // tests/devgate.test.js (which mocks the flag off), and the guarantee that
+  // packed builds ship DEV=false is in tests/pack.test.js.
+  it('schedules a simulated Adhan in dev builds (source DEV=true)', async () => {
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS } });
     const res = await h.sendRuntimeMessage({ type: 'TEST_ADHAN', seconds: 30 });
     expect(res).toEqual({ ok: true });
     expect(h.store.nextPrayer.test).toBe(true);
     expect(h.alarms.has(ALARM_PRAYER)).toBe(true);
-  });
-
-  it('is refused in store builds (manifest carries update_url)', async () => {
-    const { h } = await loadBackground({ storage: { settings: DEFAULTS }, manifest: { version: '1.7.4', update_url: 'https://clients2.google.com/service/update2/crx' } });
-    const res = await h.sendRuntimeMessage({ type: 'TEST_ADHAN' });
-    expect(res).toEqual({ ok: false, error: 'dev only' });
   });
 });
 

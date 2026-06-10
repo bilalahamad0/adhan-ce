@@ -282,13 +282,15 @@ describe('language switching', () => {
 });
 
 describe('dev-only affordances', () => {
-  it('stamps the version and hides the Test row in store builds (update_url present)', async () => {
-    await load({ manifest: { version: '9.9.9', update_url: 'https://clients2.google.com/service/update2/crx' } });
+  // Test-row visibility now follows the compile-time DEV flag (lib/buildinfo.js),
+  // not the manifest. The DEV=false store-build case (row hidden) is covered in
+  // tests/devgate.test.js; here DEV=true (source) so the row stays visible.
+  it('stamps the version from the manifest', async () => {
+    await load({ manifest: { version: '9.9.9' } });
     expect($('version').textContent).toBe('v9.9.9');
-    expect(document.querySelector('.dev-row').hidden).toBe(true);
   });
 
-  it('keeps the Test row visible in unpacked/dev builds', async () => {
+  it('keeps the Test row visible in unpacked/dev builds (source DEV=true)', async () => {
     await load({ manifest: { version: '1.7.4' } });
     expect(document.querySelector('.dev-row').hidden).toBe(false);
   });

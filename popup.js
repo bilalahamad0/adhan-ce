@@ -10,6 +10,7 @@ import { emptyUsage, recent, activeDays } from './lib/usage.js';
 import { searchPlaces } from './lib/geocode.js';
 import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
+import { DEV } from './lib/buildinfo.js';
 
 const $ = (id) => document.getElementById(id);
 let st = null;
@@ -687,11 +688,11 @@ $('lang').addEventListener('change', async (e) => {
   if (trackerActive()) renderTracker();
 });
 
-// Dev-only test affordance + version stamp.
+// Dev-only test affordance + version stamp. DEV is a compile-time flag (false in
+// every packed build); the version still comes from the manifest at runtime.
 try {
-  const mf = chrome.runtime.getManifest();
-  document.querySelector('.dev-row').hidden = 'update_url' in mf;
-  $('version').textContent = 'v' + mf.version;
+  document.querySelector('.dev-row').hidden = !DEV;
+  $('version').textContent = 'v' + chrome.runtime.getManifest().version;
 } catch (_) {}
 
 // ───────────────────────────── start ──────────────────────────────────────
