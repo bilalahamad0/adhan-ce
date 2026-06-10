@@ -51,3 +51,22 @@ jobs:
           path: coverage/
           retention-days: 14
           if-no-files-found: ignore
+
+  # Lints the staged Firefox build with addons-linter (the same engine AMO runs
+  # server-side) so an AMO-blocking regression — an over-long name, an
+  # unsupported manifest key — is caught here, not at submission. Ubuntu-only:
+  # the XPI staging shells out to `zip`. Fails on errors; warnings are allowed.
+  lint-firefox:
+    name: Firefox/AMO lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint the staged Firefox build (addons-linter)
+        run: npm run lint:firefox

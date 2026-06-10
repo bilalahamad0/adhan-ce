@@ -150,10 +150,18 @@ export function makeChrome(opts = {}) {
     },
     notifications: {
       create: async (id, options) => {
+        // Firefox profile: the WebExtensions schema rejects the Chrome-only
+        // `buttons` property (and ignores `priority`), thrown at call time — so
+        // the production code must retry without buttons to show anything.
+        if (opts.firefox && options && 'buttons' in options) {
+          throw new Error('Type error for parameter options (Property "buttons" is unsupported by Firefox).');
+        }
         harness.notifications.push({ id, options });
         return id;
       },
       onClicked: { addListener: notifClicked.addListener },
+      // Firefox exposes onButtonClicked as a no-op stub (never fires); Chrome
+      // delivers real clicks. Either way addListener is safe to call.
       onButtonClicked: { addListener: notifButtonClicked.addListener },
     },
     action: {
@@ -163,9 +171,13 @@ export function makeChrome(opts = {}) {
       setBadgeBackgroundColor: async ({ color }) => {
         harness.badge.color = color;
       },
-      openPopup: async () => {
-        harness.popupOpened++;
-      },
+      // Firefox historically only allows openPopup() from a user gesture; the
+      // production code guards it with `?.()`, so the firefox profile omits it.
+      openPopup: opts.firefox
+        ? undefined
+        : async () => {
+            harness.popupOpened++;
+          },
     },
     commands: { onCommand: { addListener: onCommand.addListener } },
     i18n: { getUILanguage: () => opts.uiLang || 'en-US' },
