@@ -29,12 +29,15 @@
     "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "pack": "bash docs/pack.sh",
     "pack:crx": "node scripts/pack-crx.mjs",
+    "pack:xpi": "node scripts/pack-xpi.mjs",
+    "lint:firefox": "node scripts/pack-xpi.mjs && addons-linter dist/firefox",
     "submit:cws": "node scripts/submit-cws.mjs",
     "icons": "node icons/generate-icons.cjs",
     "demo": "bash docs/make-demo.sh",
     "shots": "bash docs/make-store-shots.sh"
   },
   "devDependencies": {
+    "addons-linter": "^10.6.0",
     "crx3": "^1.1.3",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.4.1"

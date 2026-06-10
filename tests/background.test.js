@@ -43,8 +43,8 @@ function localeRoute() {
 }
 
 let counter = 0;
-async function loadBackground({ storage = {}, fetchRoutes, manifest, uiLang } = {}) {
-  const chrome = makeChrome({ initialStorage: storage, manifest, uiLang });
+async function loadBackground({ storage = {}, fetchRoutes, manifest, uiLang, firefox = false } = {}) {
+  const chrome = makeChrome({ initialStorage: storage, manifest, uiLang, firefox });
   // Per-test routes win: they precede the default success routes (first match used).
   const fetch = makeFetch([...(fetchRoutes || []), ['api.aladhan.com', () => aladhanPayload()], localeRoute()]);
   globalThis.chrome = chrome;
@@ -155,6 +155,28 @@ describe('handlePrayerFire', () => {
     expect(h.badge.text).toBe('❚❚');
     expect(h.alarms.has(ALARM_RESUME)).toBe(true);
     expect(h.store.nextPrayer.name).toBe('Asr'); // advanced past Dhuhr
+  });
+
+  it('on Firefox: retries a plain toast without buttons, and still counts the alert', async () => {
+    const now = Date.now();
+    const schedule = scheduleAround(now);
+    const { h } = await loadBackground({
+      firefox: true, // notifications.create throws on the Chrome-only `buttons`
+      storage: { settings: DEFAULTS, schedule, nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 }, lang: 'en' },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+
+    // The buttons variant was rejected; the retry shows a plain toast (no buttons).
+    expect(h.notifications).toHaveLength(1);
+    expect(h.notifications[0].options.title).toContain('Dhuhr');
+    expect(h.notifications[0].options.buttons).toBeUndefined();
+    expect(h.notifications[0].options.priority).toBeUndefined();
+    // And the Alerts counter still increments despite the buttons-throw.
+    expect(h.store.usage.totals.notifications).toBe(1);
+    // The rest of the prayer flow is unaffected.
+    expect(h.store.paused).toMatchObject({ active: true, prayer: 'Dhuhr' });
+    expect(h.store.nextPrayer.name).toBe('Asr');
   });
 
   it('treats a fire long past prayer time as missed (device slept), without pausing', async () => {

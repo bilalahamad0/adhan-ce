@@ -3,6 +3,7 @@ coverage/
 dist/
 *.zip
 *.crx
+*.xpi
 *.pem
 .env
 .env.local

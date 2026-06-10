@@ -10,7 +10,7 @@
 // popup.js imports both, so its module graph failed to load and the popup
 // rendered as blank static HTML. tests/pack.test.js now guards against this.
 
-import { readdir, copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
+import { readdir, readFile, copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,10 +55,15 @@ export const PACKED_BUILDINFO = 'export const DEV = false;\n';
 // Stage every runtime file into `stageDir`, then force the build flag off by
 // overwriting the staged lib/buildinfo.js with DEV=false. Source keeps DEV=true
 // (so unpacked dev loads show the Test affordance); only the staged copy is
-// flipped. This is the single staging path shared by scripts/pack-crx.mjs (CRX)
-// and docs/pack.sh (ZIP), so the two packers can never diverge on contents or on
-// the build flag. Returns stageDir.
-export async function stageExtension(stageDir) {
+// flipped. This is the single staging path shared by scripts/pack-crx.mjs (CRX),
+// docs/pack.sh (ZIP) and scripts/pack-xpi.mjs (Firefox XPI), so the packers can
+// never diverge on contents or on the build flag.
+//
+// opts.manifestName: optionally override the staged manifest.json `name` (the
+// shared source is untouched). Firefox/AMO caps the name at 45 chars while the
+// Chrome name is longer, so the XPI packer passes a shorter Firefox name here;
+// the Chrome packers omit it and keep the full source name. Returns stageDir.
+export async function stageExtension(stageDir, { manifestName } = {}) {
   // Fresh dir every run — avoids stale files from a previous pack.
   await rm(stageDir, { recursive: true, force: true });
   for (const rel of await runtimeFiles()) {
@@ -72,5 +77,13 @@ export async function stageExtension(stageDir) {
   // lib/ had no other copyable file. Store-safety invariant — do not reorder.
   await mkdir(join(stageDir, 'lib'), { recursive: true });
   await writeFile(join(stageDir, 'lib', 'buildinfo.js'), PACKED_BUILDINFO);
+  // Per-target manifest name override (Firefox only) — rewrites the staged copy,
+  // never the committed source.
+  if (manifestName) {
+    const mfPath = join(stageDir, 'manifest.json');
+    const mf = JSON.parse(await readFile(mfPath, 'utf8'));
+    mf.name = manifestName;
+    await writeFile(mfPath, JSON.stringify(mf, null, 2) + '\n');
+  }
   return stageDir;
 }

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runtimeFiles, stageExtension } from '../scripts/runtime-files.mjs';
+import { FIREFOX_NAME } from '../scripts/pack-xpi.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -71,6 +72,32 @@ describe('build flag (store safety)', () => {
       expect(staged).not.toMatch(/DEV\s*=\s*true/);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// Firefox/AMO caps the extension name at 45 chars; Chrome allows the longer
+// (46-char) name. The XPI packer overrides only the staged Firefox manifest;
+// the committed source and the Chrome builds keep the full name.
+describe('per-target manifest name (AMO 45-char limit)', () => {
+  it('the Firefox name is within AMO limits', () => {
+    expect(FIREFOX_NAME.length).toBeLessThanOrEqual(45);
+  });
+
+  it('Firefox build stages the shorter name; Chrome build keeps the source name', async () => {
+    const sourceName = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).name;
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME });
+      await stageExtension(crDir);
+      const ff = JSON.parse(await readFile(join(ffDir, 'manifest.json'), 'utf8'));
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      expect(ff.name).toBe(FIREFOX_NAME);
+      expect(cr.name).toBe(sourceName); // Chrome untouched
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
     }
   });
 });
