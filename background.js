@@ -147,6 +147,9 @@ async function armAlarms() {
 
 // ---------- broadcast to tabs ----------
 async function broadcast(message) {
+  // No "tabs" permission is requested: the query's url filter is honored because
+  // the broad host_permissions grant tab-URL access. If host_permissions are ever
+  // narrowed (e.g. moved to optional), re-add "tabs" or this filter is ignored.
   const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
   await Promise.all(
     tabs.map(async (t) => {

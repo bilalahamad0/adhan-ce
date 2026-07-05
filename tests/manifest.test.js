@@ -45,8 +45,15 @@ describe('manifest qualification', () => {
 
   it('requests only the expected permissions (no scope creep)', () => {
     expect(new Set(manifest.permissions)).toEqual(
-      new Set(['storage', 'alarms', 'notifications', 'scripting', 'tabs'])
+      new Set(['storage', 'alarms', 'notifications', 'scripting'])
     );
+  });
+
+  it('does not request the redundant "tabs" permission', () => {
+    // chrome.tabs.query({url})/sendMessage work without "tabs" because the broad
+    // host_permissions already grant tab-URL access; requesting it too would only
+    // widen the review surface. Keep it out unless host_permissions are narrowed.
+    expect(manifest.permissions).not.toContain('tabs');
   });
 
   it('host permissions cover the prayer-times API and all http/https sites', () => {

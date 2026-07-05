@@ -146,6 +146,47 @@ describe('client-side auto-resume safety net', () => {
     expect(v.play).toHaveBeenCalled();
     expect(sent('RESUME_NOW')).toHaveLength(1);
   });
+
+  it('self-resumes off a local clock when settings never loaded and `since` is missing', async () => {
+    const v = addVideo();
+    // No `settings` in storage (never synced to this tab) and the pause broadcast
+    // carries no `since` — the exact state that used to pin the overlay forever.
+    await load({ storage: { nextPrayer: { name: 'Isha', ts: BASE + 3600e3 }, paused: { active: false } } });
+
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Isha', time: '10:02 PM', focus: true, since: undefined });
+    jest.advanceTimersByTime(1000); // first tick records the local observation time
+    expect(v.paused).toBe(true);
+    expect(focusHost()).toBeTruthy();
+
+    // Still paused before the default 5-minute fallback window elapses.
+    jest.advanceTimersByTime(4 * 60000);
+    expect(v.paused).toBe(true);
+
+    // Past the default window measured from when this tab first saw the pause.
+    jest.advanceTimersByTime(90 * 1000);
+    expect(v.play).toHaveBeenCalled();
+    expect(sent('RESUME_NOW').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('tears down the full-screen focus overlay and unlocks scroll when the extension context dies mid-pause', async () => {
+    await load({
+      storage: {
+        settings: settings({ focusMode: true }),
+        nextPrayer: { name: 'Isha', ts: BASE + 3600e3 },
+        paused: { active: true, prayer: 'Isha', time: '10:02 PM', focus: true, since: BASE },
+      },
+    });
+    jest.advanceTimersByTime(1000); // render the focus overlay + lock scroll
+    expect(focusHost()).toBeTruthy();
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    // Simulate Chrome disabling/updating the extension: the context is invalidated.
+    chrome.runtime.id = undefined;
+    jest.advanceTimersByTime(1000); // next tick detects the dead context and tears down
+
+    expect(focusHost()).toBeFalsy();
+    expect(document.documentElement.style.overflow).toBe('');
+  });
 });
 
 describe('overlay rendering (top frame, shadow DOM)', () => {
