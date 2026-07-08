@@ -461,7 +461,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
   else if (was && !now) recordUsage('resumes');
 });
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Defense-in-depth: only act on messages from this extension's own contexts
+  // (its content scripts and popup, whose sender.id is our own runtime id). No
+  // externally_connectable is declared, so web pages / other extensions can't
+  // reach this today — this guards the state-mutating handlers (SAVE_SETTINGS,
+  // TOGGLE_PRAYER, RESUME_NOW, …) against a future manifest change accidentally
+  // exposing them. Missing sender.id (shouldn't happen for internal messages) is
+  // allowed through so legitimate traffic never breaks.
+  if (sender && sender.id && sender.id !== chrome.runtime.id) return;
   (async () => {
     switch (msg && msg.type) {
       case 'GET_STATE':

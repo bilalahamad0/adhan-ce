@@ -114,29 +114,35 @@ function initSeg(id, value, onPick) {
 function buildClockFace() {
   const el = $('clock');
   if (!el) return;
-  let ticks = '';
+  const ticks = svgEl('g', { class: 'cf-ticks' });
   for (let i = 0; i < 60; i++) {
     const maj = i % 5 === 0;
     const a = (i / 60) * Math.PI * 2;
     const r1 = maj ? 78 : 83;
     const r2 = 88;
-    const x1 = (100 + r1 * Math.sin(a)).toFixed(1);
-    const y1 = (100 - r1 * Math.cos(a)).toFixed(1);
-    const x2 = (100 + r2 * Math.sin(a)).toFixed(1);
-    const y2 = (100 - r2 * Math.cos(a)).toFixed(1);
-    ticks += `<line class="cf-tick${maj ? ' maj' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    ticks.appendChild(
+      svgEl('line', {
+        class: `cf-tick${maj ? ' maj' : ''}`,
+        x1: (100 + r1 * Math.sin(a)).toFixed(1),
+        y1: (100 - r1 * Math.cos(a)).toFixed(1),
+        x2: (100 + r2 * Math.sin(a)).toFixed(1),
+        y2: (100 - r2 * Math.cos(a)).toFixed(1),
+      }),
+    );
   }
-  el.innerHTML =
-    `<svg class="clock-face" viewBox="0 0 200 200" role="img" aria-label="Clock">` +
-    `<circle class="cf-track" cx="100" cy="100" r="92"/>` +
-    `<g class="cf-ticks">${ticks}</g>` +
-    `<line class="cf-hand cf-hour" id="handHour" x1="100" y1="110" x2="100" y2="52"/>` +
-    `<line class="cf-hand cf-min" id="handMin" x1="100" y1="113" x2="100" y2="36"/>` +
-    `<line class="cf-hand cf-sec" id="handSec" x1="100" y1="116" x2="100" y2="30"/>` +
-    `<circle class="cf-cap" cx="100" cy="100" r="5.5"/>` +
-    `<circle class="cf-cap-gold" cx="100" cy="100" r="2.5"/>` +
-    `</svg>` +
-    `<div class="clock-digital" id="clockDigital"></div>`;
+  const svg = svgEl('svg', { class: 'clock-face', viewBox: '0 0 200 200', role: 'img', 'aria-label': 'Clock' }, [
+    svgEl('circle', { class: 'cf-track', cx: 100, cy: 100, r: 92 }),
+    ticks,
+    svgEl('line', { class: 'cf-hand cf-hour', id: 'handHour', x1: 100, y1: 110, x2: 100, y2: 52 }),
+    svgEl('line', { class: 'cf-hand cf-min', id: 'handMin', x1: 100, y1: 113, x2: 100, y2: 36 }),
+    svgEl('line', { class: 'cf-hand cf-sec', id: 'handSec', x1: 100, y1: 116, x2: 100, y2: 30 }),
+    svgEl('circle', { class: 'cf-cap', cx: 100, cy: 100, r: 5.5 }),
+    svgEl('circle', { class: 'cf-cap-gold', cx: 100, cy: 100, r: 2.5 }),
+  ]);
+  const digital = document.createElement('div');
+  digital.className = 'clock-digital';
+  digital.id = 'clockDigital';
+  el.replaceChildren(svg, digital);
 }
 
 function clockParts(tz) {
@@ -180,7 +186,15 @@ function updateClock() {
     if (digital) {
       const str = fmtDigital(tz, false);
       const mt = str.match(/^(.*?)\s*([AP]M)$/i);
-      dig.innerHTML = mt ? `${mt[1]}<span class="ampm">${mt[2]}</span>` : str;
+      if (mt) {
+        dig.textContent = mt[1];
+        const ap = document.createElement('span');
+        ap.className = 'ampm';
+        ap.textContent = mt[2];
+        dig.appendChild(ap);
+      } else {
+        dig.textContent = str;
+      }
     } else {
       dig.textContent = fmtDigital(tz, true);
     }
@@ -210,7 +224,7 @@ function placeLabel(p) {
 }
 function renderCityResults(items) {
   const box = $('cityResults');
-  box.innerHTML = '';
+  box.replaceChildren();
   if (!items.length) {
     box.hidden = true;
     return;
@@ -323,24 +337,40 @@ function renderNext() {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-function ico(paths, cls) {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('class', 'pico ' + (cls || ''));
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  svg.innerHTML = paths;
-  return svg;
+// Build an SVG element from a tag + attribute map (+ optional children). Used
+// instead of innerHTML so no markup string is ever parsed into the DOM — the
+// popup stays injection-proof and matches content.js's DOM-only style.
+function svgEl(tag, attrs, children) {
+  const el = document.createElementNS(SVG_NS, tag);
+  if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (children) for (const c of children) el.appendChild(c);
+  return el;
 }
-const ICO_SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
-const ICO_DOT = '<circle cx="12" cy="12" r="3.4"/>';
+function ico(parts, cls) {
+  return svgEl(
+    'svg',
+    {
+      viewBox: '0 0 24 24',
+      class: 'pico ' + (cls || ''),
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    },
+    parts.map(([tag, attrs]) => svgEl(tag, attrs)),
+  );
+}
+// Icon paths as [tag, attrs] specs (were raw SVG markup strings).
+const ICO_SUN = [
+  ['circle', { cx: 12, cy: 12, r: 4 }],
+  ['path', { d: 'M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4' }],
+];
+const ICO_DOT = [['circle', { cx: 12, cy: 12, r: 3.4 }]];
 
 function renderList() {
   const wrap = $('list');
-  wrap.innerHTML = '';
+  wrap.replaceChildren();
   const sched = st.schedule;
   if (!sched || !sched.prayers) return;
   const now = Date.now();
@@ -491,7 +521,7 @@ function renderTracker() {
   $('calNext').disabled = monthKey(viewYM) >= monthKey(curYM);
 
   const grid = $('calGrid');
-  grid.innerHTML = '';
+  grid.replaceChildren();
   for (const w of weekdayLabels()) {
     const wd = document.createElement('div');
     wd.className = 'cal-wd';
@@ -522,7 +552,7 @@ function renderTracker() {
     $('ddDate').textContent = `${fmtLogDate(selDate)} · ${dayCount(log, selDate)}/${PRAYER_ORDER.length}`;
     $('ddHijri').textContent = showH ? formatHijri(selDate + 'T12:00:00', localeFor(), off) : '';
     const wrap = $('ddPrayers');
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     const day = log[selDate] || {};
     for (const name of PRAYER_ORDER) {
       const locked = prayerLocked(selDate, name);
