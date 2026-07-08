@@ -81,10 +81,13 @@ describe('manifest qualification', () => {
     expect(manifest.minimum_chrome_version).toBe('121');
     // AMO requirements: a stable add-on id, a min version that grants host
     // permissions at install, and the mandatory data-collection disclosure.
+    // We declare "locationInfo" because the chosen city (→ aladhan) and the
+    // typed location-search text (→ Open-Meteo geocoding) are transmitted
+    // off-device; declaring "none" would be inaccurate for that transmission.
     const gecko = manifest.browser_specific_settings.gecko;
     expect(gecko.id).toBe('adhan-caster@bilalahamad.com');
     expect(gecko.strict_min_version).toBe('127.0');
-    expect(gecko.data_collection_permissions.required).toEqual(['none']);
+    expect(gecko.data_collection_permissions.required).toEqual(['locationInfo']);
   });
 });
 
