@@ -1,29 +1,30 @@
 {
   "projectId": "adhan-ce",
-  "lastUpdated": "2026-06-09",
+  "lastUpdated": "2026-08-02",
   "aiContribution": 95,
   "agents": [
     {
       "name": "Claude Code",
       "provider": "Anthropic",
-      "period": "May – Jun 2026",
+      "period": "May – Jul 2026",
       "models": [
         "Claude Opus 4.8",
-        "Claude Opus 4.7"
+        "Claude Opus 4.7",
+        "Claude Fable 5"
       ],
-      "tokens": 77538600,
+      "tokens": 103522508,
       "role": "End-to-end build — service worker, content scripts, geocoding, tests & store assets"
     }
   ],
-  "totalTokens": 77538600,
-  "totalCommits": 80,
-  "linesOfCode": 7790,
+  "totalTokens": 103522508,
+  "totalCommits": 86,
+  "linesOfCode": 8216,
   "devCycleDays": 1,
   "manualEstimateDays": 14,
   "impact": "Auto-pauses media across every Chrome tab at Adhan time · cross-tab prayer-focus mode",
   "cycle": "1 day",
   "beforeAI": "Manual prayer tracking; media kept playing during Adhan",
   "afterAI": "One-click extension pauses every tab at prayer time",
-  "tests": 179,
-  "testSuites": 13
+  "tests": 189,
+  "testSuites": 14
 }
