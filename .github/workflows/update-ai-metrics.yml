@@ -1,0 +1,94 @@
+name: Update AI Metrics
+
+on:
+  # Fired by the profile repo's weekly dispatcher (scripts/update-ai-metrics.js).
+  # This repo was the only project missing a listener, so those dispatches went
+  # nowhere and its ai-metrics.json sat frozen while every other repo refreshed.
+  repository_dispatch:
+    types: [update-metrics]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-metrics:
+    name: Refresh AI usage stats
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so `git rev-list --count` is accurate
+          # This repo has no GH_PAT; the run's own token can push because main is unprotected.
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Jest is the source of truth for tests/testSuites. The other repos' copies of this
+      # workflow refresh only commits/LOC, which is how those counts drifted unnoticed.
+      # Never block the metrics update on a red suite — the counts are still valid.
+      - name: Run tests
+        continue-on-error: true
+        run: npm test -- --ci 2>&1 | tee /tmp/jest.log
+
+      - name: Update ai-metrics.json
+        run: |
+          node << 'JSEOF'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          if (!fs.existsSync('ai-metrics.json')) {
+            console.log('No ai-metrics.json -- skipping');
+            process.exit(0);
+          }
+          const metrics = JSON.parse(fs.readFileSync('ai-metrics.json', 'utf8'));
+
+          metrics.totalCommits = parseInt(execSync('git rev-list --count HEAD').toString().trim(), 10);
+
+          // Same scope the /ai page's own tooling uses for this repo, so the published
+          // figure stays comparable across refreshes: tracked source by extension,
+          // minus vendored/build output. Counts newlines, not split('\n').length.
+          const exts = /\.(ts|tsx|js|jsx|mjs|cjs|css|scss|html)$/;
+          const skip = /(^|\/)(node_modules|dist|build|out|vendor|coverage|locales)\//;
+          const files = execSync('git ls-files').toString().trim().split('\n')
+            .filter(f => f && exts.test(f) && !skip.test(f));
+          let loc = 0;
+          for (const f of files) {
+            try { loc += (fs.readFileSync(f, 'utf8').match(/\n/g) || []).length; } catch {}
+          }
+          if (loc > 0) metrics.linesOfCode = loc;
+
+          // Parse the "N total" figures (not "N passed") so a run with failures still
+          // yields the true count instead of silently keeping a stale one.
+          let log = '';
+          try { log = fs.readFileSync('/tmp/jest.log', 'utf8'); } catch {}
+          const tests = log.match(/Tests:.*?(\d+) total/);
+          const suites = log.match(/Test Suites:.*?(\d+) total/);
+          if (tests) metrics.tests = Number(tests[1]);
+          if (suites) metrics.testSuites = Number(suites[1]);
+          if (!tests || !suites) console.log('WARNING: could not parse jest counts - keeping existing values');
+
+          metrics.lastUpdated = new Date().toISOString().slice(0, 10);
+          fs.writeFileSync('ai-metrics.json', JSON.stringify(metrics, null, 2) + '\n');
+          console.log('Updated:', JSON.stringify({
+            commits: metrics.totalCommits, loc: metrics.linesOfCode,
+            tests: metrics.tests, suites: metrics.testSuites, lastUpdated: metrics.lastUpdated,
+          }));
+          JSEOF
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "bilalahamad-bot"
+          git config user.email "bilal.ahamad@gmail.com"
+          git add ai-metrics.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: weekly AI metrics update [skip actions]"
+            git push origin HEAD
+          else
+            echo "No changes to commit"
+          fi
