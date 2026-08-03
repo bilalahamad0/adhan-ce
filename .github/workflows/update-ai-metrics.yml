@@ -6,6 +6,10 @@ on:
   # nowhere and its ai-metrics.json sat frozen while every other repo refreshed.
   repository_dispatch:
     types: [update-metrics]
+  # Own schedule as well: the profile PAT lacks Actions:Write on this repo, so its
+  # dispatch 403s. Running independently means this repo stays fresh either way.
+  schedule:
+    - cron: '10 6 * * 0'   # Sundays 06:10 UTC, just after the profile dispatcher
   workflow_dispatch:
 
 permissions:
