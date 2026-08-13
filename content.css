@@ -1,18 +1,53 @@
-/* Host element for the Adhan Caster Pro overlay. Visual styling lives in a
-   shadow root (see content.js) so page CSS can't bleed in; these rules only
-   pin the host to the bottom-right corner as a backstop. */
-#adhan-ccp-host {
+/* Backstops for the two overlay host elements. The visuals live in shadow roots (see
+   content.js), and inheritance is stopped inside them by `all: initial` on .card / .scrim
+   -- a shadow root does not block page CSS by itself, because for normal declarations the
+   OUTER tree wins the cascade. These rules cover the other half: the host boxes, which the
+   shadow reset cannot reach, so a page cannot move, shrink, scale or hide them. Ids are
+   used so they outrank the element and class selectors a site reset would realistically
+   ship; a page cannot outrank them without knowing these ids. */
+#adhan-ccp-host,
+#adhan-ccp-focus-host {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
   position: fixed !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  transform: none !important;
+  rotate: none !important;
+  scale: none !important;
+  translate: none !important;
+  zoom: 1 !important;
+  filter: none !important;
+  clip-path: none !important;
+  mix-blend-mode: normal !important;
+  contain: none !important;
+  content-visibility: visible !important;
+  pointer-events: none !important;
+}
+
+/* Corner card: pinned bottom-right. applyHostDir() flips it to bottom-left for RTL with an
+   inline !important pair, which outranks these rules -- element-attached styles beat
+   stylesheet rules of the same origin and importance. */
+#adhan-ccp-host {
   right: 16px !important;
   bottom: 16px !important;
   top: auto !important;
   left: auto !important;
   width: auto !important;
   height: auto !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  transform: none !important;
   z-index: 2147483647 !important;
-  pointer-events: none !important;
+}
+
+/* Focus overlay: covers the viewport, one layer below the corner card. */
+#adhan-ccp-focus-host {
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  z-index: 2147483646 !important;
 }

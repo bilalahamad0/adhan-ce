@@ -218,6 +218,32 @@ describe('overlay rendering (top frame, shadow DOM)', () => {
     expect(focusHost().shadowRoot.querySelectorAll('.star')).toHaveLength(36);
   });
 
+  // Regression: the overlay used to reset only on :host. For normal declarations the OUTER
+  // tree wins the cascade, so a page rule matching the host (a site reset's `* { line-height:
+  // 0 }`) beat it, and inherited properties crossed the shadow boundary — on such sites every
+  // text line collapsed to a zero-height box and the panel rendered as an overlapping pile.
+  // The reset has to sit on the shadow tree's own child, which page CSS can never target.
+  it('resets inherited page CSS on the shadow container, not just :host', async () => {
+    await load({ storage: { settings: settings({ focusMode: true, leadSeconds: 30 }), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 10000 }, paused: { active: false } } });
+    jest.advanceTimersByTime(1000); // brings up the corner card, so both hosts exist
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE });
+
+    const baseRule = (root, sel) => {
+      const css = root.querySelector('style').textContent;
+      const at = css.indexOf(sel + ' {'); // the bare rule, not .card.show / .scrim.show
+      expect(at).toBeGreaterThan(-1);
+      return css.slice(at, css.indexOf('}', at));
+    };
+
+    for (const [root, sel] of [[host().shadowRoot, '.card'], [focusHost().shadowRoot, '.scrim']]) {
+      const rule = baseRule(root, sel);
+      expect(rule).toContain('all: initial');
+      // `.card`/`.scrim` outrank `* { box-sizing: border-box }`, so it must be restated here —
+      // falling back to content-box silently widens the card past its min-width.
+      expect(rule).toContain('box-sizing: border-box');
+    }
+  });
+
   it('Esc resumes from the focus overlay', async () => {
     const v = addVideo();
     await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });

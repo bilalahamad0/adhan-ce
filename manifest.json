@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Adhan Caster: Muslim Prayer Times & Auto-Pause",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Muslim prayer times with a live Adhan countdown that auto-pauses video & audio in every tab at salah. Free, no ads, private.",
   "minimum_chrome_version": "121",
   "permissions": [
