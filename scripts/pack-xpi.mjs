@@ -33,7 +33,9 @@ export async function packXpi(outPath) {
   const version = JSON.parse(await readFile(join(REPO, 'manifest.json'), 'utf8')).version;
   const xpiPath = resolve(outPath || join(REPO, `adhan-caster-pro-${version}.xpi`));
 
-  await stageExtension(STAGE, { manifestName: FIREFOX_NAME });
+  // stripServiceWorker: Gecko runs background.scripts and ignores
+  // background.service_worker, which AMO validation flags on every submission.
+  await stageExtension(STAGE, { manifestName: FIREFOX_NAME, stripServiceWorker: true });
   await rm(xpiPath, { force: true });
   // -r recurse, -q quiet, -X strip platform extra-attrs for a reproducible zip.
   await pexec('zip', ['-rqX', xpiPath, '.'], { cwd: STAGE });
