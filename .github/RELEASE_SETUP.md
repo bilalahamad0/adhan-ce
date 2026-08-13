@@ -68,17 +68,19 @@ If the private key is rotated (see "Key rotation" in [RELEASING.md](../RELEASING
 2. Edit the existing `CRX_PRIVATE_KEY_B64` secret with the new value
 3. No workflow changes needed
 
-## Automating CWS submission (optional)
+## Automating CWS submission (Chrome)
 
-By default the workflow stops at a signed CRX on a draft GitHub Release, and you
-upload it through the dashboard. If you set the four secrets below, the workflow
-will instead **upload the CRX to the Chrome Web Store and submit it for review
-automatically** on every tag push. (Verified CRX uploads is fully compatible
-with the API: the upload must be the signed CRX, which is exactly what this
-pipeline produces.)
+> **Status: configured.** The secrets below are set on this repo, so a
+> `chrome-v*` tag submits to the Chrome Web Store on its own. The steps below are
+> kept for rotating the credentials, or re-creating them on a fork.
 
-If these secrets are absent, the step **no-ops** — the build/sign/release still
-runs, you just submit manually. So you can configure this whenever you like.
+The workflow **uploads the CRX to the Chrome Web Store and submits it for review
+automatically** on every tag push. (Verified CRX uploads is fully compatible with
+the API: the upload must be the signed CRX, which is exactly what this pipeline
+produces.)
+
+Were these secrets absent, the step would **no-op** instead — the
+build/sign/release still runs and you submit manually from the draft release.
 
 ### One-time OAuth setup
 
@@ -135,13 +137,17 @@ Refresh tokens can be revoked or (for a test-mode consent screen) expire. The
 script fails with `OAuth token refresh failed (HTTP 401)`. Regenerate it
 (step 4) and update the `CWS_REFRESH_TOKEN` secret. No code change needed.
 
-## Automating AMO submission (Firefox, optional)
+## Automating AMO submission (Firefox)
+
+> **Status: configured.** `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` are set on this
+> repo, so a `firefox-v*` tag submits to AMO on its own. The steps below are kept
+> for rotating the credentials, or re-creating them on a fork.
 
 The [`Release (Firefox)` workflow](workflows/release-firefox.yml) fires on a
 `firefox-v*.*.*` tag: it lints + builds the XPI, attaches it to a draft GitHub
-Release, and — if the two secrets below are set — **AMO-signs and submits it for
-review** via `web-ext sign`. Without them the sign step **no-ops** (the XPI is on
-the GitHub Release for a manual upload), so you can configure this whenever.
+Release, and **AMO-signs and submits it for review** via `web-ext sign`. Were the
+two secrets below ever unset, the sign step **no-ops** instead and the XPI on the
+GitHub Release is there for a manual upload.
 
 > **First submission is manual.** AMO won't create a *listed* add-on from the
 > API, so the very first version must be uploaded once at
@@ -183,8 +189,10 @@ lints the XPI and uploads it as an artifact — no release, no AMO submission.
 - **They do not bump versions.** Version bumps still happen in a PR before
   the tag is pushed. The workflows only verify that the tag matches the
   manifest/package/lock version and fail fast if they disagree.
-- **Store submission is opt-in.** Without the OAuth secrets (Chrome) or the
-  `AMO_JWT_*` secrets (Firefox), the workflows don't touch the stores — the
-  signed CRX / built XPI is on the GitHub Release for a manual upload.
+- **Store submission is live on this repo.** The CWS OAuth secrets (Chrome) and
+  the `AMO_JWT_*` secrets (Firefox) are both configured, so a `chrome-v*` or
+  `firefox-v*` tag uploads to the live store and submits it for review. Tag
+  deliberately. Were those secrets removed, the workflows would fall back to
+  leaving the signed CRX / built XPI on the GitHub Release for a manual upload.
 - **A bare `v*` tag does nothing** except fail the
   [tag guard](workflows/release-tag-guard.yml). Use `chrome-v*` or `firefox-v*`.

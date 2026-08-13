@@ -86,9 +86,9 @@ fix and re-push (`git tag -d chrome-v1.6.4 && git push --delete origin chrome-v1
 
 ### 4. Chrome Web Store submission
 
-**If the CWS OAuth secrets are configured** (see
+**The CWS OAuth secrets are configured** (see
 [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Automating CWS
-submission"), the tag push already did this: the workflow uploaded the signed
+submission"), so the tag push already did this: the workflow uploaded the signed
 CRX and **submitted it for review** automatically. Check the run's "Submit to
 Chrome Web Store" step for the confirmation, then just review/publish the draft
 GitHub Release notes. Skip to [Wait for review](#wait-for-review).
@@ -170,9 +170,9 @@ add-on from the API, so the very first submission is manual:
 3. This locks in the add-on id `adhan-caster@bilalahamad.com`
    (`browser_specific_settings.gecko.id`) — **permanent**, can't be changed later.
 
-**Every version after that — tag it.** Once the listing exists and the AMO API
-secrets are configured (see [`RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) →
-"Automating AMO submission"):
+**Every version after that — tag it.** The AMO API secrets are configured (see
+[`RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Automating AMO submission"), so
+once the listing exists a tag is all it takes:
 
 ```bash
 git tag firefox-v1.6.4 <merge-commit-sha>
@@ -182,8 +182,9 @@ git push origin firefox-v1.6.4
 The [`Release (Firefox)` workflow](.github/workflows/release-firefox.yml) tests,
 verifies the tag matches the version, lints + builds the XPI, **AMO-signs and
 submits it for review** via `web-ext sign`, and attaches the XPI to a draft
-GitHub Release. Without the AMO secrets the sign step no-ops and you upload the
-XPI from the draft release manually. AMO review is publish-first (often minutes);
+GitHub Release. Were the AMO secrets ever unset, the sign step no-ops instead and
+you upload the XPI from the draft release manually. AMO review is publish-first
+(often minutes);
 **AMO version numbers are immutable** — a botched upload burns that number, so
 bump and re-tag rather than re-pushing.
 
