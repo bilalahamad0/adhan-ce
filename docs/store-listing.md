@@ -107,7 +107,6 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 | `alarms` | Schedules a reliable background timer so the countdown and the Adhan trigger fire at the exact prayer time even when the popup is closed. |
 | `notifications` | Shows a desktop notification when it's time to pray. |
 | `scripting` | Injects the content script that pauses media and renders the in-page heads-up countdown / focus screen on the page you're viewing. |
-| `tabs` | Sends pause/resume messages to media playing in your other open tabs at prayer time. |
 | `host_permissions` (`http://*/*`, `https://*/*`) | Required to pause `<video>`/`<audio>` on whatever sites you happen to have open at prayer time. The extension does not read or transmit page content. |
 | `host_permissions` (prayer-times API host) | Fetches the daily prayer-time schedule for your chosen city. |
 

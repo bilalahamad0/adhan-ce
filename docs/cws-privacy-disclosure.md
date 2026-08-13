@@ -30,7 +30,6 @@ the `permissions` / `host_permissions` in `manifest.json` on every submission.
 | `alarms` | Fires the countdown and triggers the media-pause precisely at each of the five daily prayer times, even when the popup is closed. |
 | `notifications` | Shows a desktop notification at prayer time so the user knows the Adhan has begun. |
 | `scripting` | Injects the pause/resume logic into tabs that are already open at install/update time (newly opened tabs are covered by the declared content script). |
-| `tabs` | Sends the pause/resume signal to the user's open tabs so media can be paused across all of them at prayer time. |
 | Host access (`http://*/*`, `https://*/*`) | Required so `<video>`/`<audio>` can be paused and resumed in **any** tab the user has open at prayer time — the cross-tab auto-pause that is the extension's single purpose. Page content is never read, stored, or transmitted. Also reaches `api.aladhan.com` (prayer times) and `geocoding-api.open-meteo.com` (place lookup). |
 | Remote code | **No.** The extension executes no remotely-hosted code; every script ships inside the package. |
 

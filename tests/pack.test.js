@@ -101,3 +101,32 @@ describe('per-target manifest name (AMO 45-char limit)', () => {
     }
   });
 });
+
+// The shared manifest declares both background entry points: service_worker (what
+// Chrome runs) and scripts (what Gecko runs). Firefox ignores the former, and AMO
+// warns about it on every submission, so the XPI packer strips it from the staged
+// copy only — dropping it from source would break the Chrome build outright.
+describe('per-target background entry point', () => {
+  it('source declares both entry points', () => {
+    const bg = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).background;
+    expect(bg.service_worker).toBeDefined();
+    expect(bg.scripts).toEqual(expect.arrayContaining([expect.any(String)]));
+  });
+
+  it('Firefox build drops service_worker and keeps scripts; Chrome build keeps both', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-bg-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-bg-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true });
+      await stageExtension(crDir);
+      const ff = JSON.parse(await readFile(join(ffDir, 'manifest.json'), 'utf8'));
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      expect(ff.background.service_worker).toBeUndefined();
+      expect(ff.background.scripts).toEqual(['background.js']); // Gecko still has an entry point
+      expect(cr.background.service_worker).toBe('background.js'); // Chrome untouched
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+    }
+  });
+});

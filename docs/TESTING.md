@@ -37,7 +37,7 @@ Load unpacked from `chrome://extensions` (Developer mode) and verify:
 
 ### Install & permissions
 - [ ] Loads with no errors on the extension card; "Inspect service worker" console is clean.
-- [ ] Permission prompt lists only storage/alarms/notifications/scripting/tabs + site access.
+- [ ] Permission prompt lists only storage/alarms/notifications/scripting + site access.
 
 ### Schedule & location
 - [ ] Popup shows 5 prayers; next is highlighted; past ones are checked/dimmed.

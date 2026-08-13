@@ -62,8 +62,14 @@ export const PACKED_BUILDINFO = 'export const DEV = false;\n';
 // opts.manifestName: optionally override the staged manifest.json `name` (the
 // shared source is untouched). Firefox/AMO caps the name at 45 chars while the
 // Chrome name is longer, so the XPI packer passes a shorter Firefox name here;
-// the Chrome packers omit it and keep the full source name. Returns stageDir.
-export async function stageExtension(stageDir, { manifestName } = {}) {
+// the Chrome packers omit it and keep the full source name.
+//
+// opts.stripServiceWorker: drop `background.service_worker` from the staged
+// manifest. The shared manifest declares both that key (what Chrome runs) and
+// `background.scripts` (what Gecko runs); Firefox ignores the former and AMO
+// validation warns about it on every submission. Only the XPI packer passes
+// this — Chrome builds must keep the key. Returns stageDir.
+export async function stageExtension(stageDir, { manifestName, stripServiceWorker } = {}) {
   // Fresh dir every run — avoids stale files from a previous pack.
   await rm(stageDir, { recursive: true, force: true });
   for (const rel of await runtimeFiles()) {
@@ -77,12 +83,13 @@ export async function stageExtension(stageDir, { manifestName } = {}) {
   // lib/ had no other copyable file. Store-safety invariant — do not reorder.
   await mkdir(join(stageDir, 'lib'), { recursive: true });
   await writeFile(join(stageDir, 'lib', 'buildinfo.js'), PACKED_BUILDINFO);
-  // Per-target manifest name override (Firefox only) — rewrites the staged copy,
+  // Per-target manifest rewrites (Firefox only) — always on the staged copy,
   // never the committed source.
-  if (manifestName) {
+  if (manifestName || stripServiceWorker) {
     const mfPath = join(stageDir, 'manifest.json');
     const mf = JSON.parse(await readFile(mfPath, 'utf8'));
-    mf.name = manifestName;
+    if (manifestName) mf.name = manifestName;
+    if (stripServiceWorker && mf.background) delete mf.background.service_worker;
     await writeFile(mfPath, JSON.stringify(mf, null, 2) + '\n');
   }
   return stageDir;
