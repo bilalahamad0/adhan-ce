@@ -103,9 +103,9 @@
   function prayerLabel(name) {
     return name ? ti('prayer_' + name) : ti('prayer_generic');
   }
-  // Shadow DOM resets direction to LTR (:host { all: initial }) and RTL does not
-  // inherit across the boundary, so set dir explicitly on the overlay wrappers and
-  // flip the corner card to the opposite side for RTL.
+  // `all` deliberately leaves direction/unicode-bidi alone, so neither reset pins text
+  // direction and the page's own direction inherits straight through the host. Set dir
+  // explicitly on the overlay wrappers, and flip the corner card to the opposite side for RTL.
   function applyHostDir() {
     if (host) {
       host.style.setProperty(DIR === 'rtl' ? 'left' : 'right', '16px', 'important');
@@ -196,10 +196,21 @@
     host.style.cssText =
       'position:fixed!important;right:16px!important;bottom:16px!important;top:auto!important;left:auto!important;z-index:2147483647!important;pointer-events:none!important;margin:0!important;padding:0!important;border:0!important;';
     const root = host.attachShadow({ mode: 'open' });
+    // A shadow root does not stop page CSS on its own. For NORMAL declarations the OUTER tree
+    // wins the cascade, so any page rule that matches the host element -- even a bare
+    // `* { line-height: 0 }` in a site reset -- beats `:host { all: initial }`, and inherited
+    // properties then cross the boundary and wreck the layout (collapsed line boxes
+    // overprinting each other, 3px text, `visibility: hidden`). The reset therefore has to sit
+    // on .card, the shadow tree's own child: nothing outside the shadow root can target it, so
+    // it cannot be outranked. content.css pins the host box itself, which does not inherit.
+    // Two notes: `all` skips direction/unicode-bidi, so applyHostDir() still drives RTL; and
+    // box-sizing must be restated because `.card` outranks `* { box-sizing }` on specificity,
+    // and content-box would silently widen the card past its min-width.
     const css = `
       :host { all: initial; }
       * { box-sizing: border-box; }
       .card {
+        all: initial; box-sizing: border-box;
         position: relative; display: flex; flex-direction: column; gap: 10px; overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         color: #fff; text-align: start;
@@ -218,7 +229,7 @@
       .cbname { font-size: 10px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; opacity: .72; }
       .title { font-weight: 800; font-size: 15px; letter-spacing: .2px; margin-top: 2px; }
       .sub { font-size: 12px; opacity: .9; margin-top: 1px; }
-      .resume { flex: 0 0 auto; align-self: center; font: 700 12px/1 inherit; color: #0a5240; background: #fff; border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+      .resume { flex: 0 0 auto; align-self: center; font-family: inherit; font-weight: 700; font-size: 12px; line-height: 1; color: #0a5240; background: #fff; border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
       .card.paused .resume { color: #7c3312; }
       .resume:hover { filter: brightness(.96); }
       .bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,.22); overflow: hidden; }
@@ -261,10 +272,12 @@
     fhost.style.cssText =
       'position:fixed!important;inset:0!important;z-index:2147483646!important;pointer-events:none!important;margin:0!important;';
     const root = fhost.attachShadow({ mode: 'open' });
+    // `all: initial` on .scrim -- not on :host -- is what isolates us from page CSS; see the
+    // note in ensureUI() for why the host-level reset is not enough.
     const css = `
       :host { all: initial; }
       * { box-sizing: border-box; }
-      .scrim { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #062a20; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); opacity: 0; transition: opacity .35s ease; pointer-events: none; }
+      .scrim { all: initial; box-sizing: border-box; position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #062a20; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); opacity: 0; transition: opacity .35s ease; pointer-events: none; }
       .scrim.show { opacity: 1; pointer-events: auto; }
       .bg { position: absolute; inset: -25%; z-index: 0; pointer-events: none; background: radial-gradient(55% 55% at 50% 40%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); animation: ccpBg 12s ease-in-out infinite; }
       .stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
@@ -297,7 +310,7 @@
       .ftime { font-size: 18px; opacity: .9; margin-top: 2px; }
       .fmsg { font-size: 15px; opacity: .85; margin-top: 16px; }
       .fauto { font-size: 13px; opacity: .7; margin-top: 18px; font-variant-numeric: tabular-nums; }
-      .fresume { margin-top: 18px; border: 0; border-radius: 12px; cursor: pointer; font: 700 15px/1 inherit; color: #0a5c47; background: #fff; padding: 14px 30px; box-shadow: 0 8px 22px rgba(0,0,0,.22); }
+      .fresume { margin-top: 18px; border: 0; border-radius: 12px; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 15px; line-height: 1; color: #0a5c47; background: #fff; padding: 14px 30px; box-shadow: 0 8px 22px rgba(0,0,0,.22); }
       .fresume:hover { background: #eafaf2; }
       .fhint { font-size: 12px; opacity: .6; margin-top: 13px; }
     `;
