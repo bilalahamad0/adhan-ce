@@ -1,7 +1,8 @@
 # Release workflow — one-time setup
 
 Releases are triggered by **prefixed** tags (a bare `v*` is retired):
-`chrome-v<version>` → Chrome Web Store, `firefox-v<version>` → Firefox/AMO. See
+`chrome-v<version>` → Chrome Web Store, `firefox-v<version>` → Firefox/AMO,
+`edge-v<version>` → Microsoft Edge Add-ons. See
 [RELEASING.md](../RELEASING.md) for the full flow.
 
 The [`Release (Chrome)` workflow](workflows/release.yml) packs a signed `.crx`
@@ -183,6 +184,64 @@ sensitive as a password — anyone with it can publish to your AMO listing.
 **Actions → Release (Firefox) → Run workflow** (leave `ref` blank). It builds and
 lints the XPI and uploads it as an artifact — no release, no AMO submission.
 
+## Automating Edge submission (Microsoft Edge Add-ons)
+
+> **Status: not configured.** Until the three secrets below are set, a `edge-v*`
+> tag still builds the ZIP and attaches it to a draft GitHub Release — the submit
+> step just no-ops, and you upload by hand at Partner Center.
+
+The [`Release (Edge)` workflow](workflows/release-edge.yml) fires on an
+`edge-v*.*.*` tag: it builds the ZIP (`scripts/pack-edge.mjs`), attaches it to a
+draft GitHub Release, and **uploads it to Edge Add-ons and submits it for
+review** via `scripts/submit-edge.mjs`.
+
+> **First submission is manual.** Like AMO, Edge won't create a new product from
+> the API. Register at
+> [Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/) —
+> free, no developer fee — and upload one ZIP by hand to create the product. That
+> also gives you the product ID the API needs.
+
+### One-time API credentials
+
+1. Register for the Microsoft Edge program at
+   [Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/) with
+   a Microsoft account. There is **no registration fee**.
+2. Create the product by uploading a ZIP once (see above).
+3. On the extension's **Overview** page, copy the **product ID** — a GUID. This
+   is not the storefront URL slug.
+4. **Publish API** (in the extension's left nav) → create credentials. Copy the
+   **client ID** and the **API key**; the key is shown once.
+
+### Add the secrets
+
+**Settings → Secrets and variables → Actions → New repository secret:**
+
+| Secret | Value |
+| --- | --- |
+| `EDGE_PRODUCT_ID` | Product ID (GUID) from step 3 |
+| `EDGE_CLIENT_ID` | Client ID from step 4 |
+| `EDGE_API_KEY` | API key from step 4 |
+
+The workflow passes these as env vars, never on a command line. An API key is as
+sensitive as a password — anyone with it can publish to your listing.
+
+This uses the Edge Add-ons REST API **v1.1**, which authenticates with the API
+key directly. (v1 used Azure AD access tokens and was retired at the end of 2024;
+there is no token to refresh or expire mid-release.)
+
+### Test it without cutting a release
+
+Locally, copy `.env.example` → `.env`, fill in the three values, then:
+
+```bash
+npm run pack:edge                                                    # build the ZIP
+npm run submit:edge -- --dry-run                                     # validate, no network
+npm run submit:edge -- --no-publish                                  # upload only, you submit in Partner Center
+npm run submit:edge                                                  # upload + submit for review
+```
+
+`--dry-run` needs no credentials at all, so it is safe in any environment.
+
 ## What the workflows do NOT do
 
 - **They do not publish the GitHub Release.** Releases are created as drafts
@@ -190,10 +249,12 @@ lints the XPI and uploads it as an artifact — no release, no AMO submission.
 - **They do not bump versions.** Version bumps still happen in a PR before
   the tag is pushed. The workflows only verify that the tag matches the
   manifest/package/lock version and fail fast if they disagree.
-- **Store submission is live on this repo.** The CWS OAuth secrets (Chrome) and
-  the `AMO_JWT_*` secrets (Firefox) are both configured, so a `chrome-v*` or
-  `firefox-v*` tag uploads to the live store and submits it for review. Tag
-  deliberately. Were those secrets removed, the workflows would fall back to
-  leaving the signed CRX / built XPI on the GitHub Release for a manual upload.
+- **Store submission is live for Chrome and Firefox.** The CWS OAuth secrets and
+  the `AMO_JWT_*` secrets are configured, so a `chrome-v*` or `firefox-v*` tag
+  uploads to the live store and submits it for review. Tag deliberately. Edge is
+  the exception: its `EDGE_*` secrets are not set yet, so an `edge-v*` tag builds
+  and releases but does not submit. Were any of those secrets removed, the
+  workflow falls back to leaving the signed CRX / built XPI / ZIP on the GitHub
+  Release for a manual upload.
 - **A bare `v*` tag does nothing** except fail the
   [tag guard](workflows/release-tag-guard.yml). Use `chrome-v*` or `firefox-v*`.

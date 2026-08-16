@@ -106,6 +106,41 @@ describe('per-target manifest name (AMO 45-char limit)', () => {
 // Chrome runs) and scripts (what Gecko runs). Firefox ignores the former, and AMO
 // warns about it on every submission, so the XPI packer strips it from the staged
 // copy only — dropping it from source would break the Chrome build outright.
+// Edge is Chromium, so its package is the Chrome one minus the Firefox-only
+// browser_specific_settings block. The invariants that matter: the Chromium
+// entry point survives (strip the wrong key and the extension simply never runs),
+// and Chrome's own package is untouched by the Edge option.
+describe('per-target Edge manifest', () => {
+  it('Edge build drops browser_specific_settings and keeps the Chromium entry point', async () => {
+    const edgeDir = await mkdtemp(join(tmpdir(), 'adhan-edge-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-gecko-'));
+    try {
+      await stageExtension(edgeDir, { stripGecko: true });
+      await stageExtension(crDir);
+      const edge = JSON.parse(await readFile(join(edgeDir, 'manifest.json'), 'utf8'));
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      expect(edge.browser_specific_settings).toBeUndefined();
+      expect(edge.background.service_worker).toBe('background.js'); // Chromium still boots
+      expect(edge.name).toBe(cr.name); // no Firefox name truncation on Edge
+      expect(cr.browser_specific_settings).toBeDefined(); // Chrome untouched
+    } finally {
+      await rm(edgeDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+    }
+  });
+
+  it('the Edge stage still forces DEV=false (store-safety invariant)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'adhan-edge-dev-'));
+    try {
+      await stageExtension(dir, { stripGecko: true });
+      const staged = await readFile(join(dir, 'lib', 'buildinfo.js'), 'utf8');
+      expect(staged.trim()).toBe('export const DEV = false;');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('per-target background entry point', () => {
   it('source declares both entry points', () => {
     const bg = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).background;
