@@ -158,21 +158,31 @@ no local signing key (AMO signs server-side), a separate `firefox-v*` tag, and a
 shorter listing name (AMO caps it at 45 chars — handled automatically by the XPI
 packer; the Chrome name is untouched).
 
-**First time only — create the AMO listing.** AMO won't auto-create a *listed*
-add-on from the API, so the very first submission is manual:
+> **The listing already exists — this step is done.** It was created manually on
+> 2026-08-13 with v2.0.3 (AMO won't auto-create a *listed* add-on from the API, so
+> the first submission had to be by hand). That upload permanently locked in the
+> add-on id `adhan-caster@bilalahamad.com`
+> (`browser_specific_settings.gecko.id`) and the slug
+> [`adhan-caster-prayer-times`](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/).
+> Nothing below needs repeating — it is kept only as the record of how the
+> listing came to exist, and as the recipe if the add-on is ever re-created from
+> scratch or forked:
+>
+> 1. Build the XPI locally: `npm run pack:xpi` → `adhan-caster-pro-<version>.xpi`.
+>    Lint it first with `npm run lint:firefox` (0 errors required; warnings are OK).
+> 2. At [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) →
+>    **Submit a New Add-on** → choose **"On this site"** (the listed channel — the
+>    unlisted one would break `web-ext sign --channel listed` forever) → upload the
+>    XPI → fill in the listing (reuse the store description and `docs/store/`
+>    screenshots; privacy policy URL
+>    `https://adhan.bilalahamad.com/privacy-policy.html`).
+> 3. Answer **Yes** to "Do you need to submit source code?" — `stageExtension()`
+>    generates two of the files that ship (`lib/buildinfo.js` and the rewritten
+>    `manifest.json`), which is exactly what that question asks about.
 
-1. Build the XPI locally: `npm run pack:xpi` → `adhan-caster-pro-<version>.xpi`.
-   Lint it first with `npm run lint:firefox` (0 errors required; warnings are OK).
-2. At [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) →
-   **Submit a New Add-on** → upload the XPI → fill in the listing (reuse the
-   store description and `docs/store/` screenshots; privacy policy URL
-   `https://adhan.bilalahamad.com/privacy-policy.html`).
-3. This locks in the add-on id `adhan-caster@bilalahamad.com`
-   (`browser_specific_settings.gecko.id`) — **permanent**, can't be changed later.
-
-**Every version after that — tag it.** The AMO API secrets are configured (see
-[`RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Automating AMO submission"), so
-once the listing exists a tag is all it takes:
+**Every version — just tag it.** The AMO API secrets are configured (see
+[`RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Automating AMO submission") and
+the listing exists, so a tag is all it takes:
 
 ```bash
 git tag firefox-v1.6.4 <merge-commit-sha>
