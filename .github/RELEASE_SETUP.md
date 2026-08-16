@@ -149,11 +149,12 @@ Release, and **AMO-signs and submits it for review** via `web-ext sign`. Were th
 two secrets below ever unset, the sign step **no-ops** instead and the XPI on the
 GitHub Release is there for a manual upload.
 
-> **First submission is manual.** AMO won't create a *listed* add-on from the
-> API, so the very first version must be uploaded once at
-> [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) to
-> create the listing (this locks in the add-on id
-> `adhan-caster@bilalahamad.com`). After that, tagging automates new versions.
+> **The listing exists — every version from here is tag-driven.** AMO won't create
+> a *listed* add-on from the API, so v2.0.3 was uploaded by hand on 2026-08-13 to
+> create it; that locked in the add-on id `adhan-caster@bilalahamad.com` and the
+> slug [`adhan-caster-prayer-times`](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/).
+> No manual upload is needed again. See [`RELEASING.md`](../RELEASING.md) →
+> "6. Firefox / AMO release" for the one-time recipe, kept for a fork or re-create.
 
 ### One-time AMO API credentials
 
