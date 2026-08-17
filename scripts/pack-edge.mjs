@@ -7,9 +7,12 @@
 //   outPath  defaults to ./adhan-caster-pro-<manifest.version>-edge.zip
 //
 // Edge is Chromium, so the package is the Chrome one — same MV3 manifest, same
-// background.service_worker, same runtime files — with one difference: the
-// Firefox-only `browser_specific_settings` block is stripped from the staged
-// manifest (see stripGecko in runtime-files.mjs). Stages via the shared
+// background.service_worker, same runtime files — with two edits to the staged
+// manifest: the Firefox-only `browser_specific_settings` block is removed
+// (stripGecko), and so is `background.scripts` (stripBackgroundScripts). The
+// second is not cosmetic — Edge validates MV3 strictly and REJECTS a package
+// declaring background.scripts alongside service_worker, where Chrome simply
+// ignores it. Both options live in runtime-files.mjs. Stages via the shared
 // stageExtension() (which forces lib/buildinfo.js to DEV=false), then zips the
 // STAGED tree so the dev Test trigger can never ship. The staged dir
 // (dist/edge) is left in place for inspection. Requires the `zip` CLI, same as
@@ -32,7 +35,9 @@ export async function packEdge(outPath) {
   const version = JSON.parse(await readFile(join(REPO, 'manifest.json'), 'utf8')).version;
   const zipPath = resolve(outPath || join(REPO, `adhan-caster-pro-${version}-edge.zip`));
 
-  await stageExtension(STAGE, { stripGecko: true });
+  // stripBackgroundScripts: Edge rejects an MV3 package that declares
+  // background.scripts alongside service_worker — the mirror of the Firefox strip.
+  await stageExtension(STAGE, { stripGecko: true, stripBackgroundScripts: true });
   await rm(zipPath, { force: true });
   // -r recurse, -q quiet, -X strip platform extra-attrs for a reproducible zip.
   await pexec('zip', ['-rqX', zipPath, '.'], { cwd: STAGE });

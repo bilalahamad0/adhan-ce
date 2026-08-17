@@ -115,14 +115,18 @@ describe('per-target Edge manifest', () => {
     const edgeDir = await mkdtemp(join(tmpdir(), 'adhan-edge-'));
     const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-gecko-'));
     try {
-      await stageExtension(edgeDir, { stripGecko: true });
+      await stageExtension(edgeDir, { stripGecko: true, stripBackgroundScripts: true });
       await stageExtension(crDir);
       const edge = JSON.parse(await readFile(join(edgeDir, 'manifest.json'), 'utf8'));
       const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
       expect(edge.browser_specific_settings).toBeUndefined();
       expect(edge.background.service_worker).toBe('background.js'); // Chromium still boots
+      // Edge REJECTS the package if background.scripts rides along with
+      // service_worker under MV3 — Partner Center fails validation outright.
+      expect(edge.background.scripts).toBeUndefined();
       expect(edge.name).toBe(cr.name); // no Firefox name truncation on Edge
       expect(cr.browser_specific_settings).toBeDefined(); // Chrome untouched
+      expect(cr.background.scripts).toEqual(['background.js']); // Chrome keeps both
     } finally {
       await rm(edgeDir, { recursive: true, force: true });
       await rm(crDir, { recursive: true, force: true });
@@ -132,7 +136,7 @@ describe('per-target Edge manifest', () => {
   it('the Edge stage still forces DEV=false (store-safety invariant)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'adhan-edge-dev-'));
     try {
-      await stageExtension(dir, { stripGecko: true });
+      await stageExtension(dir, { stripGecko: true, stripBackgroundScripts: true });
       const staged = await readFile(join(dir, 'lib', 'buildinfo.js'), 'utf8');
       expect(staged.trim()).toBe('export const DEV = false;');
     } finally {

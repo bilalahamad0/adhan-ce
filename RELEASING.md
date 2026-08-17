@@ -208,10 +208,14 @@ Edge is Chromium, so the package is the Chrome one: same MV3 manifest, same
 
 - **No signing key.** Edge takes a plain ZIP. There is nothing to sign locally
   (no CRX key) and nothing signed server-side (unlike AMO).
-- **The Firefox block is stripped.** `scripts/pack-edge.mjs` passes `stripGecko`
-  to `stageExtension()`, so `browser_specific_settings` is removed from the
-  staged manifest. Chromium ignores that key either way; dropping it keeps a
-  Firefox-only block out of an Edge package. Chrome's own build keeps it.
+- **Two manifest keys are stripped.** `scripts/pack-edge.mjs` passes `stripGecko`
+  and `stripBackgroundScripts` to `stageExtension()`. The first removes
+  `browser_specific_settings` (cosmetic — Chromium ignores it). The second is
+  **required**: Edge validates MV3 strictly and rejects the upload with *"The
+  background.scripts field cannot be used with manifest version 3"* if `scripts`
+  rides along with `service_worker`. Chrome tolerates both keys and Firefox needs
+  `scripts`, so this is the exact mirror of the Firefox strip. Chrome's own build
+  keeps both.
 
 **Tag it.** The version-bump, test and merge steps are identical to Chrome
 (sections 1–3) — only the tag prefix differs:
