@@ -1,0 +1,118 @@
+name: Release (Edge)
+
+# Builds the Edge ZIP when an edge-v*.*.* tag is pushed, attaches it to a draft
+# GitHub Release, and (if the Edge API secrets are set) submits it to Microsoft
+# Edge Add-ons for review. Manual workflow_dispatch runs produce the ZIP as an
+# artifact only.
+#
+# Tag convention (see RELEASING.md): chrome-v* → Chrome Web Store (release.yml),
+# firefox-v* → Firefox/AMO (release-firefox.yml), edge-v* → Edge Add-ons (here).
+# The bare v* trigger is RETIRED — release-tag-guard.yml fails loudly on one.
+#
+# Edge needs no signing key: unlike the Chrome CRX there is nothing to sign
+# locally, and unlike AMO nothing is signed server-side either. The ZIP is the
+# artifact.
+
+on:
+  push:
+    tags:
+      - 'edge-v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit to build (defaults to current branch HEAD). No release is created on manual dispatch — the ZIP is uploaded as a workflow artifact only.'
+        required: false
+
+permissions:
+  contents: write # needed for the release step to create draft releases
+
+jobs:
+  release:
+    name: Build & attach Edge ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run jest tests with coverage (enforces thresholds)
+        run: npm run test:cov
+
+      - name: Verify tag matches manifest/package/lock versions (tag push only)
+        if: startsWith(github.ref, 'refs/tags/edge-v')
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#edge-v}"
+          MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
+          LOCK_PKG_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+          DRIFT=0
+          for v in "$MANIFEST_VERSION" "$PKG_VERSION" "$LOCK_VERSION" "$LOCK_PKG_VERSION"; do
+            [ "$TAG_VERSION" = "$v" ] || DRIFT=1
+          done
+          if [ "$DRIFT" = "1" ]; then
+            echo "::error::Version drift — tag=$TAG_VERSION manifest=$MANIFEST_VERSION package=$PKG_VERSION lock=$LOCK_VERSION lock.packages[\"\"]=$LOCK_PKG_VERSION. All four must equal the tag."
+            exit 1
+          fi
+          echo "Tag ↔ manifest/package/lock all match: $TAG_VERSION"
+
+      - name: Compute output paths
+        id: ver
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./manifest.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "zip_path=adhan-caster-pro-$VERSION-edge.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Pack Edge ZIP
+        run: |
+          set -euo pipefail
+          node scripts/pack-edge.mjs "${{ steps.ver.outputs.zip_path }}"
+          ls -la "${{ steps.ver.outputs.zip_path }}"
+
+      - name: Upload ZIP as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.ver.outputs.zip_path }}
+          path: ${{ steps.ver.outputs.zip_path }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Create draft GitHub Release with ZIP attached (tag push only)
+        if: startsWith(github.ref, 'refs/tags/edge-v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.ver.outputs.zip_path }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          name: ${{ github.ref_name }}
+
+      # Upload to Edge Add-ons and submit for review. Tag pushes only. No-ops
+      # (leaving the release succeeding) when the API secrets aren't configured,
+      # so the build/release pipeline keeps working before — or without — store
+      # automation. See .github/RELEASE_SETUP.md → "Automating Edge submission".
+      - name: Submit to Edge Add-ons (tag push only)
+        if: startsWith(github.ref, 'refs/tags/edge-v')
+        env:
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EDGE_PRODUCT_ID:-}" ] || [ -z "${EDGE_CLIENT_ID:-}" ] || [ -z "${EDGE_API_KEY:-}" ]; then
+            echo "::notice::Edge API secrets not set — skipping store submission. The ZIP is on the GitHub Release; upload it manually at Partner Center, or configure the secrets (see .github/RELEASE_SETUP.md) to automate this."
+            exit 0
+          fi
+          node scripts/submit-edge.mjs "${{ steps.ver.outputs.zip_path }}"

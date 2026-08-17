@@ -1,13 +1,14 @@
 name: Release tag guard
 
 # Bare `v*` tags USED to auto-submit to the LIVE Chrome Web Store. That trigger
-# is retired: Chrome releases now use `chrome-v*` (release.yml) and Firefox uses
-# `firefox-v*` (release-firefox.yml). A bare `v*` tag now triggers neither — this
+# is retired: Chrome releases now use `chrome-v*` (release.yml), Firefox uses
+# `firefox-v*` (release-firefox.yml) and Edge uses `edge-v*` (release-edge.yml).
+# A bare `v*` tag now triggers none of them — this
 # job exists only to FAIL LOUDLY on one, so a stale habit can't silently do
 # nothing, and the fix (re-tag with a prefix, delete the bare tag) is obvious.
 #
 # The `v[0-9]+...` pattern matches only tags that START with `v` + a digit, so it
-# never catches `chrome-v*` or `firefox-v*`.
+# never catches `chrome-v*`, `firefox-v*` or `edge-v*`.
 
 on:
   push:
@@ -22,5 +23,5 @@ jobs:
       - name: Explain the tag convention and fail
         run: |
           V="${GITHUB_REF_NAME#v}"
-          echo "::error::Bare tag '${GITHUB_REF_NAME}' is RETIRED and triggers no release. Use 'chrome-v${V}' to release to the Chrome Web Store, or 'firefox-v${V}' for Firefox/AMO. Then remove this tag: git push --delete origin ${GITHUB_REF_NAME} && git tag -d ${GITHUB_REF_NAME}"
+          echo "::error::Bare tag '${GITHUB_REF_NAME}' is RETIRED and triggers no release. Use 'chrome-v${V}' to release to the Chrome Web Store, 'firefox-v${V}' for Firefox/AMO, or 'edge-v${V}' for Edge Add-ons. Then remove this tag: git push --delete origin ${GITHUB_REF_NAME} && git tag -d ${GITHUB_REF_NAME}"
           exit 1

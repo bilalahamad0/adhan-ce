@@ -64,12 +64,25 @@ export const PACKED_BUILDINFO = 'export const DEV = false;\n';
 // Chrome name is longer, so the XPI packer passes a shorter Firefox name here;
 // the Chrome packers omit it and keep the full source name.
 //
+// opts.stripBackgroundScripts: drop `background.scripts` from the staged
+// manifest, leaving `service_worker` as the only entry point. Chrome tolerates
+// both keys (it just uses service_worker) and Firefox needs `scripts`, but Edge
+// VALIDATES MV3 strictly and rejects the package outright: "The
+// background.scripts field cannot be used with manifest version 3." So Edge
+// needs the exact mirror of the Firefox strip. Only the Edge packer passes this.
+//
+// opts.stripGecko: drop `browser_specific_settings` (the Firefox-only gecko id /
+// strict_min_version / data-collection block) from the staged manifest. Only the
+// Edge packer passes this — Chromium ignores the key, but shipping a Firefox
+// block in an Edge package is noise a store reviewer can query. Chrome keeps it:
+// the CRX and the CWS ZIP have always carried it harmlessly.
+//
 // opts.stripServiceWorker: drop `background.service_worker` from the staged
 // manifest. The shared manifest declares both that key (what Chrome runs) and
 // `background.scripts` (what Gecko runs); Firefox ignores the former and AMO
 // validation warns about it on every submission. Only the XPI packer passes
 // this — Chrome builds must keep the key. Returns stageDir.
-export async function stageExtension(stageDir, { manifestName, stripServiceWorker } = {}) {
+export async function stageExtension(stageDir, { manifestName, stripServiceWorker, stripGecko, stripBackgroundScripts } = {}) {
   // Fresh dir every run — avoids stale files from a previous pack.
   await rm(stageDir, { recursive: true, force: true });
   for (const rel of await runtimeFiles()) {
@@ -85,11 +98,13 @@ export async function stageExtension(stageDir, { manifestName, stripServiceWorke
   await writeFile(join(stageDir, 'lib', 'buildinfo.js'), PACKED_BUILDINFO);
   // Per-target manifest rewrites (Firefox only) — always on the staged copy,
   // never the committed source.
-  if (manifestName || stripServiceWorker) {
+  if (manifestName || stripServiceWorker || stripGecko || stripBackgroundScripts) {
     const mfPath = join(stageDir, 'manifest.json');
     const mf = JSON.parse(await readFile(mfPath, 'utf8'));
     if (manifestName) mf.name = manifestName;
     if (stripServiceWorker && mf.background) delete mf.background.service_worker;
+    if (stripBackgroundScripts && mf.background) delete mf.background.scripts;
+    if (stripGecko) delete mf.browser_specific_settings;
     await writeFile(mfPath, JSON.stringify(mf, null, 2) + '\n');
   }
   return stageDir;

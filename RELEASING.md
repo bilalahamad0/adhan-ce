@@ -1,6 +1,7 @@
 # Releasing Adhan Caster
 
-How to publish a new version to the Chrome Web Store and to Firefox/AMO.
+How to publish a new version to the Chrome Web Store, Firefox/AMO, and Microsoft
+Edge Add-ons.
 
 > **⚠️ Tag namespaces decide the store.** Releases are triggered by **prefixed**
 > tags, never a bare `v*`:
@@ -8,12 +9,14 @@ How to publish a new version to the Chrome Web Store and to Firefox/AMO.
 >   signs the CRX and submits to the **live Chrome Web Store**.
 > - **`firefox-v<version>`** → [`Release (Firefox)`](.github/workflows/release-firefox.yml):
 >   builds + AMO-signs the XPI and submits to **addons.mozilla.org**.
+> - **`edge-v<version>`** → [`Release (Edge)`](.github/workflows/release-edge.yml):
+>   builds the ZIP and submits to **Microsoft Edge Add-ons**.
 >
 > A bare `v<version>` tag is **retired** — it triggers no release and
 > [`release-tag-guard.yml`](.github/workflows/release-tag-guard.yml) fails it on
-> purpose. This keeps a Firefox release from ever touching the Chrome store and
-> vice versa. The two stores share one `manifest.json` version, so you can tag
-> the same commit `chrome-v2.1.0` and `firefox-v2.1.0`.
+> purpose. This keeps one store's release from ever touching another. All three
+> stores share one `manifest.json` version, so you can tag the same commit
+> `chrome-v2.1.0`, `firefox-v2.1.0` and `edge-v2.1.0`.
 
 > **Verified CRX uploads is enabled** on the Chrome listing. Every CWS upload
 > must be a `.crx` signed with the project's verified-uploads private key. Plain
@@ -197,6 +200,49 @@ you upload the XPI from the draft release manually. AMO review is publish-first
 (often minutes);
 **AMO version numbers are immutable** — a botched upload burns that number, so
 bump and re-tag rather than re-pushing.
+
+## 7. Edge Add-ons release
+
+Edge is Chromium, so the package is the Chrome one: same MV3 manifest, same
+`background.service_worker`, same runtime files. Two differences from Chrome:
+
+- **No signing key.** Edge takes a plain ZIP. There is nothing to sign locally
+  (no CRX key) and nothing signed server-side (unlike AMO).
+- **Two manifest keys are stripped.** `scripts/pack-edge.mjs` passes `stripGecko`
+  and `stripBackgroundScripts` to `stageExtension()`. The first removes
+  `browser_specific_settings` (cosmetic — Chromium ignores it). The second is
+  **required**: Edge validates MV3 strictly and rejects the upload with *"The
+  background.scripts field cannot be used with manifest version 3"* if `scripts`
+  rides along with `service_worker`. Chrome tolerates both keys and Firefox needs
+  `scripts`, so this is the exact mirror of the Firefox strip. Chrome's own build
+  keeps both.
+
+**Tag it.** The version-bump, test and merge steps are identical to Chrome
+(sections 1–3) — only the tag prefix differs:
+
+```bash
+git tag edge-v1.6.4 <merge-commit-sha>
+git push origin edge-v1.6.4
+```
+
+The [`Release (Edge)` workflow](.github/workflows/release-edge.yml) tests,
+verifies the tag matches the version, builds the ZIP, attaches it to a draft
+GitHub Release, and **submits it to Edge Add-ons for review** via
+`scripts/submit-edge.mjs`. Were the Edge secrets ever unset, the submit step
+no-ops instead and you upload the ZIP from the draft release manually at
+[Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/).
+
+Microsoft's review is slower than Google's for a new listing — hours to about a
+week. Unlike AMO, a rejected Edge submission does **not** burn the version
+number: you can fix and re-submit the same version.
+
+**First time only — create the listing.** Like AMO, Edge won't create a new
+product from the API. Register once at
+[Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/) (free —
+no developer fee, unlike Chrome's one-time $5), upload
+`npm run pack:edge`'s ZIP by hand to create the product, then copy its **product
+ID** (a GUID on the extension's Overview page — not the storefront URL slug) into
+the `EDGE_PRODUCT_ID` secret. After that every version is tag-driven.
 
 ## Common upload errors
 
