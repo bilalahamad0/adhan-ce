@@ -11,7 +11,7 @@ public [AlAdhan API](https://aladhan.com/prayer-times-api) (`api.aladhan.com`)
 and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
-**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
+**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[Edge](https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
 
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 
