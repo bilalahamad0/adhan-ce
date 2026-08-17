@@ -8,9 +8,9 @@
      <meta name="google-site-verification" content="YOUR_TOKEN"> (see docs/seo-search-console.md) -->
 
 <!-- Primary SEO -->
-<title>Adhan Caster — Muslim Prayer Times Chrome Extension that Auto-Pauses Media</title>
-<meta name="description" content="Free Chrome extension showing Muslim prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha) with a live Adhan countdown — and it auto-pauses video & audio in every tab at salah. No ads, no tracking, open source.">
-<meta name="keywords" content="adhan, azan, muslim prayer times, prayer times chrome extension, salah, namaz, prayer reminder, islamic, adhan extension, prayer countdown, fajr dhuhr asr maghrib isha">
+<title>Adhan Caster: Prayer Times Chrome Extension + Firefox &amp; Edge</title>
+<meta name="description" content="Free extension for Chrome, Firefox and Edge: Muslim prayer times with a live Adhan countdown that auto-pauses video and audio in every tab at salah.">
+<meta name="keywords" content="adhan, azan, muslim prayer times, prayer times chrome extension, prayer times firefox addon, prayer times edge extension, salah, namaz, prayer reminder, islamic, adhan extension, prayer countdown, fajr dhuhr asr maghrib isha">
 <meta name="author" content="Bilal Ahamad">
 <meta name="theme-color" content="#0f7a52">
 <link rel="canonical" href="https://adhan.bilalahamad.com/">
@@ -42,13 +42,27 @@
   "@type": "SoftwareApplication",
   "name": "Adhan Caster",
   "applicationCategory": "BrowserApplication",
-  "operatingSystem": "Chrome, Microsoft Edge",
-  "description": "Free Chrome extension that shows Muslim prayer times with a live Adhan countdown and automatically pauses video and audio in every browser tab at prayer time.",
+  "operatingSystem": "Windows, macOS, Linux, ChromeOS",
+  "browserRequirements": "Requires Google Chrome, Mozilla Firefox, or Microsoft Edge",
+  "description": "Free browser extension for Chrome, Firefox and Microsoft Edge that shows Muslim prayer times with a live Adhan countdown and automatically pauses video and audio in every browser tab at prayer time.",
   "url": "https://adhan.bilalahamad.com/",
-  "downloadUrl": "https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia",
-  "softwareVersion": "2.0.0",
+  "installUrl": "https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia",
+  "softwareVersion": "2.0.3",
   "isAccessibleForFree": true,
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "sameAs": [
+    "https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia",
+    "https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/",
+    "https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg",
+    "https://github.com/bilalahamad0/adhan-ce"
+  ],
+  "offers": [
+    { "@type": "Offer", "price": "0", "priceCurrency": "USD", "url": "https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia",
+      "seller": { "@type": "Organization", "name": "Chrome Web Store" } },
+    { "@type": "Offer", "price": "0", "priceCurrency": "USD", "url": "https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/",
+      "seller": { "@type": "Organization", "name": "Firefox Add-ons" } },
+    { "@type": "Offer", "price": "0", "priceCurrency": "USD", "url": "https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg",
+      "seller": { "@type": "Organization", "name": "Microsoft Edge Add-ons" } }
+  ],
   "author": { "@type": "Person", "name": "Bilal Ahamad" }
 }
 </script>
@@ -60,13 +74,15 @@
   "@type": "FAQPage",
   "mainEntity": [
     { "@type": "Question", "name": "Is Adhan Caster free?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Adhan Caster is completely free and open source. There are no ads, no subscriptions, and no account required." } },
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes \u2014 completely free and open source (MIT). No ads, no subscriptions, no premium tier, and no account required." } },
     { "@type": "Question", "name": "Does it really pause video and audio in every tab?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The instant the Adhan begins, it pauses any playing video or audio across all of your open Chrome tabs, then resumes with one click or automatically after a delay you choose." } },
-    { "@type": "Question", "name": "Is my location or data tracked?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. There is no analytics and no tracking. Your settings and location stay on your device. The only data sent off-device is the city you pick (to look up prayer times) and the location text you type when searching (to find matching places)." } },
-    { "@type": "Question", "name": "Which prayer times does it show?",
-      "acceptedAnswer": { "@type": "Answer", "text": "All five daily prayers: Fajr, Dhuhr, Asr, Maghrib, and Isha, with a live countdown to the next one." } }
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The instant the Adhan begins, it pauses any playing video or audio across all of your open browser tabs, including content inside iframes. You can resume with one click or have it auto-resume after a delay you choose." } },
+    { "@type": "Question", "name": "Is my location or browsing tracked?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. There is no analytics and no tracking of any kind. Your settings and location stay on your device. The only things sent off-device are the city you pick (to fetch prayer times) and the location text you type when searching (to find places)." } },
+    { "@type": "Question", "name": "Which prayers and calculation does it use?",
+      "acceptedAnswer": { "@type": "Answer", "text": "It shows all five daily prayers \u2014 Fajr, Dhuhr, Asr, Maghrib, and Isha \u2014 using an Aladhan-based prayer-time service, calculated for the city you select." } },
+    { "@type": "Question", "name": "Does it work on Edge or Firefox?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes \u2014 Adhan Caster is published on all three stores: the Chrome Web Store, Firefox Add-ons, and Microsoft Edge Add-ons. It's the same Manifest V3 extension and the same version (2.0.3) on every store." } }
   ]
 }
 </script>
@@ -168,18 +184,53 @@
   .foot-inner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
   footer a{color:var(--muted);text-decoration:none;margin-left:18px}
   footer a:hover{color:var(--ink)}
+
+  /* ── Multi-store install CTAs: Chrome · Firefox · Edge ─────────── */
+
+  /* Hero: secondary "Also on ..." line under the primary CTA. */
+  .also-on{max-width:520px;margin:16px auto 0;font-size:14px;font-weight:600;color:var(--muted)}
+  .also-on a{color:var(--green-dark);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}
+  .also-on a:hover{text-decoration-thickness:2.5px}
+  /* The hero sits on the dark gradient, where --green-dark is unreadable. */
+  .hero .also-on{color:rgba(255,255,255,.68)}
+  .hero .also-on a{color:#9df0cd}
+
+  /* Final CTA: three equal store buttons. The transparent border keeps the
+     primary and ghost boxes the same size so the row stays even. */
+  .install-row{gap:12px}
+  .btn-store{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:156px;padding:10px 22px;line-height:1.2;border:1.5px solid transparent}
+  .btn-store .store-eyebrow{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;opacity:.95}
+  .btn-store .store-name{font-size:17px;font-weight:800;letter-spacing:-.01em}
+  .store-note{max-width:520px;margin:16px auto 0;font-size:14px;font-weight:600;color:var(--muted);text-align:center}
+
+  /* Phones: Chrome full-width on its own row, Firefox + Edge paired beneath. */
+  @media(max-width:560px){
+    .install-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:340px;margin-left:auto;margin-right:auto}
+    .install-row .btn-store{min-width:0;padding:10px 12px}
+    .install-row .btn-store:first-child{grid-column:1 / -1}
+  }
+
+  /* Pre-existing bug, not caused by this change: .trust is 415px of content in
+     a 335px box at 375px and .hero{overflow:hidden} silently clips it, so
+     "✓ Manifest V3" is invisible on every phone today. */
+  .trust{display:flex;flex-wrap:wrap;justify-content:center}
+
+  /* The page had no focus styles at all; these are the first. */
+  .btn:focus-visible,.also-on a:focus-visible,footer a:focus-visible{outline:3px solid var(--green-dark);outline-offset:3px}
+  .hero .btn:focus-visible,.hero .also-on a:focus-visible{outline-color:#9df0cd}
+  @media(prefers-reduced-motion:reduce){.btn{transition:none}.btn:hover{transform:none}}
 </style>
 </head>
 <body>
 
 <header class="nav">
   <div class="wrap nav-inner">
-    <a class="brand" href="/adhan-ce/"><img src="icon128.png" alt="Adhan Caster logo">Adhan Caster</a>
+    <a class="brand" href="/"><img src="icon128.png" alt="Adhan Caster logo">Adhan Caster</a>
     <nav class="nav-links">
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
       <a href="#faq">FAQ</a>
-      <a class="btn btn-primary nav-cta" href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=nav">Add to Chrome</a>
+      <a class="btn btn-primary nav-cta" href="https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=nav&utm_content=chrome">Add to Chrome</a>
     </nav>
   </div>
 </header>
@@ -189,11 +240,12 @@
     <div class="wrap">
       <span class="badge">🕌 Free &amp; open source · Privacy-first</span>
       <h1>Never miss a prayer,<br>even <span class="hl">mid-stream</span>.</h1>
-      <p class="sub">Adhan Caster shows your <strong>Muslim prayer times</strong> with a live countdown — and the moment the <strong>Adhan</strong> begins, it automatically pauses video &amp; audio in <strong>every Chrome tab</strong>.</p>
+      <p class="sub">Adhan Caster shows your <strong>Muslim prayer times</strong> with a live countdown — and the moment the <strong>Adhan</strong> begins, it automatically pauses video &amp; audio in <strong>every browser tab</strong>.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=hero">Add to Chrome — it's free</a>
+        <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=hero&utm_content=chrome">Add to Chrome — it's free</a>
         <a class="btn btn-ghost" href="https://github.com/bilalahamad0/adhan-ce">View source on GitHub</a>
       </div>
+      <p class="also-on">Also on <a href="https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=landing&utm_medium=hero-alt&utm_content=firefox">Firefox</a> and <a href="https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg?utm_source=landing&utm_medium=hero-alt&utm_content=edge">Microsoft Edge</a> — same extension, same features.</p>
       <p class="trust"><span>✓ No ads</span><span>✓ No account</span><span>✓ No analytics</span><span>✓ Manifest V3</span></p>
       <div class="hero-shot">
         <img src="store/screenshot-1.png" alt="Adhan Caster showing the five daily prayer times with a live countdown to the next salah" width="1280" height="800" loading="eager">
@@ -261,18 +313,32 @@
       <h2>Frequently asked questions</h2>
       <p class="lead">Quick answers before you install.</p>
       <details open><summary>Is Adhan Caster free?</summary><p>Yes — completely free and open source (MIT). No ads, no subscriptions, no premium tier, and no account required.</p></details>
-      <details><summary>Does it really pause video and audio in every tab?</summary><p>Yes. The instant the Adhan begins, it pauses any playing video or audio across all of your open Chrome tabs, including content inside iframes. You can resume with one click or have it auto-resume after a delay you choose.</p></details>
+      <details><summary>Does it really pause video and audio in every tab?</summary><p>Yes. The instant the Adhan begins, it pauses any playing video or audio across all of your open browser tabs, including content inside iframes. You can resume with one click or have it auto-resume after a delay you choose.</p></details>
       <details><summary>Is my location or browsing tracked?</summary><p>No. There is no analytics and no tracking of any kind. Your settings and location stay on your device. The only things sent off-device are the city you pick (to fetch prayer times) and the location text you type when searching (to find places).</p></details>
       <details><summary>Which prayers and calculation does it use?</summary><p>It shows all five daily prayers — Fajr, Dhuhr, Asr, Maghrib, and Isha — using an Aladhan-based prayer-time service, calculated for the city you select.</p></details>
-      <details><summary>Does it work on Edge or Firefox?</summary><p>It's built for Chrome (Manifest V3) and works on Chromium browsers. Edge and Firefox builds are on the roadmap — star the GitHub repo to follow along.</p></details>
+      <details><summary>Does it work on Edge or Firefox?</summary><p>Yes — Adhan Caster is published on all three stores: the <a href="https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=faq&utm_content=chrome">Chrome Web Store</a>, <a href="https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=landing&utm_medium=faq&utm_content=firefox">Firefox Add-ons</a>, and <a href="https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg?utm_source=landing&utm_medium=faq&utm_content=edge">Microsoft Edge Add-ons</a>. It's the same Manifest V3 extension and the same version (2.0.3) on every store.</p></details>
     </div>
   </section>
 
   <section class="final">
     <div class="wrap">
       <h2>Pray on time, even on a busy day.</h2>
-      <p class="lead">Add Adhan Caster to Chrome and let your browser remember the Adhan for you.</p>
-      <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=footer">Add to Chrome — it's free</a>
+      <p class="lead">Add Adhan Caster to Chrome, Firefox, or Edge and let your browser remember the Adhan for you.</p>
+      <div class="cta-row install-row">
+        <a class="btn btn-primary btn-store" href="https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=footer&utm_content=chrome">
+          <span class="store-eyebrow">Add to</span>
+          <span class="store-name">Chrome</span>
+        </a>
+        <a class="btn btn-ghost btn-store" href="https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=landing&utm_medium=footer&utm_content=firefox">
+          <span class="store-eyebrow">Add to</span>
+          <span class="store-name">Firefox</span>
+        </a>
+        <a class="btn btn-ghost btn-store" href="https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg?utm_source=landing&utm_medium=footer&utm_content=edge">
+          <span class="store-eyebrow">Add to</span>
+          <span class="store-name">Edge</span>
+        </a>
+      </div>
+      <p class="store-note">Free and open source — the same extension on Chrome, Firefox and Edge. No account, no ads.</p>
     </div>
   </section>
 </main>
@@ -281,7 +347,9 @@
   <div class="wrap foot-inner">
     <div>© Adhan Caster · Made with care for the Ummah 🤲</div>
     <nav>
-      <a href="https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia">Chrome Web Store</a>
+      <a href="https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=landing&utm_medium=footer-link&utm_content=chrome">Chrome</a>
+      <a href="https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=landing&utm_medium=footer-link&utm_content=firefox">Firefox</a>
+      <a href="https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg?utm_source=landing&utm_medium=footer-link&utm_content=edge">Edge</a>
       <a href="https://github.com/bilalahamad0/adhan-ce">GitHub</a>
       <a href="privacy-policy.html">Privacy</a>
     </nav>
