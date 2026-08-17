@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Render the Microsoft Edge promotional tiles from docs/promo-tiles.html using
-# headless Chrome. Outputs docs/store/promo-small-440x280.png (small tile) and
+# headless Chrome.
+#
+# NOTE: the star field is seeded so the tiles LOOK identical run to run, but the
+# output PNGs are not byte-reproducible — Chrome's font rasterisation and PNG
+# encoder (plus the sips downscale) drift a few hundred bytes between runs. Only
+# re-render when the design changes, or you commit a binary diff for nothing. Outputs docs/store/promo-small-440x280.png (small tile) and
 # docs/store/promo-large-1400x560.png (large tile). Same 2x-then-downscale trick
 # as make-store-shots.sh so the web fonts land crisp.
 set -euo pipefail

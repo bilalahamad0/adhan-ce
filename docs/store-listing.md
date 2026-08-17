@@ -149,8 +149,12 @@ screenshots:
 | Large promotional tile | 1400x560 | `docs/store/promo-large-1400x560.png` |
 
 Both reuse the in-page focus overlay's gradient and star field so the store art and
-the product read as the same thing. The star positions are seeded, so re-rendering
-produces identical files rather than noisy diffs.
+the product read as the same thing. The star positions come from a seeded PRNG, so
+the tiles *look* identical run to run — but the PNGs are **not** byte-reproducible:
+headless Chrome's font rasterisation and PNG encoding (and the `sips` downscale)
+vary by a few hundred bytes between runs. Re-render only when the design actually
+changes; a re-render for its own sake just produces a binary diff with no visible
+difference.
 
 > Adding these to a **published** listing requires submitting an update, which puts
 > the extension through certification again. Cheaper to let them ride along with the
