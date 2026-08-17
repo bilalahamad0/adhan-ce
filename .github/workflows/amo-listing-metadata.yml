@@ -1,0 +1,83 @@
+name: AMO listing metadata
+
+# Sets the Homepage field on the live AMO listing via the addons.mozilla.org API.
+#
+# Why a workflow rather than a local script: AMO reveals an API secret exactly
+# once, at generation time. The working secret therefore only survives in this
+# repo's Actions secrets (AMO_JWT_SECRET), where it is write-only — no one can
+# read it back out, but a job can use it. Running this here avoids revoking and
+# regenerating credentials, which would break release-firefox.yml until the
+# secret was replaced.
+#
+# Touches listing METADATA only. It cannot upload, sign, or publish a version —
+# the AMO version endpoints are not called anywhere in this workflow.
+#
+# Manual dispatch only, and dry_run defaults to true, so an accidental run
+# prints the request and sends nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      homepage:
+        description: 'Homepage URL to store on the AMO listing (empty string clears it)'
+        required: false
+        default: 'https://adhan.bilalahamad.com/'
+      dry_run:
+        description: 'Print the request without sending it'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  set-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check credentials are configured
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "${AMO_JWT_ISSUER:-}" ] || [ -z "${AMO_JWT_SECRET:-}" ]; then
+            echo "::error::AMO_JWT_ISSUER / AMO_JWT_SECRET are not set on this repository. See .github/RELEASE_SETUP.md."
+            exit 1
+          fi
+          echo "AMO credentials present."
+
+      # The secret reaches the script through the environment only, so it never
+      # appears on a command line or in the run log.
+      - name: Set AMO listing metadata
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          AMO_HOMEPAGE: ${{ inputs.homepage }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node scripts/set-amo-metadata.mjs
+
+      - name: Verify against the public API
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          sleep 5
+          curl -sS "https://addons.mozilla.org/api/v5/addons/addon/adhan-caster-prayer-times/" \
+            | node -e "
+              let raw = '';
+              process.stdin.on('data', c => (raw += c)).on('end', () => {
+                const d = JSON.parse(raw);
+                const hp = d.homepage?.url?.['en-US'] ?? d.homepage?.['en-US'] ?? d.homepage ?? null;
+                console.log('public API homepage:', JSON.stringify(hp));
+                const want = process.env.WANT;
+                if (want && hp !== want) {
+                  console.log('::warning::Public API has not caught up yet (CDN cache). Re-check in a few minutes.');
+                }
+              });
+            "
+        env:
+          WANT: ${{ inputs.homepage }}
