@@ -1,15 +1,17 @@
-# Adhan Caster Pro — Chrome Extension
+# Adhan Caster Pro — Browser Extension
 
 Upcoming Islamic prayer times with a live countdown, and **automatic pausing of
 media in every Chrome tab** at Adhan time — with an optional full-screen "prayer
 focus" screen.
 
-It's a standalone Chrome extension. It fetches prayer times directly from the
+It's a standalone browser extension — published on the Chrome Web Store,
+Firefox Add-ons and Microsoft Edge Add-ons from this one MV3 codebase. It
+fetches prayer times directly from the
 public [AlAdhan API](https://aladhan.com/prayer-times-api) (`api.aladhan.com`)
 and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
-**[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
+**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[Edge](https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
 
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 
@@ -37,7 +39,8 @@ Every push and pull request runs the suite on Linux, **Windows and macOS** (see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) so the timezone, DST and
 locale-formatting paths are verified on each OS the extension ships to.
 
-To publish a new version to the Chrome Web Store, see [RELEASING.md](RELEASING.md).
+To publish a new version to the Chrome Web Store, Firefox/AMO or Microsoft Edge
+Add-ons, see [RELEASING.md](RELEASING.md).
 
 ## Load it (unpacked)
 
