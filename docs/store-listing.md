@@ -136,6 +136,26 @@ Screenshots are downscaled to 640×400, so use **large text and one idea per ima
 
 ---
 
+## 7b. Promotional tiles (Edge only)
+
+Microsoft Edge Add-ons has two optional promotional images the other stores don't;
+they're what Edge uses if it ever features the extension. Rendered by
+`npm run tiles` from `docs/promo-tiles.html`, same headless-Chrome pipeline as the
+screenshots:
+
+| Tile | Size | File |
+| --- | --- | --- |
+| Small promotional tile | 440x280 | `docs/store/promo-small-440x280.png` |
+| Large promotional tile | 1400x560 | `docs/store/promo-large-1400x560.png` |
+
+Both reuse the in-page focus overlay's gradient and star field so the store art and
+the product read as the same thing. The star positions are seeded, so re-rendering
+produces identical files rather than noisy diffs.
+
+> Adding these to a **published** listing requires submitting an update, which puts
+> the extension through certification again. Cheaper to let them ride along with the
+> next version bump than to spend a review cycle on artwork alone.
+
 ## 8. Pre-publish checklist
 
 - [ ] Title updated (re-upload the new `manifest.json`)

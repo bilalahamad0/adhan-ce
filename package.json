@@ -36,7 +36,8 @@
     "submit:edge": "node scripts/submit-edge.mjs",
     "icons": "node icons/generate-icons.cjs",
     "demo": "bash docs/make-demo.sh",
-    "shots": "bash docs/make-store-shots.sh"
+    "shots": "bash docs/make-store-shots.sh",
+    "tiles": "bash docs/make-promo-tiles.sh"
   },
   "devDependencies": {
     "addons-linter": "^10.6.0",
