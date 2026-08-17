@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Adhan Caster — Edge promotional tiles</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600;700;800&display=swap');
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; background: #062a20; }
+      .serif { font-family: 'Fraunces', Georgia, serif; }
+      .tile { display: none; position: relative; overflow: hidden; color: #fff;
+              /* the prayer overlay's own gradient, so the tiles read as the product */
+              background: radial-gradient(55% 55% at 50% 40%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); }
+      body[data-tile="small"] #small, body[data-tile="large"] #large { display: flex; }
+
+      /* drifting stars, same motif as the in-page focus overlay */
+      .stars { position: absolute; inset: 0; }
+      .star { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.85); }
+
+      /* icon128.png already IS a rounded green square — wrapping it in another
+         panel reads as a box inside a box, so the mark is just the art plus a
+         drop shadow to lift it off the gradient. */
+      .mark { position: relative; display: grid; place-items: center; }
+      .mark img { width: 100%; height: 100%; border-radius: 24%;
+                  filter: drop-shadow(0 12px 30px rgba(0,0,0,.38)); }
+
+      #small { width: 440px; height: 280px; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 26px; text-align: center; }
+      #small .mark { width: 74px; height: 74px; }
+      #small h1 { font-size: 27px; font-weight: 800; letter-spacing: -.4px; line-height: 1.1; }
+      #small .tag { font-size: 15px; font-style: italic; opacity: .93; }
+
+      #large { width: 1400px; height: 560px; align-items: center; gap: 64px; padding: 0 96px; }
+      #large .mark { width: 190px; height: 190px; flex: 0 0 auto; }
+      #large h1 { font-size: 76px; font-weight: 800; letter-spacing: -1.6px; line-height: 1.03; }
+      #large .tag { font-size: 34px; margin-top: 14px; opacity: .95; }
+      #large .chips { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
+      #large .chip { font-size: 17px; font-weight: 600; padding: 10px 18px; border-radius: 999px;
+                     background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.20); }
+    </style>
+  </head>
+  <body data-tile="small">
+    <section class="tile" id="small">
+      <div class="stars"></div>
+      <div class="mark"><img src="../icons/icon128.png" alt="" /></div>
+      <h1>Adhan Caster</h1>
+      <div class="tag serif">Pause every tab for prayer.</div>
+    </section>
+
+    <section class="tile" id="large">
+      <div class="stars"></div>
+      <div class="mark"><img src="../icons/icon128.png" alt="" /></div>
+      <div>
+        <h1>Adhan Caster</h1>
+        <div class="tag serif"><i>Pause every tab for prayer.</i></div>
+        <div class="chips">
+          <span class="chip">🕌 Five prayers + Sunrise</span>
+          <span class="chip">⏸️ Auto-pause every tab</span>
+          <span class="chip">🔒 No ads, no tracking</span>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      const p = new URLSearchParams(location.search);
+      document.body.dataset.tile = p.get('tile') || 'small';
+      // deterministic star field — same seed every render, so tiles are reproducible
+      let seed = 7;
+      const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+      for (const box of document.querySelectorAll('.stars')) {
+        for (let i = 0; i < 34; i++) {
+          const s = document.createElement('span');
+          const size = 1.4 + rnd() * 2.6;
+          s.className = 'star';
+          s.style.cssText = `left:${(rnd()*100).toFixed(2)}%;top:${(rnd()*100).toFixed(2)}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;opacity:${(0.25+rnd()*0.6).toFixed(2)}`;
+          box.appendChild(s);
+        }
+      }
+    </script>
+  </body>
+</html>
