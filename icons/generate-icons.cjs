@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Dependency-free PNG icon generator for Adhan Caster Pro.
+ * Dependency-free PNG icon generator for Adhan Caster.
  * Renders a crescent + sparkle on a green rounded square at 16/48/128 px
  * using only Node's built-in zlib. Re-run with `node generate-icons.cjs`.
  */

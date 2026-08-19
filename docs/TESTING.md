@@ -1,6 +1,6 @@
 # Testing & Chrome Web Store qualification
 
-How to verify Adhan Caster Pro before publishing a production build.
+How to verify Adhan Caster before publishing a production build.
 
 ## Automated tests
 

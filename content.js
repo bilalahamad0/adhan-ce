@@ -1,4 +1,4 @@
-// Adhan Caster Pro — content script (runs in every frame).
+// Adhan Caster — content script (runs in every frame).
 // Top visible frame: renders the bottom-right T-15s countdown overlay, the
 // "media paused" card, and (opt-in) the full-screen prayer focus overlay.
 // Every frame: pauses/resumes its own <video>/<audio> when prayer time hits.

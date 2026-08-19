@@ -1,5 +1,5 @@
 ---
-title: "Adhan Caster Pro"
+title: "Adhan Caster"
 slug: "adhan-caster-pro"
 tagline: "A privacy-first Chrome extension that pauses media in every tab at prayer time."
 date: "2026-05-24"
@@ -21,7 +21,7 @@ links:
 cover: "./demo.gif"
 ---
 
-> **TL;DR** — Adhan Caster Pro is a Chrome extension that shows a live countdown to
+> **TL;DR** — Adhan Caster is a Chrome extension that shows a live countdown to
 > the next Islamic prayer and, the moment the Adhan begins, **pauses video and audio
 > across every open tab** — with an optional full-screen "prayer focus" screen and
 > automatic resume afterward. It's built on Manifest V3, ships zero runtime

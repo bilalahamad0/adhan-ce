@@ -1,4 +1,4 @@
-# Adhan Caster Pro — Browser Extension
+# Adhan Caster — Browser Extension
 
 Upcoming Islamic prayer times with a live countdown, and **automatic pausing of
 media in every Chrome tab** at Adhan time — with an optional full-screen "prayer
