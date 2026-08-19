@@ -23,7 +23,7 @@
 //   CWS_CLIENT_SECRET    OAuth2 client secret
 //   CWS_REFRESH_TOKEN    OAuth2 refresh token with the chromewebstore scope
 //   CWS_EXTENSION_ID     the published item's ID
-//                        (defaults to the known Adhan Caster Pro ID below)
+//                        (defaults to the known Adhan Caster ID below)
 //
 // Locally these come from a gitignored .env; in CI they come from repo secrets.
 // See .github/RELEASE_SETUP.md for how to obtain the OAuth credentials once.
@@ -64,7 +64,7 @@ function loadDotEnv() {
   }
 }
 
-// Published Adhan Caster Pro item ID (public — it's in the store URL/README).
+// Published Adhan Caster item ID (public — it's in the store URL/README).
 // Overridable via env so this script isn't hard-wired to one listing.
 const DEFAULT_EXTENSION_ID = 'jfjknglldcdminelckmmfdbnlikiogia';
 

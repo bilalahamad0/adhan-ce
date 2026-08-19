@@ -1,4 +1,4 @@
-// Adhan Caster Pro — background service worker (MV3)
+// Adhan Caster — background service worker (MV3)
 // Fetches the prayer schedule, fires the desktop notification + cross-tab media
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.

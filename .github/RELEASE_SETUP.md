@@ -59,7 +59,7 @@ The workflow fires on the tag push. When it finishes:
 
 - **Releases** tab → a draft release named `v1.6.4` with `adhan-caster-pro-1.6.4.crx` attached.
 - Review the auto-generated notes, edit if needed, click **Publish**.
-- Upload the same `.crx` to the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster Pro → Package → Upload new package → Submit for review.
+- Upload the same `.crx` to the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster → Package → Upload new package → Submit for review.
 
 ## Rotating the secret
 
@@ -117,7 +117,7 @@ required + one optional:
 | `CWS_CLIENT_ID` | OAuth client ID from step 3 |
 | `CWS_CLIENT_SECRET` | OAuth client secret from step 3 |
 | `CWS_REFRESH_TOKEN` | Refresh token from step 4 |
-| `CWS_EXTENSION_ID` | _(optional)_ item ID — defaults to the published Adhan Caster Pro ID |
+| `CWS_EXTENSION_ID` | _(optional)_ item ID — defaults to the published Adhan Caster ID |
 
 ### Test it without cutting a release
 
