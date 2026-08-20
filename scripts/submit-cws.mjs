@@ -10,7 +10,7 @@
 //   node scripts/submit-cws.mjs <path-to.crx> [--dry-run] [--no-publish]
 //
 //   <path-to.crx>   the signed CRX to ship. Defaults to
-//                   ./adhan-caster-pro-<manifest.version>.crx (repo root).
+//                   ./adhan-caster-<manifest.version>.crx (repo root).
 //   --dry-run       validate the CRX + config and exit. Makes NO network calls
 //                   and needs NO credentials — safe to run anywhere, including
 //                   CI smoke tests. This is the only path that can be exercised
@@ -142,7 +142,7 @@ async function uploadCrx({ token, extId, crx }) {
       Authorization: `Bearer ${token}`,
       'x-goog-api-version': '2',
       'X-Goog-Upload-Protocol': 'raw',
-      'X-Goog-Upload-File-Name': `adhan-caster-pro.crx`,
+      'X-Goog-Upload-File-Name': `adhan-caster.crx`,
       'Content-Type': 'application/octet-stream',
     },
     body: crx.buf,
@@ -191,7 +191,7 @@ async function main() {
 
   const version = await manifestVersion();
   const crxPath = resolve(
-    positional[0] || join(REPO, `adhan-caster-pro-${version}.crx`)
+    positional[0] || join(REPO, `adhan-caster-${version}.crx`)
   );
   const extId = process.env.CWS_EXTENSION_ID || DEFAULT_EXTENSION_ID;
 

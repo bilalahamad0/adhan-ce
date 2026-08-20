@@ -10,7 +10,7 @@ name: Release (Chrome)
 # Chrome Web Store can never be hit by an ambiguous tag.
 #
 # Required repo secret:
-#   CRX_PRIVATE_KEY_B64 — base64-encoded contents of adhan-caster-pro-private.pem.
+#   CRX_PRIVATE_KEY_B64 — base64-encoded contents of adhan-caster-private.pem.
 #                         See .github/RELEASE_SETUP.md for one-time setup.
 
 on:
@@ -73,7 +73,7 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p "require('./manifest.json').version")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "crx_path=adhan-caster-pro-$VERSION.crx" >> "$GITHUB_OUTPUT"
+          echo "crx_path=adhan-caster-$VERSION.crx" >> "$GITHUB_OUTPUT"
 
       - name: Decode private key
         env:
@@ -90,7 +90,7 @@ jobs:
           # Sanity check: decoded bytes look like a PEM
           if ! head -1 key.pem | grep -q "BEGIN"; then
             echo "::error::Decoded CRX_PRIVATE_KEY_B64 does not look like a PEM file."
-            echo "::error::Re-encode with: base64 -i adhan-caster-pro-private.pem | pbcopy"
+            echo "::error::Re-encode with: base64 -i adhan-caster-private.pem | pbcopy"
             exit 1
           fi
 

@@ -2,7 +2,7 @@
 //
 // Usage:
 //   node scripts/pack-xpi.mjs [outPath]
-//   outPath  defaults to ./adhan-caster-pro-<manifest.version>.xpi (repo root)
+//   outPath  defaults to ./adhan-caster-<manifest.version>.xpi (repo root)
 //
 // Unlike the Chrome CRX there is NO local signing key — AMO signs XPIs
 // server-side (web-ext sign / the addons.mozilla.org API, wired up in Phase 3).
@@ -31,7 +31,7 @@ export const FIREFOX_NAME = 'Adhan Caster: Muslim Prayer Times & Autopause';
 
 export async function packXpi(outPath) {
   const version = JSON.parse(await readFile(join(REPO, 'manifest.json'), 'utf8')).version;
-  const xpiPath = resolve(outPath || join(REPO, `adhan-caster-pro-${version}.xpi`));
+  const xpiPath = resolve(outPath || join(REPO, `adhan-caster-${version}.xpi`));
 
   // stripServiceWorker: Gecko runs background.scripts and ignores
   // background.service_worker, which AMO validation flags on every submission.

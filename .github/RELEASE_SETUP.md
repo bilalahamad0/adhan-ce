@@ -12,14 +12,14 @@ section at the bottom of this file.)
 
 ## 1. Encode the private key
 
-Locally, with `adhan-caster-pro-private.pem` accessible:
+Locally, with `adhan-caster-private.pem` accessible:
 
 ```bash
 # macOS — copies the base64 string to your clipboard
-base64 -i adhan-caster-pro-private.pem | pbcopy
+base64 -i adhan-caster-private.pem | pbcopy
 
 # Linux
-base64 -w 0 adhan-caster-pro-private.pem
+base64 -w 0 adhan-caster-private.pem
 ```
 
 The output is a single long base64 string. Anything in it can recreate the
@@ -57,7 +57,7 @@ git push origin v1.6.4
 
 The workflow fires on the tag push. When it finishes:
 
-- **Releases** tab → a draft release named `v1.6.4` with `adhan-caster-pro-1.6.4.crx` attached.
+- **Releases** tab → a draft release named `v1.6.4` with `adhan-caster-1.6.4.crx` attached.
 - Review the auto-generated notes, edit if needed, click **Publish**.
 - Upload the same `.crx` to the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster → Package → Upload new package → Submit for review.
 
@@ -124,9 +124,9 @@ required + one optional:
 Locally, copy `.env.example` → `.env`, fill in the same four values, then:
 
 ```bash
-npm run submit:cws -- adhan-caster-pro-<version>.crx --dry-run   # validate, no network
-npm run submit:cws -- adhan-caster-pro-<version>.crx --no-publish # upload only, you submit in the dashboard
-npm run submit:cws -- adhan-caster-pro-<version>.crx              # upload + submit for review
+npm run submit:cws -- adhan-caster-<version>.crx --dry-run   # validate, no network
+npm run submit:cws -- adhan-caster-<version>.crx --no-publish # upload only, you submit in the dashboard
+npm run submit:cws -- adhan-caster-<version>.crx              # upload + submit for review
 ```
 
 `.env` is gitignored. A refresh token is as sensitive as a password — anyone

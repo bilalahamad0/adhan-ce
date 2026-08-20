@@ -35,7 +35,7 @@ There are two release paths:
 
 ## Prerequisites (one-time)
 
-You need the verified-uploads private key: `adhan-caster-pro-private.pem`.
+You need the verified-uploads private key: `adhan-caster-private.pem`.
 
 - It is **not in this repo** (and never should be — `*.pem` is gitignored).
 - Stored in: _\<password manager entry name + offline backup location\>_ —
@@ -99,12 +99,12 @@ GitHub Release notes. Skip to [Wait for review](#wait-for-review).
 **Otherwise, submit manually:**
 
 1. **Releases** tab → draft `chrome-v1.6.4` → review the auto-generated notes → **Publish**
-2. Download `adhan-caster-pro-1.6.4.crx` from the release's attached assets
+2. Download `adhan-caster-1.6.4.crx` from the release's attached assets
 3. [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster → **Package** → **Upload new package** → pick the CRX → **Submit for review**
 
    Or from your machine, with the OAuth `.env` set up:
    ```bash
-   npm run submit:cws -- adhan-caster-pro-1.6.4.crx
+   npm run submit:cws -- adhan-caster-1.6.4.crx
    ```
 
 ## Manual fallback (pack locally)
@@ -115,10 +115,10 @@ Use when GitHub Actions is down, or you need to test a build before tagging.
 
 ```bash
 npm ci
-npm run pack:crx /path/to/adhan-caster-pro-private.pem
+npm run pack:crx /path/to/adhan-caster-private.pem
 ```
 
-Drops `adhan-caster-pro-<manifest.version>.crx` at the repo root. Same
+Drops `adhan-caster-<manifest.version>.crx` at the repo root. Same
 [`scripts/pack-crx.mjs`](scripts/pack-crx.mjs) the CI workflow uses, so the
 output is byte-identical to what CI would produce.
 
@@ -127,7 +127,7 @@ output is byte-identical to what CI would produce.
 1. `chrome://extensions` → **Developer mode** on (top right)
 2. **Pack extension**
 3. **Extension root directory**: the repo folder (`/path/to/adhan-ce`)
-4. **Private key file**: path to `adhan-caster-pro-private.pem`
+4. **Private key file**: path to `adhan-caster-private.pem`
 5. **Pack extension**
 
 Produces `adhan-ce.crx` next to the repo folder. **Do not** use the
@@ -171,7 +171,7 @@ packer; the Chrome name is untouched).
 > listing came to exist, and as the recipe if the add-on is ever re-created from
 > scratch or forked:
 >
-> 1. Build the XPI locally: `npm run pack:xpi` → `adhan-caster-pro-<version>.xpi`.
+> 1. Build the XPI locally: `npm run pack:xpi` → `adhan-caster-<version>.xpi`.
 >    Lint it first with `npm run lint:firefox` (0 errors required; warnings are OK).
 > 2. At [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) →
 >    **Submit a New Add-on** → choose **"On this site"** (the listed channel — the
@@ -249,7 +249,7 @@ the `EDGE_PRODUCT_ID` secret. After that every version is tag-driven.
 | Error | Cause | Fix |
 | --- | --- | --- |
 | "Invalid version number in manifest" | New version ≤ published version | Bump `manifest.json`, `package.json`, and `package-lock.json` higher |
-| "CRX signature doesn't match" | Packed with the wrong `.pem` | Re-pack with `adhan-caster-pro-private.pem` |
+| "CRX signature doesn't match" | Packed with the wrong `.pem` | Re-pack with `adhan-caster-private.pem` |
 | "Invalid CRX format" | Wrong packer / corrupted file | Re-pack via `npm run pack:crx` or Chrome's GUI |
 | Upload only accepts ZIP | Verified CRX uploads not opted in | Already opted in on this listing — should not happen |
 | CI: "Tag … does not match manifest.json version …" | Tag pushed before version bump landed on main | Delete the tag, land the bump, re-tag the merge commit |

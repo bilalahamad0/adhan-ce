@@ -97,3 +97,6 @@ Check **only** the data type that actually leaves the device:
 > landing page use the short name "Adhan Caster" and reference the full listing
 > title once. The old "Adhan Caster Pro" branding is retired from user-facing
 > docs (it survives only in internal artifact/package names).
+> Update 2026-08-20: those internal identifiers (package name, build artifact
+> filenames, private-key path, docs slug) were renamed to `adhan-caster` too;
+> the old branding now appears nowhere except this historical note.

@@ -10,7 +10,7 @@
 //   node scripts/submit-edge.mjs <path-to.zip> [--dry-run] [--no-publish]
 //
 //   <path-to.zip>   the package to ship. Defaults to
-//                   ./adhan-caster-pro-<manifest.version>-edge.zip (repo root).
+//                   ./adhan-caster-<manifest.version>-edge.zip (repo root).
 //   --dry-run       validate the ZIP + config and exit. Makes NO network calls
 //                   and needs NO credentials — safe anywhere, including CI.
 //   --no-publish    upload the package but skip publish, leaving it as a draft
@@ -109,7 +109,7 @@ async function main() {
   loadDotEnv();
 
   const version = JSON.parse(await readFile(join(REPO, 'manifest.json'), 'utf8')).version;
-  const zipPath = resolve(positional[0] || join(REPO, `adhan-caster-pro-${version}-edge.zip`));
+  const zipPath = resolve(positional[0] || join(REPO, `adhan-caster-${version}-edge.zip`));
   if (!existsSync(zipPath)) fail(`package not found: ${zipPath} (run \`npm run pack:edge\` first)`);
   const size = (await stat(zipPath)).size;
   if (size === 0) fail(`package is empty: ${zipPath}`);

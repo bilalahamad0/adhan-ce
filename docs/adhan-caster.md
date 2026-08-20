@@ -1,6 +1,6 @@
 ---
 title: "Adhan Caster"
-slug: "adhan-caster-pro"
+slug: "adhan-caster"
 tagline: "A privacy-first Chrome extension that pauses media in every tab at prayer time."
 date: "2026-05-24"
 status: "In review — Chrome Web Store"

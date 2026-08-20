@@ -4,7 +4,7 @@
 //
 // Usage:
 //   node scripts/pack-edge.mjs [outPath]
-//   outPath  defaults to ./adhan-caster-pro-<manifest.version>-edge.zip
+//   outPath  defaults to ./adhan-caster-<manifest.version>-edge.zip
 //
 // Edge is Chromium, so the package is the Chrome one — same MV3 manifest, same
 // background.service_worker, same runtime files — with two edits to the staged
@@ -33,7 +33,7 @@ const STAGE = join(REPO, 'dist', 'edge');
 
 export async function packEdge(outPath) {
   const version = JSON.parse(await readFile(join(REPO, 'manifest.json'), 'utf8')).version;
-  const zipPath = resolve(outPath || join(REPO, `adhan-caster-pro-${version}-edge.zip`));
+  const zipPath = resolve(outPath || join(REPO, `adhan-caster-${version}-edge.zip`));
 
   // stripBackgroundScripts: Edge rejects an MV3 package that declares
   // background.scripts alongside service_worker — the mirror of the Firefox strip.

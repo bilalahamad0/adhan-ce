@@ -75,13 +75,13 @@ jobs:
           npm run lint:firefox
           VERSION="$(node -p "require('./manifest.json').version")"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "xpi_path=adhan-caster-pro-$VERSION.xpi" >> "$GITHUB_OUTPUT"
-          ls -la "adhan-caster-pro-$VERSION.xpi"
+          echo "xpi_path=adhan-caster-$VERSION.xpi" >> "$GITHUB_OUTPUT"
+          ls -la "adhan-caster-$VERSION.xpi"
 
       - name: Upload XPI as workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: adhan-caster-pro-${{ steps.ver.outputs.version }}.xpi
+          name: adhan-caster-${{ steps.ver.outputs.version }}.xpi
           path: ${{ steps.ver.outputs.xpi_path }}
           retention-days: 14
           if-no-files-found: error

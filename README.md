@@ -32,7 +32,7 @@ and resolves locations via the free
 npm install      # installs Jest + jsdom (dev only — the extension itself has no runtime deps)
 npm test         # full suite: pure-lib units, service-worker / content / popup integration, manifest
 npm run test:cov # same, with a coverage report + enforced thresholds (~96% statements)
-npm run pack     # runs the tests, then zips a clean build → adhan-caster-pro-<version>.zip
+npm run pack     # runs the tests, then zips a clean build → adhan-caster-<version>.zip
 ```
 
 Every push and pull request runs the suite on Linux, **Windows and macOS** (see
