@@ -24,7 +24,7 @@ let counter = 0;
 
 function defaultState() {
   return {
-    settings: { enabled: true, focusMode: true, country: 'United States', state: 'California', city: 'Sunnyvale', lat: 37.36, lon: -122.03, autoResumeMinutes: 5, leadSeconds: 30 },
+    settings: { enabled: true, focusMode: true, badgeCountdown: true, country: 'United States', state: 'California', city: 'Sunnyvale', lat: 37.36, lon: -122.03, autoResumeMinutes: 5, leadSeconds: 30 },
     schedule: {
       date: '2026-05-23',
       tz: 'America/Los_Angeles',
@@ -101,9 +101,15 @@ describe('initial render from GET_STATE', () => {
     expect(rows).toHaveLength(6);
     expect($('list').querySelector('.row.sunrise')).not.toBeNull();
     expect($('list').querySelector('.row.next .pname').textContent).toBe('Asr');
+    expect($('list').querySelector('.row.p-fajr')).not.toBeNull();
+    expect($('list').querySelector('.row.p-dhuhr')).not.toBeNull();
+    expect($('list').querySelector('.row.p-asr')).not.toBeNull();
+    expect($('list').querySelector('.row.p-maghrib')).not.toBeNull();
+    expect($('list').querySelector('.row.p-isha')).not.toBeNull();
 
     expect($('enabled').checked).toBe(true);
     expect($('focusMode').checked).toBe(true);
+    expect($('badgeCountdown').checked).toBe(true);
     expect($('city').value).toBe('Sunnyvale, California, United States');
     expect($('resumeMin').value).toBe('5');
   });
@@ -165,21 +171,91 @@ describe('saving settings', () => {
     expect(saved.settings).toMatchObject({ method: 3, school: 1 });
   });
 
-  it('shows the Hijri date in the Tracker (not the header) and saves the toggle + offset', async () => {
+  it('always shows the Hijri date in the Tracker and saves the offset', async () => {
     await load();
-    expect($('showHijri').checked).toBe(true);
-    // The Hijri date lives only in the Tracker day-detail now (not the popup header,
-    // and no longer duplicated in the Tracker month header).
+    // Hijri date is now always on — no toggle to check.
     document.querySelector('[data-tab="tracker"]').click();
     expect($('calHijri')).toBeNull(); // header month Hijri removed as redundant
     expect($('ddHijri').textContent).toMatch(/\d{4}/); // e.g. "Dhuʻl-Hijjah 18, 1447 AH"
-    // Turn it off, nudge the offset, and save.
-    $('showHijri').checked = false;
+    // Offset still user-adjustable and saved via Save.
     $('hijriOffset').value = '1';
     $('save').click();
     await settle();
     const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
-    expect(saved.settings).toMatchObject({ showHijri: false, hijriOffset: 1 });
+    expect(saved.settings).toMatchObject({ hijriOffset: 1 });
+  });
+
+  it('directly auto-saves enabled and focusMode toggles with correct Fullscreen / Enabled / Disabled / OFF tags', async () => {
+    await load();
+    expect($('enabled').checked).toBe(true);
+    expect($('enabledTag').textContent).toBe('Enabled');
+    expect($('focusMode').checked).toBe(true);
+    expect($('focusTag').textContent).toBe('Fullscreen');
+
+    // Click focusTile -> toggles off -> tag becomes OFF and auto-saves
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(false);
+    expect($('focusTag').textContent).toBe('OFF');
+    const savedFocus = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedFocus.settings).toMatchObject({ focusMode: false });
+
+    // Click focusTile again -> toggles on -> tag becomes Fullscreen and auto-saves
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(true);
+    expect($('focusTag').textContent).toBe('Fullscreen');
+    const savedFocusOn = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedFocusOn.settings).toMatchObject({ focusMode: true });
+
+    // Click enabledTile -> toggles off -> tag becomes Disabled and auto-saves
+    $('enabledTile').click();
+    await settle();
+    expect($('enabled').checked).toBe(false);
+    expect($('enabledTag').textContent).toBe('Disabled');
+    const savedEnabled = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedEnabled.settings).toMatchObject({ enabled: false });
+
+    // Click enabledTile again -> toggles on -> tag becomes Enabled and auto-saves
+    $('enabledTile').click();
+    await settle();
+    expect($('enabled').checked).toBe(true);
+    expect($('enabledTag').textContent).toBe('Enabled');
+  });
+
+  it('saves the badgeCountdown toggle state (auto-saves on tile click)', async () => {
+    await load();
+    expect($('badgeCountdown').checked).toBe(true);
+    expect($('badgeTag').textContent).toBe('ON');
+    expect($('badgeSubpanel').hidden).toBe(false);
+    expect($('pinHint').hidden).toBe(false);
+    $('badgeTile').click(); // toggles from true to false — auto-saves immediately
+    await settle();
+    expect($('badgeCountdown').checked).toBe(false);
+    expect($('badgeTag').textContent).toBe('OFF');
+    expect($('badgeSubpanel').hidden).toBe(true);
+    expect($('pinHint').hidden).toBe(true);
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings).toMatchObject({ badgeCountdown: false });
+  });
+
+  it('renders and auto-saves badgeMode (Auto/Manual) and badgeManualHours', async () => {
+    await load();
+    expect($('badgeMode').value).toBe('auto');
+    expect($('badgeHoursRow').hidden).toBe(true); // auto hides hours row
+    $('badgeMode').value = 'manual';
+    $('badgeMode').dispatchEvent(new window.Event('change')); // triggers auto-save
+    await settle();
+    expect($('badgeHoursRow').hidden).toBe(false); // manual reveals hours row
+    const saved1 = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved1.settings).toMatchObject({ badgeMode: 'manual' });
+
+    // Also test hours selector auto-save
+    $('badgeManualHours').value = '3';
+    $('badgeManualHours').dispatchEvent(new window.Event('change'));
+    await settle();
+    const saved2 = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved2.settings).toMatchObject({ badgeManualHours: 3 });
   });
 });
 
@@ -373,6 +449,52 @@ describe('prayer tracking', () => {
     await settle();
     expect(sent.find((m) => m.type === 'TOGGLE_PRAYER')).toMatchObject({ date: '2026-05-20', prayer: 'Fajr' });
   });
+
+  it('Option 1: styles tracker pills with prayer-specific classes and prevents marking upcoming prayers', async () => {
+    const state = defaultState();
+    state.schedule.date = '2026-05-23';
+    state.prayerLog = {
+      '2026-05-23': { Fajr: true },
+    };
+    const sent = [];
+    await load({ state, send: (m) => { sent.push(m); return m.type === 'GET_STATE' ? state : { ok: true, prayerLog: {} }; } });
+    document.querySelector('[data-tab="tracker"]').click();
+
+    const pills = $('ddPrayers').querySelectorAll('.dd-p');
+    expect(pills).toHaveLength(5);
+
+    // 1. Prayer classes attached (p-fajr, p-dhuhr, p-asr, p-maghrib, p-isha)
+    expect(pills[0].classList.contains('p-fajr')).toBe(true);
+    expect(pills[1].classList.contains('p-dhuhr')).toBe(true);
+    expect(pills[2].classList.contains('p-asr')).toBe(true);
+    expect(pills[3].classList.contains('p-maghrib')).toBe(true);
+    expect(pills[4].classList.contains('p-isha')).toBe(true);
+
+    // 2. Attended prayer has "on" class
+    expect(pills[0].classList.contains('on')).toBe(true);
+    expect(pills[1].classList.contains('on')).toBe(false);
+
+    // 3. Past prayers are markable (unlocked); upcoming prayers today are locked
+    expect(pills[0].classList.contains('locked')).toBe(false); // Fajr passed
+    expect(pills[1].classList.contains('locked')).toBe(false); // Dhuhr passed
+    expect(pills[2].classList.contains('locked')).toBe(true);  // Asr upcoming
+    expect(pills[3].classList.contains('locked')).toBe(true);  // Maghrib upcoming
+    expect(pills[4].classList.contains('locked')).toBe(true);  // Isha upcoming
+    expect(pills[2].getAttribute('aria-disabled')).toBe('true');
+
+    // 4. Clicking upcoming prayer does NOT send TOGGLE_PRAYER
+    pills[2].click();
+    await settle();
+    expect(sent.find((m) => m.type === 'TOGGLE_PRAYER' && m.prayer === 'Asr')).toBeUndefined();
+
+    // 5. Clicking passed prayer sends TOGGLE_PRAYER
+    pills[1].click(); // Dhuhr
+    await settle();
+    expect(sent.find((m) => m.type === 'TOGGLE_PRAYER' && m.prayer === 'Dhuhr')).toMatchObject({
+      date: '2026-05-23',
+      prayer: 'Dhuhr',
+    });
+  });
 });
 
 describe('appearance & clock style', () => {
@@ -424,5 +546,33 @@ describe('usage card (local-only activity)', () => {
     await load(); // defaultState carries no usage
     expect($('usageEmpty').hidden).toBe(false);
     expect($('usageGrid').hidden).toBe(true);
+  });
+
+  it('preserves and renders historical tracker streak and device activity upon version upgrade', async () => {
+    const state = defaultState();
+    state.installedAt = new Date('2026-01-01T12:00:00').getTime();
+    state.prayerLog = {
+      '2026-05-22': { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true },
+      '2026-05-23': { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true },
+    };
+    state.usage = {
+      totals: { pauses: 42, resumes: 39, notifications: 38, focusUsed: 10 },
+      perDay: { '2026-05-22': { pauses: 5 }, '2026-05-23': { pauses: 4 } },
+    };
+    await load({ state });
+
+    // Verify Tracker renders historical data
+    document.querySelector('[data-tab="tracker"]').click();
+    expect($('trackerStreak').textContent).toMatch(/streak|prayers logged/);
+    const dayCell = [...$('calGrid').querySelectorAll('.cal-day:not(.empty)')].find((c) => c.textContent === '22');
+    expect(dayCell.className).toContain('lvl-5'); // all 5 prayers logged
+
+    // Verify Activity on this device renders historical data
+    document.querySelector('[data-tab="settings"]').click();
+    expect($('usageGrid').hidden).toBe(false);
+    expect($('usagePaused').textContent).toBe('42');
+    expect($('usageAlerts').textContent).toBe('38');
+    expect($('usageActiveDays').textContent).toBe('2');
+    expect($('usageSince').textContent).toMatch(/Jan 2026/);
   });
 });

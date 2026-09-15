@@ -300,18 +300,42 @@ body {
 }
 .row .pname { font-weight: 650; color: var(--text); flex: 1; }
 .row .ptime { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
-.row .pico { width: 15px; height: 15px; flex: 0 0 auto; opacity: .8; color: var(--faint); }
+.row .pico { width: 15px; height: 15px; flex: 0 0 auto; opacity: .9; color: var(--faint); transition: transform .2s, opacity .2s; }
 .row.past { opacity: .6; }
+.row.past .pico { opacity: .55; }
 .row.sunrise { background: transparent; }
 .row.sunrise .pname, .row.sunrise .ptime { color: var(--faint); font-weight: 600; }
 .row.sunrise .pico { color: var(--gold); opacity: .9; }
+
+/* Signature prayer badge color dots — matching the toolbar icon badge */
+.row.p-fajr .pico { color: #1d4ed8; }
+.row.p-dhuhr .pico { color: #eab308; }
+.row.p-asr .pico { color: #d97706; }
+.row.p-maghrib .pico { color: #be123c; }
+.row.p-isha .pico { color: #4338ca; }
+
+/* Enhanced dark mode luminance for prayer dots */
+[data-theme="dark"] .row.p-fajr .pico { color: #3b82f6; }
+[data-theme="dark"] .row.p-dhuhr .pico { color: #facc15; }
+[data-theme="dark"] .row.p-asr .pico { color: #fbbf24; }
+[data-theme="dark"] .row.p-maghrib .pico { color: #f43f5e; }
+[data-theme="dark"] .row.p-isha .pico { color: #818cf8; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .row.p-fajr .pico { color: #3b82f6; }
+  :root:not([data-theme="light"]) .row.p-dhuhr .pico { color: #facc15; }
+  :root:not([data-theme="light"]) .row.p-asr .pico { color: #fbbf24; }
+  :root:not([data-theme="light"]) .row.p-maghrib .pico { color: #f43f5e; }
+  :root:not([data-theme="light"]) .row.p-isha .pico { color: #818cf8; }
+}
+
 .row.next {
   background: linear-gradient(120deg, var(--accent-soft), transparent);
   border-color: color-mix(in srgb, var(--accent) 34%, transparent);
 }
 .row.next .pname { color: var(--accent); font-weight: 750; }
 .row.next .ptime { color: var(--accent); font-weight: 700; }
-.row.next .pico { color: var(--accent); opacity: 1; }
+.row.next .pico { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .2)); }
 .row .em { font-style: normal; font-size: 10px; color: var(--gold); font-weight: 650; margin-inline-start: 6px; text-transform: uppercase; letter-spacing: .5px; }
 
 /* prayed check-off */
@@ -374,12 +398,78 @@ body {
 .dd-p {
   flex: 1; text-align: center; font-size: 10px; font-weight: 650; padding: 7px 2px; border-radius: 9px;
   background: var(--row-fill); border: 1px solid transparent; color: var(--muted); cursor: pointer;
-  transition: background .15s, transform .1s;
+  transition: background .15s, transform .1s, color .15s, border-color .15s, box-shadow .15s;
 }
-.dd-p:hover:not(.locked) { background: var(--accent-soft); color: var(--accent); }
 .dd-p:active:not(.locked) { transform: scale(.94); }
-.dd-p.on { background: linear-gradient(150deg, var(--accent-bright), var(--accent)); border-color: transparent; color: var(--accent-ink); }
-.dd-p.locked { opacity: .4; cursor: not-allowed; border-style: dashed; border-color: var(--line); }
+.dd-p.locked { opacity: .4; cursor: not-allowed; border-style: dashed; border-color: var(--line); pointer-events: none; }
+
+/* Option 1: Soft tint on hover for markable prayers */
+.dd-p.p-fajr:hover:not(.locked):not(.on) { background: rgba(29, 78, 216, .12); color: #1d4ed8; }
+.dd-p.p-dhuhr:hover:not(.locked):not(.on) { background: rgba(234, 179, 8, .15); color: #ca8a04; }
+.dd-p.p-asr:hover:not(.locked):not(.on) { background: rgba(217, 119, 6, .12); color: #d97706; }
+.dd-p.p-maghrib:hover:not(.locked):not(.on) { background: rgba(190, 18, 60, .12); color: #be123c; }
+.dd-p.p-isha:hover:not(.locked):not(.on) { background: rgba(67, 56, 202, .12); color: #4338ca; }
+
+[data-theme="dark"] .dd-p.p-fajr:hover:not(.locked):not(.on) { background: rgba(59, 130, 246, .15); color: #60a5fa; }
+[data-theme="dark"] .dd-p.p-dhuhr:hover:not(.locked):not(.on) { background: rgba(250, 204, 21, .15); color: #facc15; }
+[data-theme="dark"] .dd-p.p-asr:hover:not(.locked):not(.on) { background: rgba(251, 191, 36, .15); color: #fbbf24; }
+[data-theme="dark"] .dd-p.p-maghrib:hover:not(.locked):not(.on) { background: rgba(244, 63, 94, .15); color: #fb7185; }
+[data-theme="dark"] .dd-p.p-isha:hover:not(.locked):not(.on) { background: rgba(129, 140, 248, .15); color: #a5b4fc; }
+
+/* Option 1: Signature atmospheric prayer color when marked attended */
+.dd-p.on { border-color: transparent; }
+.dd-p.p-fajr.on {
+  background: linear-gradient(145deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, .35);
+}
+.dd-p.p-dhuhr.on {
+  background: linear-gradient(145deg, #facc15, #eab308);
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(234, 179, 8, .35);
+}
+.dd-p.p-asr.on {
+  background: linear-gradient(145deg, #f59e0b, #d97706);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, .35);
+}
+.dd-p.p-maghrib.on {
+  background: linear-gradient(145deg, #e11d48, #be123c);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(190, 18, 60, .35);
+}
+.dd-p.p-isha.on {
+  background: linear-gradient(145deg, #6366f1, #4338ca);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(67, 56, 202, .35);
+}
+
+/* Dark mode overrides for high contrast and vibrance */
+[data-theme="dark"] .dd-p.p-fajr.on {
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, .4);
+}
+[data-theme="dark"] .dd-p.p-dhuhr.on {
+  background: linear-gradient(145deg, #fde047, #eab308);
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(250, 204, 21, .35);
+}
+[data-theme="dark"] .dd-p.p-asr.on {
+  background: linear-gradient(145deg, #fbbf24, #d97706);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, .35);
+}
+[data-theme="dark"] .dd-p.p-maghrib.on {
+  background: linear-gradient(145deg, #f43f5e, #be123c);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(244, 63, 94, .4);
+}
+[data-theme="dark"] .dd-p.p-isha.on {
+  background: linear-gradient(145deg, #818cf8, #4338ca);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(129, 140, 248, .4);
+}
 
 /* ===================== SETTINGS (Control-Center style) ==================== */
 .set-group {
@@ -411,6 +501,101 @@ body {
 .cc-tile.on { background: linear-gradient(120deg, var(--accent-bright), var(--accent)); color: var(--accent-ink); border-color: transparent; }
 .cc-tile.on .cc-ico { background: rgba(255, 255, 255, .25); color: var(--accent-ink); }
 
+/* Status pill badge inside each tile (ON / OFF / Fullscreen) */
+.cc-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .03em;
+  padding: 2.5px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--switch-off);
+  color: var(--muted);
+  transition: background .2s, color .2s;
+  user-select: none;
+  line-height: 1.2;
+  text-align: center;
+}
+.cc-tile.on .cc-tag {
+  background: rgba(255, 255, 255, .28);
+  color: var(--accent-ink);
+}
+
+/* Auto-save indicator (shown briefly after instant-save) */
+.badge-saved {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 4px 0 2px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity .25s;
+}
+.badge-saved.visible { opacity: 1; }
+
+/* Control-Center tile wrapper for attached subpanels */
+.cc-tile-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.badge-subpanel {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  padding: 2px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.85);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.85);
+  box-shadow: inset 0 1px 0 var(--glass-inset);
+  animation: viewIn .2s var(--ease);
+}
+.badge-subpanel .set-row {
+  padding: 10px 0;
+  font-size: 13px;
+}
+.badge-subpanel .set-row + .set-row {
+  border-top: 1px solid var(--line);
+}
+
+/* pin toolbar hint */
+.pin-hint {
+  margin-top: 8px;
+  margin-bottom: 2px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  line-height: 1.35;
+}
+.pin-hint .pin-ico {
+  font-size: 16px;
+  flex: 0 0 auto;
+  line-height: 1.1;
+  margin-top: 1px;
+}
+.pin-hint .pin-text {
+  flex: 1;
+  min-width: 0;
+}
+.pin-hint strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-strong);
+  margin-bottom: 2px;
+}
+.pin-hint p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+
 /* segmented control */
 .seg { position: relative; display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); background: var(--seg-bg); border-radius: 13px; padding: 3px; }
 .seg-thumb {
@@ -436,7 +621,7 @@ body {
 }
 .set-row.col input[type="text"], .set-row.col select { width: 100%; }
 /* Short-value controls: narrower so their labels stay to ≤2 lines. */
-#hijriOffset, #leadSeconds, #resumeMin { width: 110px; }
+#hijriOffset, #leadSeconds, #resumeMin, #badgeMode, #badgeManualHours { width: 130px; }
 .set-row select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%237a988b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-inline-end: 28px; }
 [dir="rtl"] .set-row select { background-position: left 10px center; }
 .set-row input:focus, .set-row select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

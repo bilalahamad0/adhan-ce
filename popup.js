@@ -75,7 +75,11 @@ function applyClockStyle(style) {
 
 // Control-Center toggle tiles are backed by hidden checkboxes (#enabled etc.),
 // so the existing render/save logic (and tests) keep using the checkboxes.
-const TOGGLE_TILES = [['enabled', 'enabledTile'], ['focusMode', 'focusTile'], ['showHijri', 'hijriTile']];
+const TOGGLE_TILES = [
+  ['enabled', 'enabledTile'],
+  ['focusMode', 'focusTile'],
+  ['badgeCountdown', 'badgeTile'],
+];
 function syncToggleTiles() {
   for (const [cb, tile] of TOGGLE_TILES) {
     const el = $(tile);
@@ -83,6 +87,45 @@ function syncToggleTiles() {
     const on = $(cb).checked;
     el.classList.toggle('on', on);
     el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const tag = el.querySelector('.cc-tag');
+    if (tag) {
+      if (tile === 'enabledTile') {
+        tag.textContent = on ? (t('tag_enabled') || 'Enabled') : (t('tag_disabled') || 'Disabled');
+      } else if (tile === 'focusTile') {
+        tag.textContent = on ? (t('tag_fullscreen') || 'Fullscreen') : (t('tag_off') || 'OFF');
+      } else {
+        tag.textContent = on ? (t('tag_on') || 'ON') : (t('tag_off') || 'OFF');
+      }
+    }
+  }
+}
+
+function syncBadgeSettings() {
+  const badgeOn = $('badgeCountdown') ? $('badgeCountdown').checked : true;
+  const isManual = $('badgeMode') ? $('badgeMode').value === 'manual' : false;
+  if ($('badgeSubpanel')) $('badgeSubpanel').hidden = !badgeOn;
+  if ($('pinHint')) $('pinHint').hidden = !badgeOn;
+  if ($('badgeModeRow')) $('badgeModeRow').hidden = !badgeOn;
+  if ($('badgeHoursRow')) $('badgeHoursRow').hidden = !badgeOn || !isManual;
+}
+
+let _tileSaveTimer = null;
+async function autoSaveToggleSettings() {
+  syncBadgeSettings();
+  const settings = {
+    enabled: $('enabled') ? $('enabled').checked : true,
+    focusMode: $('focusMode') ? $('focusMode').checked : false,
+    badgeCountdown: $('badgeCountdown') ? $('badgeCountdown').checked : true,
+    badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
+    badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
+  };
+  await send({ type: 'SAVE_SETTINGS', settings });
+  // Flash "✓ Saved" indicator inside badge subpanel if open
+  const el = $('badgeSaved');
+  if (el && $('badgeCountdown') && $('badgeCountdown').checked) {
+    el.classList.add('visible');
+    clearTimeout(_tileSaveTimer);
+    _tileSaveTimer = setTimeout(() => el.classList.remove('visible'), 1800);
   }
 }
 
@@ -278,9 +321,12 @@ function renderAll() {
   $('focusMode').checked = settings.focusMode === true;
   $('method').value = String(settings.method != null ? settings.method : 2);
   $('school').value = String(settings.school != null ? settings.school : 0);
-  $('showHijri').checked = settings.showHijri !== false;
   $('hijriOffset').value = String(settings.hijriOffset || 0);
+  $('badgeCountdown').checked = settings.badgeCountdown !== false;
+  if ($('badgeMode')) $('badgeMode').value = settings.badgeMode === 'manual' ? 'manual' : 'auto';
+  if ($('badgeManualHours')) $('badgeManualHours').value = String(settings.badgeManualHours || 2);
   syncToggleTiles();
+  syncBadgeSettings();
 
   const place = settings.city
     ? { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon }
@@ -366,7 +412,7 @@ const ICO_SUN = [
   ['circle', { cx: 12, cy: 12, r: 4 }],
   ['path', { d: 'M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4' }],
 ];
-const ICO_DOT = [['circle', { cx: 12, cy: 12, r: 3.4 }]];
+const ICO_DOT = [['circle', { cx: 12, cy: 12, r: 4.2, fill: 'currentColor', stroke: 'none' }]];
 
 function renderList() {
   const wrap = $('list');
@@ -402,7 +448,7 @@ function renderList() {
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = prayedToday(prayer);
-      cb.disabled = prayerLocked(logToday(), prayer); // upcoming prayer — not yet markable
+      cb.disabled = !!tomorrow || prayerLocked(logToday(), prayer); // upcoming prayer — not yet markable
       cb.setAttribute('aria-label', t('mark_prayed', { prayer: name }));
       cb.addEventListener('change', () => togglePrayer(logToday(), prayer));
       pcheck.appendChild(cb);
@@ -414,7 +460,7 @@ function renderList() {
   sched.prayers.forEach((p) => {
     const past = p.ts < now;
     const isNext = p.name === nextName;
-    const cls = [past ? 'past' : '', isNext ? 'next' : ''].filter(Boolean).join(' ');
+    const cls = [past ? 'past' : '', isNext ? 'next' : '', 'p-' + p.name.toLowerCase()].filter(Boolean).join(' ');
     makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name });
     if (p.name === 'Fajr' && sched.sunrise) {
       makeRow('sunrise', ico(ICO_SUN), t('sunrise'), sched.sunrise.time, {});
@@ -452,12 +498,15 @@ function prayedToday(name) {
   const day = ((st && st.prayerLog) || {})[logToday()] || {};
   return !!day[name];
 }
-// A prayer is "locked" (not yet markable) only while it's still upcoming TODAY,
+// A prayer is "locked" (not yet markable) while it's still upcoming,
 // judged by the loaded schedule's per-prayer times. Past days are always editable.
 function prayerLocked(date, name) {
-  if (date !== logToday()) return false;
+  const today = logToday();
+  if (date > today) return true; // future dates are never markable
+  if (date < today) return false; // past dates are always editable
   const p = st && st.schedule && st.schedule.prayers && st.schedule.prayers.find((x) => x.name === name);
-  return !!(p && p.ts > Date.now());
+  if (!p || !p.ts) return true; // if timing is not yet ready, stay locked
+  return p.ts > Date.now(); // only markable after prayer time has passed
 }
 async function togglePrayer(date, name) {
   if (prayerLocked(date, name)) return;
@@ -504,7 +553,7 @@ function stepMonth(delta) {
 function renderTracker() {
   const today = logToday();
   const log = (st && st.prayerLog) || {};
-  const showH = !st || !st.settings || st.settings.showHijri !== false;
+  const showH = true; // Hijri date is always shown
   const off = (st && st.settings && st.settings.hijriOffset) || 0;
   const tp = parseYmd(today);
   const curYM = { year: tp.year, month: tp.month };
@@ -557,9 +606,13 @@ function renderTracker() {
     for (const name of PRAYER_ORDER) {
       const locked = prayerLocked(selDate, name);
       const cell = document.createElement('div');
-      cell.className = 'dd-p' + (day[name] ? ' on' : '') + (locked ? ' locked' : '');
+      cell.className = 'dd-p p-' + name.toLowerCase() + (day[name] ? ' on' : '') + (locked ? ' locked' : '');
       cell.textContent = t('prayer_' + name);
-      if (!locked) cell.addEventListener('click', () => togglePrayer(selDate, name));
+      if (!locked) {
+        cell.addEventListener('click', () => togglePrayer(selDate, name));
+      } else {
+        cell.setAttribute('aria-disabled', 'true');
+      }
       wrap.appendChild(cell);
     }
   }
@@ -631,8 +684,10 @@ $('save').addEventListener('click', async () => {
     leadSeconds: parseInt($('leadSeconds').value, 10) || 30,
     method: Number.isFinite(method) ? method : 2,
     school: parseInt($('school').value, 10) === 1 ? 1 : 0,
-    showHijri: $('showHijri').checked,
     hijriOffset: parseInt($('hijriOffset').value, 10) || 0,
+    badgeCountdown: $('badgeCountdown').checked,
+    badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
+    badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
   };
   $('save').disabled = true;
   $('save').textContent = t('saving');
@@ -680,6 +735,7 @@ TOGGLE_TILES.forEach(([cb, tile]) => {
   const flip = () => {
     $(cb).checked = !$(cb).checked;
     syncToggleTiles();
+    autoSaveToggleSettings();
   };
   el.addEventListener('click', flip);
   el.addEventListener('keydown', (e) => {
@@ -689,6 +745,13 @@ TOGGLE_TILES.forEach(([cb, tile]) => {
     }
   });
 });
+
+if ($('badgeMode')) {
+  $('badgeMode').addEventListener('change', autoSaveToggleSettings);
+}
+if ($('badgeManualHours')) {
+  $('badgeManualHours').addEventListener('change', autoSaveToggleSettings);
+}
 
 // Tracker month navigation
 $('calPrev').addEventListener('click', () => {

@@ -9,13 +9,14 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeChrome, flush } from './helpers/chrome-mock.js';
 import { makeFetch, aladhanPayload } from './helpers/fetch-mock.js';
-import { ymd, ymdInTz } from '../lib/schedule.js';
+import { ymd, ymdInTz, computeNext } from '../lib/schedule.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const ALARM_PRAYER = 'adhan-prayer-fire';
 const ALARM_RESUME = 'adhan-auto-resume';
 const ALARM_TICK = 'adhan-tick';
+const ALARM_BADGE = 'adhan-badge-tick';
 
 const DEFAULTS = {
   enabled: true,
@@ -25,6 +26,9 @@ const DEFAULTS = {
   autoResumeMinutes: 5,
   leadSeconds: 30,
   focusMode: true,
+  badgeCountdown: true,
+  badgeMode: 'auto',
+  badgeManualHours: 2,
   method: 2,
   school: 0,
   showHijri: true,
@@ -512,6 +516,35 @@ describe('prayer tracking', () => {
     expect(res).toEqual({ ok: false, error: 'bad prayer' });
     expect(h.store.prayerLog).toBeUndefined();
   });
+
+  it('TOGGLE_PRAYER rejects marking future dates or upcoming prayers on today', async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      storage: {
+        settings: DEFAULTS,
+        schedule: {
+          date: '2026-06-04',
+          prayers: [
+            { name: 'Fajr', time: '04:27 AM', ts: now - 3600e3 },
+            { name: 'Dhuhr', time: '01:05 PM', ts: now + 3600e3 },
+          ],
+        },
+      },
+    });
+
+    // 1. Future date rejected
+    const rFutureDate = await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-05', prayer: 'Fajr' });
+    expect(rFutureDate).toEqual({ ok: false, error: 'cannot mark future prayer' });
+
+    // 2. Upcoming prayer today rejected
+    const rFuturePrayer = await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Dhuhr' });
+    expect(rFuturePrayer).toEqual({ ok: false, error: 'prayer time has not passed yet' });
+
+    // 3. Past prayer today allowed
+    const rPastPrayer = await h.sendRuntimeMessage({ type: 'TOGGLE_PRAYER', date: '2026-06-04', prayer: 'Fajr' });
+    expect(rPastPrayer.ok).toBe(true);
+    expect(h.store.prayerLog['2026-06-04']).toEqual({ Fajr: true });
+  });
 });
 
 describe('usage counters (local-only)', () => {
@@ -585,3 +618,324 @@ describe('usage counters (local-only)', () => {
     expect(s.usage).toBeNull();
   });
 });
+
+describe('toolbar icon badge countdown', () => {
+  it('arms ALARM_BADGE and sets countdown badge and tooltip when enabled', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[2] = { name: 'Asr', time: '04:56 PM', ts: now + 45 * 60 * 1000 };
+    const { h } = await loadBackground({
+      storage: {
+        settings: DEFAULTS,
+        schedule: sched,
+        nextPrayer: sched.prayers[2],
+        paused: { active: false },
+      },
+    });
+    await h.fireStartup();
+    await flush();
+    expect(h.alarms.has(ALARM_BADGE)).toBe(true);
+    expect(h.badge.text).toBe('45m');
+    expect(h.badge.color).toBe('#d97706'); // Asr is Amber
+    expect(h.title).toBe('Next: Asr in 45m (04:56 PM)');
+  });
+
+  it('sets Crimson badge color (#be123c) when next prayer is Maghrib', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[2].ts = now - 1000; // Asr in the past
+    sched.prayers[3] = { name: 'Maghrib', time: '08:17 PM', ts: now + 50 * 60 * 1000 };
+    const { h } = await loadBackground({
+      storage: {
+        settings: DEFAULTS,
+        schedule: sched,
+        nextPrayer: sched.prayers[3],
+        paused: { active: false },
+      },
+    });
+    await h.fireStartup();
+    await flush();
+    expect(h.badge.text).toBe('50m');
+    expect(h.badge.color).toBe('#be123c'); // Maghrib is Crimson
+    expect(h.title).toBe('Next: Maghrib in 50m (08:17 PM)');
+  });
+
+  it('sets Yellow badge color (#eab308) and high-contrast text color when next prayer is Dhuhr', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[0].ts = now - 1000; // Fajr in the past
+    sched.prayers[1] = { name: 'Dhuhr', time: '01:05 PM', ts: now + 35 * 60 * 1000 };
+    const { h } = await loadBackground({
+      storage: {
+        settings: DEFAULTS,
+        schedule: sched,
+        nextPrayer: sched.prayers[1],
+        paused: { active: false },
+      },
+    });
+    await h.fireStartup();
+    await flush();
+    expect(h.badge.text).toBe('35m');
+    expect(h.badge.color).toBe('#eab308'); // Dhuhr is Yellow
+    expect(h.badge.textColor).toBe('#000000'); // Black text on yellow background
+    expect(h.title).toBe('Next: Dhuhr in 35m (01:05 PM)');
+  });
+
+  it('ALARM_BADGE alarm tick updates badge countdown', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[2] = { name: 'Asr', time: '04:56 PM', ts: now + 15 * 60 * 1000 };
+    const { h } = await loadBackground({
+      storage: {
+        settings: DEFAULTS,
+        schedule: sched,
+        nextPrayer: sched.prayers[2],
+        paused: { active: false },
+      },
+    });
+    await h.fireStartup();
+    await flush();
+    expect(h.badge.text).toBe('15m');
+    await h.fireAlarm(ALARM_BADGE);
+    await flush();
+    expect(h.badge.text).toBe('15m');
+  });
+
+  it('clears badge and resets title when badgeCountdown is disabled', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[2] = { name: 'Asr', time: '04:56 PM', ts: now + 45 * 60 * 1000 };
+    const { h } = await loadBackground({
+      storage: {
+        settings: { ...DEFAULTS, badgeCountdown: false },
+        schedule: sched,
+        nextPrayer: sched.prayers[2],
+        paused: { active: false },
+      },
+    });
+    await h.fireStartup();
+    await flush();
+    expect(h.alarms.has(ALARM_BADGE)).toBe(false);
+    expect(h.badge.text).toBe('');
+    expect(h.title).toBe('Adhan Caster — Muslim Prayer Times');
+  });
+
+  it('manual timer mode holds off countdown until within configured hours', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[2].ts = now - 1000; // Asr in the past
+    // Maghrib is 3 hours away; manual limit is 2 hours
+    sched.prayers[3] = { name: 'Maghrib', time: '08:17 PM', ts: now + 3 * 3600 * 1000 };
+    const { h } = await loadBackground({
+      storage: {
+        settings: { ...DEFAULTS, badgeMode: 'manual', badgeManualHours: 2 },
+        schedule: sched,
+        nextPrayer: sched.prayers[3],
+        paused: { active: false },
+      },
+    });
+    await h.fireStartup();
+    await flush();
+    // Beyond 2 hours: badge text is suppressed (blank)
+    expect(h.badge.text).toBe('');
+    // Hover tooltip still shows next prayer and full countdown
+    expect(h.title).toBe('Next: Maghrib in 3h (08:17 PM)');
+
+    // Now advance next prayer to within 2 hours (1h 30m)
+    sched.prayers[3].ts = now + 90 * 60 * 1000;
+    await chrome.storage.local.set({ nextPrayer: sched.prayers[3] });
+    await h.fireAlarm(ALARM_BADGE);
+    await flush();
+    expect(h.badge.text).toBe('1h');
+    expect(h.badge.color).toBe('#be123c'); // Crimson
+  });
+
+  it('switches to pause badge on prayer fire, then to next prayer countdown on resume', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    const { h } = await loadBackground({
+      storage: {
+        settings: DEFAULTS,
+        schedule: sched,
+        nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 },
+        paused: { active: false },
+      },
+    });
+    // Fire prayer
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    expect(h.badge.text).toBe('❚❚');
+    expect(h.title).toBe('Dhuhr Adhan · Media paused');
+
+    // Resume
+    await h.fireAlarm(ALARM_RESUME);
+    await flush();
+    expect(h.store.paused.active).toBe(false);
+    // nextPrayer was advanced in handlePrayerFire to Asr (ts = now + 3h), so badge is now the countdown
+    expect(h.badge.text).toBe('3h');
+    expect(h.badge.color).toBe('#d97706'); // Asr is Amber
+    expect(h.title).toBe('Next: Asr in 3h (04:56 PM)');
+  });
+
+  it('handles 5-hour Countdown window between consecutive prayers (Asr -> Maghrib and Maghrib -> Isha) with immediate rollover', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    // Asr fires now:
+    // Maghrib is at 8:17 PM (delta = 3h 21m < 5 hours)
+    // Isha is at 9:43 PM (delta from Maghrib = 1h 26m < 5 hours)
+    sched.prayers[2] = { name: 'Asr', time: '04:56 PM', ts: now - 1000 };
+    sched.prayers[3] = { name: 'Maghrib', time: '08:17 PM', ts: now + (3 * 3600 + 21 * 60) * 1000 };
+    sched.prayers[4] = { name: 'Isha', time: '09:43 PM', ts: now + (4 * 3600 + 47 * 60) * 1000 };
+
+    const { h } = await loadBackground({
+      storage: {
+        settings: { ...DEFAULTS, badgeMode: 'manual', badgeManualHours: 5 },
+        schedule: sched,
+        nextPrayer: sched.prayers[2],
+        paused: { active: false },
+      },
+    });
+
+    // 1. Asr fires: badge shows pause icon ❚❚, nextPrayer advances to Maghrib
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    expect(h.badge.text).toBe('❚❚');
+    expect(h.badge.color).toBe('#d97706'); // Asr Amber
+    expect(h.title).toBe('Asr Adhan · Media paused');
+    expect(h.store.nextPrayer.name).toBe('Maghrib');
+
+    // 2. Asr concludes / auto-resumes:
+    // Delta between Asr and Maghrib is 3h 21m, which is LESS than the 5h manual window.
+    // Therefore, Maghrib countdown starts IMMEDIATELY without any hold-off gap!
+    await h.fireAlarm(ALARM_RESUME);
+    await flush();
+    expect(h.store.paused.active).toBe(false);
+    expect(h.badge.text).toBe('3h');
+    expect(h.badge.color).toBe('#be123c'); // Maghrib Crimson
+    expect(h.title).toBe('Next: Maghrib in 3h 21m (08:17 PM)');
+
+    // 3. Maghrib time arrives (8:17 PM): Maghrib fires
+    const maghribNow = now + (3 * 3600 + 21 * 60) * 1000;
+    const dateSpy = jest.spyOn(Date, 'now').mockReturnValue(maghribNow);
+    try {
+      sched.prayers[3].ts = maghribNow - 1000;
+      await chrome.storage.local.set({ nextPrayer: sched.prayers[3] });
+      await h.fireAlarm(ALARM_PRAYER);
+      await flush();
+      expect(h.badge.text).toBe('❚❚');
+      expect(h.badge.color).toBe('#be123c'); // Maghrib Crimson
+      expect(h.title).toBe('Maghrib Adhan · Media paused');
+      expect(h.store.nextPrayer.name).toBe('Isha');
+
+      // 4. Maghrib concludes / auto-resumes:
+      // Delta between Maghrib (8:17 PM) and Isha (9:43 PM) is 1h 26m (< 5h).
+      // Therefore, Isha countdown starts IMMEDIATELY with Night Indigo badge!
+      await h.fireAlarm(ALARM_RESUME);
+      await flush();
+      expect(h.store.paused.active).toBe(false);
+      expect(h.badge.text).toBe('1h');
+      expect(h.badge.color).toBe('#4338ca'); // Isha Night Indigo
+      expect(h.title).toBe('Next: Isha in 1h 26m (09:43 PM)');
+    } finally {
+      dateSpy.mockRestore();
+    }
+  });
+
+  it('Firefox profile interoperability: badge countdown and clean hover tooltip work without errors', async () => {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[2] = { name: 'Asr', time: '04:56 PM', ts: now + 45 * 60 * 1000 };
+    const { h } = await loadBackground({
+      firefox: true,
+      storage: {
+        settings: DEFAULTS,
+        schedule: sched,
+        nextPrayer: sched.prayers[2],
+        paused: { active: false },
+      },
+    });
+    await h.fireStartup();
+    await flush();
+    expect(h.alarms.has(ALARM_BADGE)).toBe(true);
+    expect(h.badge.text).toBe('45m');
+    expect(h.badge.color).toBe('#d97706');
+    expect(h.title).toBe('Next: Asr in 45m (04:56 PM)');
+  });
+});
+
+describe('upgrade & historical data preservation', () => {
+  it('preserves prayerLog, usage activity, installedAt, and custom settings upon extension upgrade', async () => {
+    const historicalInstalledAt = 1_680_000_000_000;
+    const historicalPrayerLog = {
+      '2026-05-01': { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true },
+      '2026-05-02': { Fajr: true, Dhuhr: true },
+      '2026-06-15': { Asr: true, Maghrib: true },
+    };
+    const historicalUsage = {
+      totals: { pauses: 42, notifications: 38, resumes: 40 },
+      perDay: {
+        '2026-06-14': { pauses: 5, notifications: 5 },
+        '2026-06-15': { pauses: 4, notifications: 4 },
+      },
+    };
+    const userSettings = {
+      ...DEFAULTS,
+      city: 'Istanbul',
+      country: 'Turkey',
+      method: 13,
+      school: 1,
+      badgeMode: 'manual',
+      badgeManualHours: 4,
+    };
+
+    // Simulate extension upgrading with pre-existing local storage
+    const { h } = await loadBackground({
+      storage: {
+        settings: userSettings,
+        installedAt: historicalInstalledAt,
+        prayerLog: historicalPrayerLog,
+        usage: historicalUsage,
+        paused: { active: false },
+      },
+    });
+
+    // Fire onInstalled as happens during a version update
+    await h.fireInstalled({ reason: 'update', previousVersion: '2.0.3' });
+    await flush();
+
+    // 1. Verify installedAt is not overwritten with the upgrade timestamp
+    expect(h.store.installedAt).toBe(historicalInstalledAt);
+
+    // 2. Verify prayerLog is 100% intact across all past dates
+    expect(h.store.prayerLog).toEqual(historicalPrayerLog);
+
+    // 3. Verify usage counts and activity buckets are 100% intact
+    expect(h.store.usage).toEqual(historicalUsage);
+
+    // 4. Verify custom user settings are intact
+    expect(h.store.settings.city).toBe('Istanbul');
+    expect(h.store.settings.method).toBe(13);
+    expect(h.store.settings.school).toBe(1);
+    expect(h.store.settings.badgeManualHours).toBe(4);
+
+    // 5. Verify GET_STATE returns the exact historical data
+    const state = await h.sendRuntimeMessage({ type: 'GET_STATE' });
+    expect(state.installedAt).toBe(historicalInstalledAt);
+    expect(state.prayerLog).toEqual(historicalPrayerLog);
+    expect(state.usage).toEqual(historicalUsage);
+    expect(state.settings.city).toBe('Istanbul');
+
+    // 6. Verify logging a new prayer continues seamlessly on top of historical data
+    const res = await h.sendRuntimeMessage({
+      type: 'TOGGLE_PRAYER',
+      date: '2026-06-15',
+      prayer: 'Isha',
+    });
+    expect(res.ok).toBe(true);
+    expect(h.store.prayerLog['2026-06-15']).toEqual({ Asr: true, Maghrib: true, Isha: true });
+    // Prior history still completely preserved
+    expect(h.store.prayerLog['2026-05-01']).toEqual({ Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true });
+  });
+});
+
+

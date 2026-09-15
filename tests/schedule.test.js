@@ -6,6 +6,8 @@ import {
   buildPrayers,
   computeNext,
   formatCountdown,
+  formatBadgeCountdown,
+  formatTooltipCountdown,
   hhmmTo12h,
   isStaleFire,
   STALE_FIRE_MS,
@@ -13,6 +15,8 @@ import {
   PREMATURE_FIRE_MS,
   PRAYER_ORDER,
   DAY_MS,
+  PRAYER_BADGE_COLORS,
+  PRAYER_BADGE_TEXT_COLORS,
 } from '../lib/schedule.js';
 
 const ALL = { Fajr: '04:27 AM', Dhuhr: '01:05 PM', Asr: '04:56 PM', Maghrib: '08:17 PM', Isha: '09:43 PM' };
@@ -165,6 +169,85 @@ describe('formatCountdown', () => {
   });
   it('clamps negatives to 0s', () => {
     expect(formatCountdown(-5000)).toBe('0s');
+  });
+});
+
+describe('formatBadgeCountdown', () => {
+  it('formats hours (>= 1h)', () => {
+    expect(formatBadgeCountdown(3 * 3600e3 + 12 * 60e3)).toBe('3h');
+    expect(formatBadgeCountdown(12 * 3600e3)).toBe('12h');
+    expect(formatBadgeCountdown(1 * 3600e3)).toBe('1h');
+  });
+  it('formats minutes (1m to 59m)', () => {
+    expect(formatBadgeCountdown(59 * 60e3)).toBe('59m');
+    expect(formatBadgeCountdown(5 * 60e3)).toBe('5m');
+    expect(formatBadgeCountdown(1 * 60e3)).toBe('1m');
+  });
+  it('formats sub-minute (< 1m)', () => {
+    expect(formatBadgeCountdown(45e3)).toBe('<1m');
+    expect(formatBadgeCountdown(1000)).toBe('<1m');
+  });
+  it('clamps zero and negatives to empty string', () => {
+    expect(formatBadgeCountdown(0)).toBe('');
+    expect(formatBadgeCountdown(-5000)).toBe('');
+  });
+  it('supports manual mode hold-off threshold', () => {
+    // 3 hours away with 2-hour manual threshold -> suppressed
+    expect(formatBadgeCountdown(3 * 3600e3, { mode: 'manual', manualHours: 2 })).toBe('');
+    // 1h 45m away with 2-hour manual threshold -> shows countdown (1h)
+    expect(formatBadgeCountdown(1 * 3600e3 + 45 * 60e3, { mode: 'manual', manualHours: 2 })).toBe('1h');
+    expect(formatBadgeCountdown(45 * 60e3, { mode: 'manual', manualHours: 2 })).toBe('45m');
+    // auto mode never suppresses
+    expect(formatBadgeCountdown(3 * 3600e3, { mode: 'auto', manualHours: 2 })).toBe('3h');
+  });
+
+  it('handles 5-hour Countdown window for consecutive prayer deltas (Asr -> Maghrib, Maghrib -> Isha)', () => {
+    const asrToMaghribMs = (3 * 3600 + 21 * 60) * 1000; // 3h 21m
+    const maghribToIshaMs = (1 * 3600 + 26 * 60) * 1000; // 1h 26m
+    const ishaToFajrMs = (6 * 3600 + 44 * 60) * 1000;    // 6h 44m
+
+    // Asr -> Maghrib (3h 21m) is within 5h -> immediately active (no gap)
+    expect(formatBadgeCountdown(asrToMaghribMs, { mode: 'manual', manualHours: 5 })).toBe('3h');
+
+    // Maghrib -> Isha (1h 26m) is within 5h -> immediately active (no gap)
+    expect(formatBadgeCountdown(maghribToIshaMs, { mode: 'manual', manualHours: 5 })).toBe('1h');
+
+    // Isha -> Fajr (6h 44m) exceeds 5h -> held off (blank)
+    expect(formatBadgeCountdown(ishaToFajrMs, { mode: 'manual', manualHours: 5 })).toBe('');
+
+    // Once within 5h threshold (e.g. 4h 30m) -> activates
+    expect(formatBadgeCountdown(4 * 3600e3 + 30 * 60e3, { mode: 'manual', manualHours: 5 })).toBe('4h');
+  });
+});
+
+describe('PRAYER_BADGE_COLORS', () => {
+  it('defines distinct atmospheric colors with Maghrib as Crimson and Dhuhr as Yellow', () => {
+    expect(PRAYER_BADGE_COLORS.Maghrib).toBe('#be123c'); // Crimson
+    expect(PRAYER_BADGE_COLORS.Fajr).toBe('#1d4ed8');    // Dawn Blue
+    expect(PRAYER_BADGE_COLORS.Dhuhr).toBe('#eab308');   // Midday Yellow
+    expect(PRAYER_BADGE_COLORS.Asr).toBe('#d97706');     // Afternoon Amber
+    expect(PRAYER_BADGE_COLORS.Isha).toBe('#4338ca');    // Night Indigo
+
+    expect(PRAYER_BADGE_TEXT_COLORS.Dhuhr).toBe('#000000'); // High contrast black on yellow
+    expect(PRAYER_BADGE_TEXT_COLORS.Maghrib).toBe('#ffffff');
+  });
+});
+
+describe('formatTooltipCountdown', () => {
+  it('formats hours and minutes', () => {
+    expect(formatTooltipCountdown(1 * 3600e3 + 45 * 60e3)).toBe('1h 45m');
+    expect(formatTooltipCountdown(2 * 3600e3)).toBe('2h');
+  });
+  it('formats minutes', () => {
+    expect(formatTooltipCountdown(45 * 60e3)).toBe('45m');
+    expect(formatTooltipCountdown(5 * 60e3)).toBe('5m');
+  });
+  it('formats sub-minute', () => {
+    expect(formatTooltipCountdown(30e3)).toBe('<1m');
+  });
+  it('clamps zero and negatives to empty string', () => {
+    expect(formatTooltipCountdown(0)).toBe('');
+    expect(formatTooltipCountdown(-5000)).toBe('');
   });
 });
 
