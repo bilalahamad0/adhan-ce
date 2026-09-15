@@ -50,7 +50,8 @@ export function makeChrome(opts = {}) {
     notifications: [], // {id, options}
     broadcasts: [], // messages sent via tabs.sendMessage
     injected: [], // tabIds we ran executeScript on
-    badge: { text: '', color: null },
+    badge: { text: '', color: null, textColor: null },
+    title: '',
     sent: [], // runtime.sendMessage payloads from content/popup
     popupOpened: 0,
     onChanged,
@@ -170,6 +171,12 @@ export function makeChrome(opts = {}) {
       },
       setBadgeBackgroundColor: async ({ color }) => {
         harness.badge.color = color;
+      },
+      setBadgeTextColor: async ({ color }) => {
+        harness.badge.textColor = color;
+      },
+      setTitle: async ({ title }) => {
+        harness.title = title;
       },
       // Firefox historically only allows openPopup() from a user gesture; the
       // production code guards it with `?.()`, so the firefox profile omits it.

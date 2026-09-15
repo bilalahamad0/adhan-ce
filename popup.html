@@ -112,18 +112,52 @@
             <div class="cc-toggles" role="group" aria-label="Toggles">
               <div class="cc-tile" id="enabledTile" role="button" tabindex="0">
                 <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.8 6a8.5 8.5 0 0 1 0 12" /></svg></span>
-                <span class="cc-label" data-i18n="enable_caster">Enable Adhan Caster</span>
+                <span class="cc-label" data-i18n="enable_caster">Adhan Caster</span>
+                <span class="cc-tag" id="enabledTag" aria-hidden="true">Enabled</span>
                 <input type="checkbox" id="enabled" class="cc-input" tabindex="-1" aria-hidden="true" />
               </div>
               <div class="cc-tile" id="focusTile" role="button" tabindex="0">
                 <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" /></svg></span>
-                <span class="cc-label" data-i18n="focus_fullscreen">Prayer focus fullscreen during Adhan</span>
+                <span class="cc-label" data-i18n="focus_fullscreen">Display Prayer Focus Screen</span>
+                <span class="cc-tag" id="focusTag" aria-hidden="true">Fullscreen</span>
                 <input type="checkbox" id="focusMode" class="cc-input" tabindex="-1" aria-hidden="true" />
               </div>
-              <div class="cc-tile" id="hijriTile" role="button" tabindex="0">
-                <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 12.8A8 8 0 1 1 11.2 3a6.3 6.3 0 0 0 9.8 9.8z" /></svg></span>
-                <span class="cc-label" data-i18n="show_hijri">Show Hijri date</span>
-                <input type="checkbox" id="showHijri" class="cc-input" tabindex="-1" aria-hidden="true" />
+
+              <div class="cc-tile-wrap" id="badgeTileWrap">
+                <div class="cc-tile" id="badgeTile" role="button" tabindex="0">
+                  <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg></span>
+                  <span class="cc-label" data-i18n="badge_countdown">Display Countdown on Extension Icon</span>
+                  <span class="cc-tag" id="badgeTag" aria-hidden="true">ON</span>
+                  <input type="checkbox" id="badgeCountdown" class="cc-input" tabindex="-1" aria-hidden="true" />
+                </div>
+
+                <div class="badge-subpanel glass" id="badgeSubpanel">
+                  <label class="set-row" id="badgeModeRow">
+                    <span class="set-label" data-i18n="badge_mode">Icon countdown mode</span>
+                    <select id="badgeMode">
+                      <option value="auto" data-i18n="badge_mode_auto">Auto (always on)</option>
+                      <option value="manual" data-i18n="badge_mode_manual">Manual (set hours)</option>
+                    </select>
+                  </label>
+                  <label class="set-row" id="badgeHoursRow">
+                    <span class="set-label" data-i18n="badge_hours">Countdown window</span>
+                    <select id="badgeManualHours">
+                      <option value="1" data-i18n="badge_hours_1h">1 hour before</option>
+                      <option value="2" data-i18n="badge_hours_2h">2 hours before</option>
+                      <option value="3" data-i18n="badge_hours_3h">3 hours before</option>
+                      <option value="4" data-i18n="badge_hours_4h">4 hours before</option>
+                      <option value="5" data-i18n="badge_hours_5h">5 hours before</option>
+                    </select>
+                  </label>
+                  <div class="pin-hint" id="pinHint">
+                    <span class="pin-ico" aria-hidden="true">📌</span>
+                    <div class="pin-text">
+                      <strong data-i18n="pin_extension_title">Pin to browser toolbar</strong>
+                      <p data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Caster to keep the countdown visible at a glance.</p>
+                    </div>
+                  </div>
+                  <div class="badge-saved" id="badgeSaved" aria-live="polite">✓ Saved</div>
+                </div>
               </div>
             </div>
 

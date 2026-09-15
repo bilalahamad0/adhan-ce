@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
+import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
@@ -28,6 +28,9 @@ const DEFAULT_SETTINGS = {
   autoResumeMinutes: 5,
   leadSeconds: 30,
   focusMode: true,
+  badgeCountdown: true, // show next prayer countdown on toolbar icon badge
+  badgeMode: 'auto', // 'auto' (always active) or 'manual' (hold-off threshold)
+  badgeManualHours: 2, // hours before prayer to show badge countdown when in manual mode
   method: 2, // Aladhan calculation method id; 2 = ISNA (preserves prior times)
   school: 0, // Asr juristic method: 0 = Standard (Shafi/Maliki/Hanbali), 1 = Hanafi
   showHijri: true, // show the Hijri (Islamic) date in the popup header
@@ -37,6 +40,7 @@ const DEFAULT_SETTINGS = {
 const ALARM_PRAYER = 'adhan-prayer-fire';
 const ALARM_RESUME = 'adhan-auto-resume';
 const ALARM_TICK = 'adhan-tick';
+const ALARM_BADGE = 'adhan-badge-tick';
 
 // ---------- storage helpers ----------
 async function getSettings() {
@@ -141,8 +145,16 @@ async function armAlarms() {
   if (settings.enabled && nextPrayer) {
     chrome.alarms.create(ALARM_PRAYER, { when: Math.max(Date.now() + 500, nextPrayer.ts) });
   }
+  await chrome.alarms.clear(ALARM_BADGE);
+  if (settings.enabled && settings.badgeCountdown !== false && nextPrayer) {
+    chrome.alarms.create(ALARM_BADGE, {
+      when: Math.ceil(Date.now() / 60000) * 60000,
+      periodInMinutes: 1,
+    });
+  }
   // Self-healing heartbeat: recompute / refetch and re-arm periodically.
   chrome.alarms.create(ALARM_TICK, { periodInMinutes: 15 });
+  await updateBadge();
 }
 
 // ---------- broadcast to tabs ----------
@@ -173,12 +185,60 @@ async function broadcast(message) {
   );
 }
 
-async function setPausedBadge(on) {
+async function updateBadge(providedState) {
   try {
-    await chrome.action.setBadgeText({ text: on ? '❚❚' : '' });
-    if (on) await chrome.action.setBadgeBackgroundColor({ color: '#0b6b43' });
+    const { settings, nextPrayer, paused } = providedState || (await getState());
+    if (!settings.enabled || settings.badgeCountdown === false) {
+      await chrome.action.setBadgeText({ text: '' });
+      await chrome.action.setTitle({ title: 'Adhan Caster — Muslim Prayer Times' });
+      return;
+    }
+
+    if (paused && paused.active) {
+      await chrome.action.setBadgeText({ text: '❚❚' });
+      const p = paused.prayer || (nextPrayer && nextPrayer.name) || 'Prayer';
+      const color = (p && PRAYER_BADGE_COLORS[p]) || '#0b6b43';
+      const textColor = (p && PRAYER_BADGE_TEXT_COLORS[p]) || '#ffffff';
+      await chrome.action.setBadgeBackgroundColor({ color });
+      try {
+        await chrome.action.setBadgeTextColor({ color: textColor });
+      } catch (_) {}
+      await chrome.action.setTitle({ title: `${p} Adhan · Media paused` });
+      return;
+    }
+
+    if (!nextPrayer || !nextPrayer.ts) {
+      await chrome.action.setBadgeText({ text: '' });
+      await chrome.action.setTitle({ title: 'Adhan Caster — Muslim Prayer Times' });
+      return;
+    }
+
+    const now = Date.now();
+    const diff = nextPrayer.ts - now;
+    const mode = settings.badgeMode || 'auto';
+    const manualHours = settings.badgeManualHours != null ? settings.badgeManualHours : 2;
+    const text = formatBadgeCountdown(diff, { mode, manualHours });
+    await chrome.action.setBadgeText({ text });
+    if (text) {
+      const color = (nextPrayer.name && PRAYER_BADGE_COLORS[nextPrayer.name]) || '#0b6b43';
+      const textColor = (nextPrayer.name && PRAYER_BADGE_TEXT_COLORS[nextPrayer.name]) || '#ffffff';
+      await chrome.action.setBadgeBackgroundColor({ color });
+      try {
+        await chrome.action.setBadgeTextColor({ color: textColor });
+      } catch (_) {}
+    }
+
+    const countdownStr = formatTooltipCountdown(diff) || formatBadgeCountdown(diff);
+    await chrome.action.setTitle({
+      title: `Next: ${nextPrayer.name} in ${countdownStr} (${nextPrayer.time})`,
+    });
   } catch (_) {}
 }
+
+async function setPausedBadge(on) {
+  await updateBadge();
+}
+
 
 // ---------- prayer / resume handlers ----------
 async function handlePrayerFire() {
@@ -424,6 +484,7 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_PRAYER) handlePrayerFire();
   else if (alarm.name === ALARM_RESUME) handleAutoResume();
+  else if (alarm.name === ALARM_BADGE) updateBadge();
   else if (alarm.name === ALARM_TICK) {
     refreshNext()
       .then(armAlarms)
@@ -512,16 +573,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await testAdhan(msg.seconds || 30);
         sendResponse({ ok: true });
         break;
+      case 'PATCH_SETTINGS':
       case 'SAVE_SETTINGS': {
         const current = await getSettings();
         const settings = { ...current, ...(msg.settings || {}) };
         await chrome.storage.local.set({ settings });
-        try {
-          await fetchAndStoreSchedule();
-        } catch (e) {
-          await armAlarms();
-          sendResponse({ ok: false, error: String(e.message || e) });
-          return;
+        const { schedule } = await chrome.storage.local.get('schedule');
+        const locationOrCalcChanged =
+          !schedule ||
+          settings.city !== current.city ||
+          settings.country !== current.country ||
+          settings.state !== current.state ||
+          settings.method !== current.method ||
+          settings.school !== current.school;
+        if (locationOrCalcChanged) {
+          try {
+            await fetchAndStoreSchedule();
+          } catch (e) {
+            await armAlarms();
+            sendResponse({ ok: false, error: String(e.message || e) });
+            return;
+          }
         }
         await armAlarms();
         sendResponse({ ok: true });
@@ -539,9 +611,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'TOGGLE_PRAYER': {
         // Mark/unmark one prayer as prayed on a given day (YYYY-MM-DD). Stores only
         // the marked prayers; an emptied day is dropped so the log stays compact.
+        // Prayers cannot be marked in advance (neither future dates nor future prayer times).
         if (!msg.date || !PRAYER_ORDER.includes(msg.prayer)) {
           sendResponse({ ok: false, error: 'bad prayer' });
           break;
+        }
+        const { schedule } = await chrome.storage.local.get('schedule');
+        const today = (schedule && schedule.date) || ymd();
+        if (msg.date > today) {
+          sendResponse({ ok: false, error: 'cannot mark future prayer' });
+          break;
+        }
+        if (msg.date === today && schedule && Array.isArray(schedule.prayers)) {
+          const p = schedule.prayers.find((x) => x.name === msg.prayer);
+          if (p && p.ts && p.ts > Date.now()) {
+            sendResponse({ ok: false, error: 'prayer time has not passed yet' });
+            break;
+          }
         }
         const { prayerLog } = await chrome.storage.local.get('prayerLog');
         const log = prayerLog || {};

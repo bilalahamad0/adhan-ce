@@ -25,7 +25,7 @@ const BODY = readFileSync(join(ROOT, 'popup.html'), 'utf8')
 
 const DEFAULTS = {
   enabled: true, country: 'United States', state: 'California', city: 'Sunnyvale',
-  autoResumeMinutes: 5, leadSeconds: 30, focusMode: true, method: 2, school: 0,
+  autoResumeMinutes: 5, leadSeconds: 30, focusMode: true, badgeCountdown: true, badgeMode: 'auto', badgeManualHours: 2, method: 2, school: 0,
   showHijri: true, hijriOffset: 0,
 };
 
