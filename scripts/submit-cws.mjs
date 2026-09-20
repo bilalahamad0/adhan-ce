@@ -10,7 +10,7 @@
 //   node scripts/submit-cws.mjs <path-to.crx> [--dry-run] [--no-publish]
 //
 //   <path-to.crx>   the signed CRX to ship. Defaults to
-//                   ./adhan-caster-<manifest.version>.crx (repo root).
+//                   ./adhan-focus-<manifest.version>.crx (repo root).
 //   --dry-run       validate the CRX + config and exit. Makes NO network calls
 //                   and needs NO credentials — safe to run anywhere, including
 //                   CI smoke tests. This is the only path that can be exercised
@@ -23,7 +23,7 @@
 //   CWS_CLIENT_SECRET    OAuth2 client secret
 //   CWS_REFRESH_TOKEN    OAuth2 refresh token with the chromewebstore scope
 //   CWS_EXTENSION_ID     the published item's ID
-//                        (defaults to the known Adhan Caster ID below)
+//                        (defaults to the known Adhan Focus ID below)
 //
 // Locally these come from a gitignored .env; in CI they come from repo secrets.
 // See .github/RELEASE_SETUP.md for how to obtain the OAuth credentials once.
@@ -64,7 +64,7 @@ function loadDotEnv() {
   }
 }
 
-// Published Adhan Caster item ID (public — it's in the store URL/README).
+// Published Adhan Focus item ID (public — it's in the store URL/README).
 // Overridable via env so this script isn't hard-wired to one listing.
 const DEFAULT_EXTENSION_ID = 'jfjknglldcdminelckmmfdbnlikiogia';
 
@@ -142,7 +142,7 @@ async function uploadCrx({ token, extId, crx }) {
       Authorization: `Bearer ${token}`,
       'x-goog-api-version': '2',
       'X-Goog-Upload-Protocol': 'raw',
-      'X-Goog-Upload-File-Name': `adhan-caster.crx`,
+      'X-Goog-Upload-File-Name': `adhan-focus.crx`,
       'Content-Type': 'application/octet-stream',
     },
     body: crx.buf,
@@ -191,7 +191,7 @@ async function main() {
 
   const version = await manifestVersion();
   const crxPath = resolve(
-    positional[0] || join(REPO, `adhan-caster-${version}.crx`)
+    positional[0] || join(REPO, `adhan-focus-${version}.crx`)
   );
   const extId = process.env.CWS_EXTENSION_ID || DEFAULT_EXTENSION_ID;
 

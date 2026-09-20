@@ -1,4 +1,4 @@
-// Adhan Caster — popup UI logic.
+// Adhan Focus — popup UI logic.
 // A fixed-frame popup with three tabbed views (Home / Tracker / Settings) that
 // swap in place (the popup never resizes), an SVG analog clock that ticks in the
 // selected location's timezone, an Appearance control (System / Light / Dark), a
@@ -7,10 +7,11 @@
 import { formatCountdown, ymd, PRAYER_ORDER } from './lib/schedule.js';
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { emptyUsage, recent, activeDays } from './lib/usage.js';
-import { searchPlaces } from './lib/geocode.js';
+import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
 import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
 import { DEV } from './lib/buildinfo.js';
+import { playChime } from './lib/audio.js';
 
 const $ = (id) => document.getElementById(id);
 let st = null;
@@ -73,51 +74,189 @@ function applyClockStyle(style) {
   c.classList.toggle('is-analog', style !== 'digital');
 }
 
-// Control-Center toggle tiles are backed by hidden checkboxes (#enabled etc.),
-// so the existing render/save logic (and tests) keep using the checkboxes.
-const TOGGLE_TILES = [
-  ['enabled', 'enabledTile'],
-  ['focusMode', 'focusTile'],
-  ['badgeCountdown', 'badgeTile'],
+function isStrictFocusActive() {
+  return !!(
+    st &&
+    st.paused &&
+    st.paused.active &&
+    st.settings &&
+    st.settings.strictFocus
+  );
+}
+
+// Segmented toggle controls backed by hidden inputs for state and testing compatibility.
+const TOGGLE_CONFIG = [
+  { cb: 'enabled', tile: 'enabledTile', onVal: 'enabled', offVal: 'disabled', tagOnKey: 'tag_enabled', tagOffKey: 'tag_disabled', tagOnDef: 'Enabled', tagOffDef: 'Disabled' },
+  { cb: 'focusMode', tile: 'focusTile', onVal: 'fullscreen', offVal: 'subtle', tagOnKey: 'tag_fullscreen', tagOffKey: 'tag_subtle_banner', tagOnDef: 'Fullscreen', tagOffDef: 'Subtle Banner' },
+  { cb: 'strictFocus', tile: 'strictFocusTile', onVal: 'strict', offVal: 'casual', tagOnKey: 'tag_strict_focus', tagOffKey: 'tag_can_resume', tagOnDef: 'Strict Focus', tagOffDef: 'Can Resume' },
+  { cb: 'adhanChime', tile: 'chimeTile', onVal: 'on', offVal: 'off', tagOnKey: 'tag_on', tagOffKey: 'tag_off', tagOnDef: 'ON', tagOffDef: 'OFF' },
+  { cb: 'badgeCountdown', tile: 'badgeTile', onVal: 'on', offVal: 'off', tagOnKey: 'tag_on', tagOffKey: 'tag_off', tagOnDef: 'ON', tagOffDef: 'OFF' },
 ];
+const TOGGLE_TILES = TOGGLE_CONFIG.map((c) => [c.cb, c.tile]);
+
+let focusSubpanelOpen = false;
+let badgeSubpanelOpen = false;
+
+function setFocusSubpanel(open) {
+  focusSubpanelOpen = open;
+  if ($('focusSubpanel')) $('focusSubpanel').hidden = !focusSubpanelOpen;
+  if ($('focusExpandBtn')) {
+    $('focusExpandBtn').classList.toggle('is-expanded', focusSubpanelOpen);
+    $('focusExpandBtn').setAttribute('aria-expanded', String(focusSubpanelOpen));
+  }
+}
+
+function setBadgeSubpanel(open) {
+  badgeSubpanelOpen = open;
+  if ($('badgeSubpanel')) $('badgeSubpanel').hidden = !badgeSubpanelOpen;
+  if ($('badgeExpandBtn')) {
+    $('badgeExpandBtn').classList.toggle('is-expanded', badgeSubpanelOpen);
+    $('badgeExpandBtn').setAttribute('aria-expanded', String(badgeSubpanelOpen));
+  }
+}
+
+function wireSubpanelToggles() {
+  $('focusExpandBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setFocusSubpanel(!focusSubpanelOpen);
+  });
+  $('badgeExpandBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setBadgeSubpanel(!badgeSubpanelOpen);
+  });
+}
+
+function syncBadgeModeSeg() {
+  const seg = $('badgeModeSeg');
+  const sel = $('badgeMode');
+  if (!seg || !sel) return;
+  const val = sel.value || 'auto';
+  const opts = [...seg.querySelectorAll('.seg-opt')];
+  opts.forEach((o, i) => {
+    const isMatch = o.dataset.val === val;
+    o.classList.toggle('is-active', isMatch);
+    o.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+    if (isMatch) seg.style.setProperty('--i', String(i));
+  });
+}
+
 function syncToggleTiles() {
-  for (const [cb, tile] of TOGGLE_TILES) {
-    const el = $(tile);
-    if (!el) continue;
-    const on = $(cb).checked;
+  const strictActive = isStrictFocusActive();
+  for (const cfg of TOGGLE_CONFIG) {
+    const el = $(cfg.tile);
+    const cb = $(cfg.cb);
+    if (!el || !cb) continue;
+    const on = cb.checked;
     el.classList.toggle('on', on);
     el.setAttribute('aria-pressed', on ? 'true' : 'false');
-    const tag = el.querySelector('.cc-tag');
+
+    // If strict focus is currently active during salah, disable and lock tiles so
+    // user cannot turn strictFocus or focusMode off intermittently.
+    if (strictActive && (cfg.tile === 'strictFocusTile' || cfg.tile === 'focusTile')) {
+      el.classList.add('is-disabled');
+      el.setAttribute('aria-disabled', 'true');
+      el.querySelectorAll('.seg-opt').forEach((b) => (b.disabled = true));
+    } else {
+      el.classList.remove('is-disabled');
+      el.removeAttribute('aria-disabled');
+      el.querySelectorAll('.seg-opt').forEach((b) => (b.disabled = false));
+    }
+
+    // Update segmented control buttons and thumb
+    const opts = [...el.querySelectorAll('.seg-opt')];
+    if (opts.length) {
+      const activeVal = on ? cfg.onVal : cfg.offVal;
+      let activeIdx = 0;
+      opts.forEach((o, i) => {
+        const isMatch = o.dataset.val === activeVal;
+        o.classList.toggle('is-active', isMatch);
+        o.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+        if (isMatch) activeIdx = i;
+      });
+      el.style.setProperty('--i', String(activeIdx));
+    }
+
+    const tag = $(cfg.tile.replace('Tile', 'Tag')) || el.querySelector('.cc-tag');
     if (tag) {
-      if (tile === 'enabledTile') {
-        tag.textContent = on ? (t('tag_enabled') || 'Enabled') : (t('tag_disabled') || 'Disabled');
-      } else if (tile === 'focusTile') {
-        tag.textContent = on ? (t('tag_fullscreen') || 'Fullscreen') : (t('tag_off') || 'OFF');
+      if (strictActive && cfg.tile === 'strictFocusTile') {
+        tag.textContent = t('locked') || 'Locked';
       } else {
-        tag.textContent = on ? (t('tag_on') || 'ON') : (t('tag_off') || 'OFF');
+        const onText = t(cfg.tagOnKey) || cfg.tagOnDef;
+        const offText = t(cfg.tagOffKey) || t('tag_casual_focus') || cfg.tagOffDef;
+        tag.textContent = on ? onText : offText;
       }
     }
   }
+
+  // Show strictFocus warning hint only when strictFocus is selected (Strict Focus mode)
+  if ($('strictFocusHint')) {
+    const strictOn = $('strictFocus') ? $('strictFocus').checked : false;
+    $('strictFocusHint').hidden = !strictOn;
+  }
+
+  // Hide and disable the toolbar Resume button during enforced strict focus
+  if ($('resumeBtn')) {
+    if (strictActive) {
+      $('resumeBtn').hidden = true;
+      $('resumeBtn').style.display = 'none';
+      $('resumeBtn').disabled = true;
+      $('resumeBtn').classList.add('is-disabled');
+      $('resumeBtn').setAttribute('aria-disabled', 'true');
+    } else {
+      $('resumeBtn').hidden = false;
+      $('resumeBtn').style.display = '';
+      $('resumeBtn').disabled = false;
+      $('resumeBtn').classList.remove('is-disabled');
+      $('resumeBtn').removeAttribute('aria-disabled');
+    }
+  }
+
+  syncFocusSettings();
+  syncBadgeSettings();
+}
+
+function syncFocusSettings() {
+  const focusOn = $('focusMode') ? $('focusMode').checked : false;
+  if ($('resumeMinRow')) $('resumeMinRow').hidden = !focusOn;
+  if ($('strictFocusTileWrap')) $('strictFocusTileWrap').hidden = !focusOn;
+  if ($('focusSubpanel')) $('focusSubpanel').hidden = !focusSubpanelOpen;
 }
 
 function syncBadgeSettings() {
   const badgeOn = $('badgeCountdown') ? $('badgeCountdown').checked : true;
   const isManual = $('badgeMode') ? $('badgeMode').value === 'manual' : false;
-  if ($('badgeSubpanel')) $('badgeSubpanel').hidden = !badgeOn;
   if ($('pinHint')) $('pinHint').hidden = !badgeOn;
   if ($('badgeModeRow')) $('badgeModeRow').hidden = !badgeOn;
   if ($('badgeHoursRow')) $('badgeHoursRow').hidden = !badgeOn || !isManual;
+  if ($('badgeExpandBtn')) {
+    $('badgeExpandBtn').style.display = badgeOn ? '' : 'none';
+  }
+  if (!badgeOn) {
+    badgeSubpanelOpen = false;
+    if ($('badgeSubpanel')) $('badgeSubpanel').hidden = true;
+    if ($('badgeExpandBtn')) {
+      $('badgeExpandBtn').classList.remove('is-expanded');
+      $('badgeExpandBtn').setAttribute('aria-expanded', 'false');
+    }
+  } else {
+    if ($('badgeSubpanel')) $('badgeSubpanel').hidden = !badgeSubpanelOpen;
+  }
 }
 
 let _tileSaveTimer = null;
 async function autoSaveToggleSettings() {
   syncBadgeSettings();
+  syncFocusSettings();
   const settings = {
     enabled: $('enabled') ? $('enabled').checked : true,
     focusMode: $('focusMode') ? $('focusMode').checked : false,
+    strictFocus: $('strictFocus') ? $('strictFocus').checked : false,
+    adhanChime: $('adhanChime') ? $('adhanChime').checked : true,
     badgeCountdown: $('badgeCountdown') ? $('badgeCountdown').checked : true,
     badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
     badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
+    autoResumeMinutes: Math.max(0, parseInt($('resumeMin') ? $('resumeMin').value : 5, 10) || 5),
+    leadSeconds: Math.max(15, parseInt($('leadSeconds') ? $('leadSeconds').value : 30, 10) || 30),
   };
   await send({ type: 'SAVE_SETTINGS', settings });
   // Flash "✓ Saved" indicator inside badge subpanel if open
@@ -319,6 +458,8 @@ function renderAll() {
 
   $('enabled').checked = settings.enabled !== false;
   $('focusMode').checked = settings.focusMode === true;
+  if ($('strictFocus')) $('strictFocus').checked = settings.strictFocus === true;
+  if ($('adhanChime')) $('adhanChime').checked = settings.adhanChime !== false;
   $('method').value = String(settings.method != null ? settings.method : 2);
   $('school').value = String(settings.school != null ? settings.school : 0);
   $('hijriOffset').value = String(settings.hijriOffset || 0);
@@ -326,7 +467,9 @@ function renderAll() {
   if ($('badgeMode')) $('badgeMode').value = settings.badgeMode === 'manual' ? 'manual' : 'auto';
   if ($('badgeManualHours')) $('badgeManualHours').value = String(settings.badgeManualHours || 2);
   syncToggleTiles();
+  syncBadgeModeSeg();
   syncBadgeSettings();
+  syncFocusSettings();
 
   const place = settings.city
     ? { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon }
@@ -353,6 +496,9 @@ function renderAll() {
       prayer: paused.prayer ? t('prayer_' + paused.prayer) : t('prayer_generic'),
     });
     $('focusBtn').hidden = paused.focus === true;
+    const isStrict = isStrictFocusActive();
+    $('resumeBtn').hidden = isStrict;
+    $('resumeBtn').style.display = isStrict ? 'none' : '';
   } else {
     $('pausedBanner').hidden = true;
   }
@@ -664,6 +810,18 @@ $('testBtn').addEventListener('click', async () => {
     $('testMsg').textContent = (res && res.error) || t('unavailable');
   }
 });
+if ($('testChimeBtn')) {
+  $('testChimeBtn').addEventListener('click', async () => {
+    $('testMsg').textContent = '';
+    try {
+      await playChime();
+      $('testMsg').textContent = t('test_chime_played');
+      setTimeout(() => ($('testMsg').textContent = ''), 4000);
+    } catch (err) {
+      $('testMsg').textContent = (err && err.message) || t('unavailable');
+    }
+  });
+}
 $('save').addEventListener('click', async () => {
   if (!selectedPlace || $('city').value.trim() !== selectedPlace.label) {
     $('saveMsg').textContent = t('pick_location');
@@ -675,6 +833,8 @@ $('save').addEventListener('click', async () => {
   const settings = {
     enabled: $('enabled').checked,
     focusMode: $('focusMode').checked,
+    strictFocus: $('strictFocus') ? $('strictFocus').checked : false,
+    adhanChime: $('adhanChime') ? $('adhanChime').checked : true,
     country: selectedPlace.country || 'United States',
     state: selectedPlace.state || '',
     city: selectedPlace.city,
@@ -728,29 +888,77 @@ $('clock').addEventListener('keydown', (e) => {
   }
 });
 
-// Control-Center toggle tiles flip their backing checkbox on click / Enter / Space.
-TOGGLE_TILES.forEach(([cb, tile]) => {
-  const el = $(tile);
-  if (!el) return;
-  const flip = () => {
-    $(cb).checked = !$(cb).checked;
+// Toggle controls: clicking an explicit option (.seg-opt) sets that state;
+// clicking the container itself (or pressing Enter/Space) flips state.
+TOGGLE_CONFIG.forEach((cfg) => {
+  const el = $(cfg.tile);
+  const cb = $(cfg.cb);
+  if (!el || !cb) return;
+
+  const handleSelection = (e) => {
+    if (el.classList.contains('is-disabled') || el.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
+    const opt = e.target && e.target.closest ? e.target.closest('.seg-opt') : null;
+    if (opt) {
+      const val = opt.dataset.val;
+      const targetChecked = val === cfg.onVal;
+      if (cb.checked === targetChecked) return;
+      cb.checked = targetChecked;
+    } else {
+      cb.checked = !cb.checked;
+    }
     syncToggleTiles();
     autoSaveToggleSettings();
+    if (cfg.cb === 'adhanChime' && cb.checked) {
+      playChime().catch(() => {});
+    }
   };
-  el.addEventListener('click', flip);
+
+  el.addEventListener('click', handleSelection);
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      flip();
+      if (el.classList.contains('is-disabled') || el.getAttribute('aria-disabled') === 'true') {
+        return;
+      }
+      cb.checked = !cb.checked;
+      syncToggleTiles();
+      autoSaveToggleSettings();
+      if (cfg.cb === 'adhanChime' && cb.checked) {
+        playChime().catch(() => {});
+      }
     }
   });
 });
 
+if ($('badgeModeSeg')) {
+  $('badgeModeSeg').addEventListener('click', (e) => {
+    const opt = e.target && e.target.closest ? e.target.closest('.seg-opt') : null;
+    if (!opt) return;
+    const val = opt.dataset.val;
+    if ($('badgeMode') && $('badgeMode').value !== val) {
+      $('badgeMode').value = val;
+      syncBadgeModeSeg();
+      autoSaveToggleSettings();
+    }
+  });
+}
+
 if ($('badgeMode')) {
-  $('badgeMode').addEventListener('change', autoSaveToggleSettings);
+  $('badgeMode').addEventListener('change', () => {
+    syncBadgeModeSeg();
+    autoSaveToggleSettings();
+  });
 }
 if ($('badgeManualHours')) {
   $('badgeManualHours').addEventListener('change', autoSaveToggleSettings);
+}
+if ($('resumeMin')) {
+  $('resumeMin').addEventListener('change', autoSaveToggleSettings);
+}
+if ($('leadSeconds')) {
+  $('leadSeconds').addEventListener('change', autoSaveToggleSettings);
 }
 
 // Tracker month navigation
@@ -788,6 +996,126 @@ try {
   $('version').textContent = 'v' + chrome.runtime.getManifest().version;
 } catch (_) {}
 
+// ───────────────────────────── Onboarding & Tour ─────────────────────────
+let obStep = 1;
+let obSimTimer = null;
+
+function showOnboardingModal(force = false) {
+  const modal = $('onboardingModal');
+  if (!modal) return;
+  modal.hidden = false;
+  obStep = 1;
+  updateObSlides();
+  if ($('obCurrentLoc')) {
+    const loc = $('locLabel') ? $('locLabel').textContent : (st?.settings?.city || 'Makkah');
+    $('obCurrentLoc').textContent = loc !== '—' ? loc : 'Makkah, Saudi Arabia';
+  }
+}
+
+function hideOnboardingModal() {
+  const modal = $('onboardingModal');
+  if (modal) modal.hidden = true;
+  chrome.storage.local.set({ onboardingCompleted: true });
+}
+
+function updateObSlides() {
+  for (let i = 1; i <= 4; i++) {
+    const slide = $(`obSlide${i}`);
+    if (slide) slide.classList.toggle('is-active', i === obStep);
+  }
+  const dots = $('obDots');
+  if (dots) {
+    Array.from(dots.children).forEach((dot, idx) => {
+      dot.classList.toggle('is-active', idx + 1 === obStep);
+    });
+  }
+  const prevBtn = $('obPrevBtn');
+  const nextBtn = $('obNextBtn');
+  const finishBtn = $('obFinishBtn');
+  if (prevBtn) prevBtn.style.visibility = obStep === 1 ? 'hidden' : 'visible';
+  if (nextBtn) nextBtn.hidden = obStep === 4;
+  if (finishBtn) finishBtn.hidden = obStep !== 4;
+}
+
+function wireOnboarding() {
+  $('obSkipBtn')?.addEventListener('click', hideOnboardingModal);
+  $('obFinishBtn')?.addEventListener('click', hideOnboardingModal);
+  $('openTourBtn')?.addEventListener('click', () => showOnboardingModal(true));
+
+  $('obNextBtn')?.addEventListener('click', () => {
+    if (obStep < 4) {
+      obStep += 1;
+      updateObSlides();
+    }
+  });
+  $('obPrevBtn')?.addEventListener('click', () => {
+    if (obStep > 1) {
+      obStep -= 1;
+      updateObSlides();
+    }
+  });
+
+  $('obChimePreviewBtn')?.addEventListener('click', () => {
+    playChime().catch(() => {});
+  });
+
+  $('obSimBtn')?.addEventListener('click', () => {
+    const status = $('obSimStatus');
+    if (!status) return;
+    status.hidden = false;
+    if (obSimTimer) clearTimeout(obSimTimer);
+    playChime().catch(() => {});
+    obSimTimer = setTimeout(() => {
+      status.hidden = true;
+    }, 4000);
+  });
+
+  $('obDetectBtn')?.addEventListener('click', async () => {
+    const text = $('obDetectText');
+    const btn = $('obDetectBtn');
+    if (text) text.textContent = t('detecting_location') || 'Detecting…';
+    if (btn) btn.disabled = true;
+    try {
+      const place = await detectLocationByIp();
+      if (place) {
+        choosePlace(place);
+        if ($('obCurrentLoc')) $('obCurrentLoc').textContent = place.label;
+        $('save').click();
+      }
+    } catch (_) {
+    } finally {
+      if (text) text.textContent = t('detect_location') || 'Detect location';
+      if (btn) btn.disabled = false;
+    }
+  });
+}
+
+function wireDetectLocation() {
+  const btn = $('detectLocBtn');
+  const text = $('detectText');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (text) text.textContent = t('detecting_location') || 'Detecting…';
+    btn.disabled = true;
+    try {
+      const place = await detectLocationByIp();
+      if (place) {
+        choosePlace(place);
+        $('save').click();
+      } else {
+        if ($('saveMsg')) {
+          $('saveMsg').textContent = t('pick_location') || 'Please search for your city';
+          setTimeout(() => ($('saveMsg').textContent = ''), 3000);
+        }
+      }
+    } catch (_) {
+    } finally {
+      if (text) text.textContent = t('detect_location') || 'Detect location';
+      btn.disabled = false;
+    }
+  });
+}
+
 // ───────────────────────────── start ──────────────────────────────────────
 async function start() {
   // Theme first to minimize any flash before the rest renders.
@@ -816,7 +1144,18 @@ async function start() {
     updateClock();
   });
 
+  wireDetectLocation();
+  wireSubpanelToggles();
+  wireOnboarding();
+
   await load();
   startTick();
+
+  try {
+    const { onboardingCompleted } = await chrome.storage.local.get('onboardingCompleted');
+    if (onboardingCompleted === false) {
+      showOnboardingModal();
+    }
+  } catch (_) {}
 }
 start();

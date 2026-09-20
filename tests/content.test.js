@@ -253,6 +253,30 @@ describe('overlay rendering (top frame, shadow DOM)', () => {
     expect(v.play).toHaveBeenCalled();
     expect(sent('RESUME_NOW')).toHaveLength(1);
   });
+
+  it('strictFocus mode hides Resume button and Esc hint, and blocks Escape key', async () => {
+    const v = addVideo();
+    await load({
+      storage: {
+        settings: settings({ focusMode: true, strictFocus: true }),
+        nextPrayer: { name: 'Asr', ts: BASE + 3600e3 },
+        paused: { active: false },
+      },
+    });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE });
+
+    const root = focusHost().shadowRoot;
+    const resume = root.querySelector('.fresume');
+    const hint = root.querySelector('.fhint');
+    expect(resume.style.display).toBe('none');
+    expect(hint.style.display).toBe('none');
+
+    // Pressing Escape does NOT dismiss focus overlay and does NOT resume media
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    expect(v.play).not.toHaveBeenCalled();
+    expect(sent('RESUME_NOW')).toHaveLength(0);
+    expect(root.querySelector('.scrim').classList.contains('show')).toBe(true);
+  });
 });
 
 describe('corner card + focus toggles', () => {

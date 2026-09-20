@@ -1,4 +1,4 @@
-// Adhan Caster — content script (runs in every frame).
+// Adhan Focus — content script (runs in every frame).
 // Top visible frame: renders the bottom-right T-15s countdown overlay, the
 // "media paused" card, and (opt-in) the full-screen prayer focus overlay.
 // Every frame: pauses/resumes its own <video>/<audio> when prayer time hits.
@@ -76,7 +76,7 @@
   // fallback so overlays always have text even before the round-trip / if it fails,
   // i.e. English behavior is unchanged when no translation is loaded.
   const I18N_EN = {
-    app_name: 'Adhan Caster',
+    app_name: 'Adhan Focus',
     prayer_generic: 'Prayer',
     time_for_prayer: 'Time for prayer',
     media_paused_msg: 'Media is paused. Take a moment for your prayer.',
@@ -241,7 +241,7 @@
     const bar = mk('div', { class: 'bar' }, barfill);
     const title = mk('div', { class: 'title', text: 'Prayer' });
     const sub = mk('div', { class: 'sub' });
-    const cbname = mk('div', { class: 'cbname', text: 'Adhan Caster' });
+    const cbname = mk('div', { class: 'cbname', text: 'Adhan Focus' });
     const cbicon = mk('img', { class: 'cbicon', alt: '' });
     const resume = mk('button', { class: 'resume' }, 'Resume');
     resume.hidden = true;
@@ -315,7 +315,7 @@
       .fhint { font-size: 12px; opacity: .6; margin-top: 13px; }
     `;
     const fbicon = mk('img', { class: 'fbicon', alt: '' });
-    const fbname = mk('span', { class: 'fbname', text: 'Adhan Caster' });
+    const fbname = mk('span', { class: 'fbname', text: 'Adhan Focus' });
     const ftitle = mk('div', { class: 'ftitle', text: 'Time for prayer' });
     const fname = mk('div', { class: 'fname', text: 'Prayer' });
     const ftime = mk('div', { class: 'ftime', dir: 'ltr' });
@@ -363,6 +363,7 @@
   }
 
   function onFocusResume() {
+    if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
     resumeMedia();
     state.paused = { active: false };
     hideFocusUI();
@@ -396,6 +397,9 @@
     if (mode === 'focus' && !document.hidden) {
       hideUI();
       ensureFocusUI();
+      const isStrict = !!(state.settings && state.settings.strictFocus);
+      fels.fresume.style.display = isStrict ? 'none' : '';
+      fels.fhint.style.display = isStrict ? 'none' : '';
       fels.fname.textContent = prayerLabel((state.paused && state.paused.prayer) || (np && np.name));
       fels.ftime.textContent = (state.paused && state.paused.time) || '';
       const mins = effectiveResumeMins();
@@ -465,6 +469,7 @@
   }
 
   function onResumeClick() {
+    if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
     resumeMedia();
     state.paused = { active: false }; // optimistic; background confirms
     render();
@@ -697,7 +702,10 @@
       if (!focusLocked || document.hidden) return;
       if (e.key === 'Escape') {
         e.preventDefault();
-        onFocusResume();
+        const isStrict = !!(state.settings && state.settings.strictFocus);
+        if (!isStrict) {
+          onFocusResume();
+        }
       } else if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' ', 'Spacebar'].includes(e.key)) {
         e.preventDefault();
       }

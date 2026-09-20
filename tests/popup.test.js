@@ -47,13 +47,25 @@ const settle = async () => {
   for (let i = 0; i < 25; i++) await Promise.resolve();
 };
 
-async function load({ state = defaultState(), manifest = { version: '1.7.4' }, send } = {}) {
+async function load({ state = defaultState(), manifest = { version: '1.7.4' }, send, initialStorage = {}, fetchRoutes = [] } = {}) {
+  window.HTMLMediaElement.prototype.play = () => Promise.resolve();
   document.body.innerHTML = BODY;
   const handleSendMessage = send || ((m) => (m.type === 'GET_STATE' ? state : { ok: true }));
-  chrome = makeChrome({ initialStorage: {}, manifest, handleSendMessage });
+  chrome = makeChrome({ initialStorage, manifest, handleSendMessage });
   globalThis.chrome = chrome;
   globalThis.fetch = makeFetch([
+    ...fetchRoutes,
     ['locales/', (url) => cat(url.match(/locales\/(\w+)\.json/)[1])],
+    [
+      'reverse-geocode-client',
+      {
+        latitude: 37.36,
+        longitude: -122.03,
+        city: 'Sunnyvale',
+        principalSubdivision: 'California',
+        countryName: 'United States',
+      },
+    ],
     [
       'geocoding-api.open-meteo.com',
       {
@@ -192,11 +204,11 @@ describe('saving settings', () => {
     expect($('focusMode').checked).toBe(true);
     expect($('focusTag').textContent).toBe('Fullscreen');
 
-    // Click focusTile -> toggles off -> tag becomes OFF and auto-saves
+    // Click focusTile -> toggles off -> tag becomes Subtle Banner and auto-saves
     $('focusTile').click();
     await settle();
     expect($('focusMode').checked).toBe(false);
-    expect($('focusTag').textContent).toBe('OFF');
+    expect($('focusTag').textContent).toBe('Subtle Banner');
     const savedFocus = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
     expect(savedFocus.settings).toMatchObject({ focusMode: false });
 
@@ -223,12 +235,127 @@ describe('saving settings', () => {
     expect($('enabledTag').textContent).toBe('Enabled');
   });
 
-  it('saves the badgeCountdown toggle state (auto-saves on tile click)', async () => {
+  it('renders and auto-saves the adhanChime toggle (default ON, flips to OFF)', async () => {
+    await load();
+    expect($('adhanChime').checked).toBe(true);
+    expect($('chimeTag').textContent).toBe('ON');
+    expect($('chimeTile').classList.contains('on')).toBe(true);
+
+    // Click chimeTile -> toggles off -> tag becomes OFF and auto-saves
+    $('chimeTile').click();
+    await settle();
+    expect($('adhanChime').checked).toBe(false);
+    expect($('chimeTag').textContent).toBe('OFF');
+    expect($('chimeTile').classList.contains('on')).toBe(false);
+    const savedOff = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOff.settings).toMatchObject({ adhanChime: false });
+
+    // Click chimeTile again -> toggles on -> tag becomes ON and auto-saves
+    $('chimeTile').click();
+    await settle();
+    expect($('adhanChime').checked).toBe(true);
+    expect($('chimeTag').textContent).toBe('ON');
+    expect($('chimeTile').classList.contains('on')).toBe(true);
+    const savedOn = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOn.settings).toMatchObject({ adhanChime: true });
+  });
+
+  it('renders and auto-saves the strictFocus toggle (default Can Resume, flips to Strict Focus)', async () => {
+    await load();
+    expect($('strictFocus').checked).toBe(false);
+    expect($('strictFocusTag').textContent).toBe('Can Resume');
+    expect($('strictFocusTile').classList.contains('on')).toBe(false);
+    expect($('strictFocusHint').hidden).toBe(true);
+
+    // Click strictFocusTile -> toggles on -> tag becomes Strict Focus, hint shows and auto-saves
+    $('strictFocusTile').click();
+    await settle();
+    expect($('strictFocus').checked).toBe(true);
+    expect($('strictFocusTag').textContent).toBe('Strict Focus');
+    expect($('strictFocusTile').classList.contains('on')).toBe(true);
+    expect($('strictFocusHint').hidden).toBe(false);
+    const savedOn = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOn.settings).toMatchObject({ strictFocus: true });
+
+    // Click strictFocusTile again -> toggles off -> tag becomes Can Resume, hint hides and auto-saves
+    $('strictFocusTile').click();
+    await settle();
+    expect($('strictFocus').checked).toBe(false);
+    expect($('strictFocusTag').textContent).toBe('Can Resume');
+    expect($('strictFocusTile').classList.contains('on')).toBe(false);
+    expect($('strictFocusHint').hidden).toBe(true);
+    const savedOff = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOff.settings).toMatchObject({ strictFocus: false });
+  });
+
+  it('locks strictFocus and focusMode tiles and hides Resume button while screen freeze is active', async () => {
+    const base = defaultState();
+    await load({
+      state: {
+        ...base,
+        settings: { ...base.settings, strictFocus: true },
+        paused: { active: true, focus: true, prayer: 'Asr', since: BASE },
+      },
+    });
+
+    expect($('strictFocusTile').classList.contains('is-disabled')).toBe(true);
+    expect($('strictFocusTile').getAttribute('aria-disabled')).toBe('true');
+    expect($('strictFocusTag').textContent).toBe('Locked');
+    expect($('focusTile').classList.contains('is-disabled')).toBe(true);
+    expect($('resumeBtn').disabled).toBe(true);
+    expect($('resumeBtn').hidden).toBe(true);
+    expect($('resumeBtn').style.display).toBe('none');
+
+    // Attempting to click strictFocusTile does not flip it
+    $('strictFocusTile').click();
+    await settle();
+    expect($('strictFocus').checked).toBe(true);
+  });
+
+  it('shows Freeze Screen and auto-resume rows when focusMode is enabled and hides them when disabled while keeping headsUpRow', async () => {
+    await load();
+    expect($('focusMode').checked).toBe(true);
+    expect($('resumeMinRow').hidden).toBe(false);
+    expect($('strictFocusTileWrap').hidden).toBe(false);
+    expect($('headsUpRow').hidden).toBe(false);
+
+    // Toggle focusMode off -> Freeze Screen & auto-resume hide, heads-up stays
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(false);
+    expect($('resumeMinRow').hidden).toBe(true);
+    expect($('strictFocusTileWrap').hidden).toBe(true);
+    expect($('headsUpRow').hidden).toBe(false);
+
+    // Toggle focusMode back on -> Freeze Screen & auto-resume show again
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(true);
+    expect($('resumeMinRow').hidden).toBe(false);
+    expect($('strictFocusTileWrap').hidden).toBe(false);
+
+    // Changing resumeMin auto-saves autoResumeMinutes
+    $('resumeMin').value = '10';
+    $('resumeMin').dispatchEvent(new Event('change'));
+    await settle();
+    const saved = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings).toMatchObject({ autoResumeMinutes: 10 });
+  });
+
+  it('saves the badgeCountdown toggle state (auto-saves on tile click and respects collapsed subpanel)', async () => {
     await load();
     expect($('badgeCountdown').checked).toBe(true);
     expect($('badgeTag').textContent).toBe('ON');
+    // Sublist under Countdown Timer is collapsed by default
+    expect($('badgeSubpanel').hidden).toBe(true);
+    expect($('badgeExpandBtn').getAttribute('aria-expanded')).toBe('false');
+
+    // Expand button opens options subpanel
+    $('badgeExpandBtn').click();
     expect($('badgeSubpanel').hidden).toBe(false);
+    expect($('badgeExpandBtn').getAttribute('aria-expanded')).toBe('true');
     expect($('pinHint').hidden).toBe(false);
+
     $('badgeTile').click(); // toggles from true to false — auto-saves immediately
     await settle();
     expect($('badgeCountdown').checked).toBe(false);
@@ -257,6 +384,93 @@ describe('saving settings', () => {
     const saved2 = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
     expect(saved2.settings).toMatchObject({ badgeManualHours: 3 });
   });
+
+  it('supports segmented controls and expand/collapse buttons for Notification Screen and Countdown Timer', async () => {
+    await load();
+
+    // 1. Notification Screen subpanel toggle
+    expect($('focusSubpanel').hidden).toBe(true);
+    expect($('focusExpandBtn').getAttribute('aria-expanded')).toBe('false');
+    $('focusExpandBtn').click();
+    expect($('focusSubpanel').hidden).toBe(false);
+    expect($('focusExpandBtn').getAttribute('aria-expanded')).toBe('true');
+    $('focusExpandBtn').click();
+    expect($('focusSubpanel').hidden).toBe(true);
+    expect($('focusExpandBtn').getAttribute('aria-expanded')).toBe('false');
+
+    // 2. Notification Screen segmented buttons (Fullscreen / Subtle Banner)
+    const subtleOpt = document.querySelector('#focusTile [data-val="subtle"]');
+    const fullscreenOpt = document.querySelector('#focusTile [data-val="fullscreen"]');
+    subtleOpt.click();
+    await settle();
+    expect($('focusMode').checked).toBe(false);
+    expect($('focusTile').style.getPropertyValue('--i')).toBe('1');
+    const savedSubtle = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedSubtle.settings).toMatchObject({ focusMode: false });
+
+    fullscreenOpt.click();
+    await settle();
+    expect($('focusMode').checked).toBe(true);
+    expect($('focusTile').style.getPropertyValue('--i')).toBe('0');
+    const savedFullscreen = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedFullscreen.settings).toMatchObject({ focusMode: true });
+
+    // 3. Lock Screen segmented buttons (Can Resume / Strict Focus)
+    const strictOpt = document.querySelector('#strictFocusTile [data-val="strict"]');
+    const casualOpt = document.querySelector('#strictFocusTile [data-val="casual"]');
+    strictOpt.click();
+    await settle();
+    expect($('strictFocus').checked).toBe(true);
+    expect($('strictFocusHint').hidden).toBe(false);
+    expect($('strictFocusTile').style.getPropertyValue('--i')).toBe('1');
+
+    casualOpt.click();
+    await settle();
+    expect($('strictFocus').checked).toBe(false);
+    expect($('strictFocusHint').hidden).toBe(true);
+    expect($('strictFocusTile').style.getPropertyValue('--i')).toBe('0');
+
+    // 4. Chime Sound segmented buttons
+    const chimeOffOpt = document.querySelector('#chimeTile [data-val="off"]');
+    const chimeOnOpt = document.querySelector('#chimeTile [data-val="on"]');
+    chimeOffOpt.click();
+    await settle();
+    expect($('adhanChime').checked).toBe(false);
+    expect($('chimeTile').style.getPropertyValue('--i')).toBe('1');
+
+    chimeOnOpt.click();
+    await settle();
+    expect($('adhanChime').checked).toBe(true);
+    expect($('chimeTile').style.getPropertyValue('--i')).toBe('0');
+
+    // 5. Adhan Focus segmented buttons
+    const disabledOpt = document.querySelector('#enabledTile [data-val="disabled"]');
+    const enabledOpt = document.querySelector('#enabledTile [data-val="enabled"]');
+    disabledOpt.click();
+    await settle();
+    expect($('enabled').checked).toBe(false);
+    expect($('enabledTile').style.getPropertyValue('--i')).toBe('1');
+
+    enabledOpt.click();
+    await settle();
+    expect($('enabled').checked).toBe(true);
+    expect($('enabledTile').style.getPropertyValue('--i')).toBe('0');
+
+    // 6. Icon Countdown Mode segmented control (Auto / Manual)
+    const manualModeOpt = document.querySelector('#badgeModeSeg [data-val="manual"]');
+    const autoModeOpt = document.querySelector('#badgeModeSeg [data-val="auto"]');
+    manualModeOpt.click();
+    await settle();
+    expect($('badgeMode').value).toBe('manual');
+    expect($('badgeModeSeg').style.getPropertyValue('--i')).toBe('1');
+    expect($('badgeHoursRow').hidden).toBe(false);
+
+    autoModeOpt.click();
+    await settle();
+    expect($('badgeMode').value).toBe('auto');
+    expect($('badgeModeSeg').style.getPropertyValue('--i')).toBe('0');
+    expect($('badgeHoursRow').hidden).toBe(true);
+  });
 });
 
 describe('action buttons relay to the worker', () => {
@@ -269,6 +483,14 @@ describe('action buttons relay to the worker', () => {
     await settle();
     expect(sentTypes()).toEqual(expect.arrayContaining(['RESUME_NOW', 'FOCUS_NOW', 'REFRESH', 'TEST_ADHAN']));
     expect($('testMsg').textContent).toBe(EN.test_started);
+  });
+
+  it('testChimeBtn plays chime and shows feedback message', async () => {
+    await load();
+    expect($('testChimeBtn')).toBeTruthy();
+    $('testChimeBtn').click();
+    await settle();
+    expect($('testMsg').textContent).toBe(EN.test_chime_played);
   });
 
   it('the tab bar swaps views within the fixed frame (no resize)', async () => {
@@ -576,3 +798,104 @@ describe('usage card (local-only activity)', () => {
     expect($('usageSince').textContent).toMatch(/Jan 2026/);
   });
 });
+
+describe('in-popup onboarding & tutorial', () => {
+  it('displays onboarding modal when onboardingCompleted is false and allows skipping', async () => {
+    await load();
+    await chrome.storage.local.set({ onboardingCompleted: false });
+    $('openTourBtn').click();
+    expect($('onboardingModal').hidden).toBe(false);
+    expect($('obSlide1').classList.contains('is-active')).toBe(true);
+
+    // Click Next -> moves to slide 2
+    $('obNextBtn').click();
+    expect($('obSlide2').classList.contains('is-active')).toBe(true);
+
+    // Click Skip -> hides modal and marks completed
+    $('obSkipBtn').click();
+    expect($('onboardingModal').hidden).toBe(true);
+    const stored = await chrome.storage.local.get('onboardingCompleted');
+    expect(stored.onboardingCompleted).toBe(true);
+  });
+
+  it('allows stepping through all 4 slides and clicking finish', async () => {
+    await load();
+    $('openTourBtn').click();
+    expect($('onboardingModal').hidden).toBe(false);
+
+    $('obNextBtn').click(); // to slide 2
+    expect($('obSlide2').classList.contains('is-active')).toBe(true);
+    $('obNextBtn').click(); // to slide 3
+    expect($('obSlide3').classList.contains('is-active')).toBe(true);
+    $('obNextBtn').click(); // to slide 4
+    expect($('obSlide4').classList.contains('is-active')).toBe(true);
+    expect($('obFinishBtn').hidden).toBe(false);
+
+    $('obFinishBtn').click();
+    expect($('onboardingModal').hidden).toBe(true);
+    const stored = await chrome.storage.local.get('onboardingCompleted');
+    expect(stored.onboardingCompleted).toBe(true);
+  });
+
+  it('handles onboarding detect button, chime preview, simulation, and prev button', async () => {
+    await load({ initialStorage: { onboardingCompleted: false } });
+    expect($('onboardingModal').hidden).toBe(false);
+
+    // Test obDetectBtn
+    $('obDetectBtn').click();
+    await settle();
+    expect($('obCurrentLoc').textContent).toContain('Sunnyvale');
+
+    // Test obChimePreviewBtn
+    $('obChimePreviewBtn').click();
+    await settle();
+
+    // Test obSimBtn
+    $('obSimBtn').click();
+    expect($('obSimStatus').hidden).toBe(false);
+
+    // Test obNextBtn then obPrevBtn
+    $('obNextBtn').click();
+    expect($('obSlide2').classList.contains('is-active')).toBe(true);
+    $('obPrevBtn').click();
+    expect($('obSlide1').classList.contains('is-active')).toBe(true);
+  });
+});
+
+describe('detect location and clock keyboard shortcuts', () => {
+  it('detects location via IP when detectLocBtn is clicked', async () => {
+    await load();
+    const btn = $('detectLocBtn');
+    expect(btn).toBeTruthy();
+    btn.click();
+    await settle();
+    expect($('city').value).toBe('Sunnyvale, California, United States');
+    expect($('locLabel').textContent).toContain('Sunnyvale');
+  });
+
+  it('shows pick location error if detectLocationByIp returns no place', async () => {
+    await load({
+      fetchRoutes: [
+        ['reverse-geocode-client', { status: 500 }],
+        ['ipapi.co', { status: 500 }],
+      ],
+    });
+    const btn = $('detectLocBtn');
+    btn.click();
+    await settle();
+    expect($('saveMsg').textContent).toBe(EN.pick_location || 'Please search for your city');
+  });
+
+  it('toggles clock style on Enter or Space keydown', async () => {
+    await load();
+    const clock = $('clock');
+    clock.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle();
+    expect(clock.classList.contains('is-digital')).toBe(true);
+
+    clock.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await settle();
+    expect(clock.classList.contains('is-digital')).toBe(false);
+  });
+});
+

@@ -1,9 +1,9 @@
 ---
-title: "Adhan Caster"
-slug: "adhan-caster"
+title: "Adhan Focus"
+slug: "adhan-focus"
 tagline: "A privacy-first Chrome extension that pauses media in every tab at prayer time."
 date: "2026-05-24"
-status: "In review — Chrome Web Store"
+status: "Published — Chrome Web Store, Firefox AMO, Edge Add-ons"
 category: "Browser Extension"
 role: "Design & engineering (solo)"
 tech:
@@ -13,15 +13,14 @@ tech:
   - "Shadow DOM"
   - "Jest"
   - "Open-Meteo geocoding"
-  - "Vercel (API)"
+  - "AlAdhan API"
 links:
   extension: "https://github.com/bilalahamad0/adhan-ce"
-  api: "https://github.com/bilalahamad0/adhan-api"
   privacy: "https://adhan.bilalahamad.com/privacy-policy.html"
 cover: "./demo.gif"
 ---
 
-> **TL;DR** — Adhan Caster is a Chrome extension that shows a live countdown to
+> **TL;DR** — Adhan Focus is a browser extension that shows a live countdown to
 > the next Islamic prayer and, the moment the Adhan begins, **pauses video and audio
 > across every open tab** — with an optional full-screen "prayer focus" screen and
 > automatic resume afterward. It's built on Manifest V3, ships zero runtime

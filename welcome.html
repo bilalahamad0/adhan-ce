@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welcome to Adhan Focus</title>
+    <link rel="stylesheet" href="welcome.css" />
+    <link rel="icon" type="image/png" href="icons/icon48.png" />
+  </head>
+  <body>
+    <!-- Atmospheric background -->
+    <div class="bg" aria-hidden="true">
+      <span class="bg-orb bg-orb-1"></span>
+      <span class="bg-orb bg-orb-2"></span>
+      <span class="bg-pattern"></span>
+      <span class="bg-veil"></span>
+    </div>
+
+    <main class="welcome-container" role="main">
+      <!-- Top header with brand and language -->
+      <header class="welcome-header">
+        <div class="welcome-brand">
+          <img src="icons/icon48.png" alt="Adhan Focus" />
+          <strong data-i18n="app_name">Adhan Focus</strong>
+        </div>
+        <div class="welcome-header-actions">
+          <select id="welcomeLang" class="lang-select" aria-label="Language">
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+            <option value="ur">اردو</option>
+            <option value="id">Bahasa Indonesia</option>
+            <option value="tr">Türkçe</option>
+            <option value="fr">Français</option>
+          </select>
+          <button type="button" id="skipWelcomeBtn" class="skip-link" data-i18n="skip_setup">Skip</button>
+        </div>
+      </header>
+
+      <!-- Stepper -->
+      <nav class="welcome-steps" aria-label="Onboarding Steps">
+        <div class="step-item is-active" id="stepIndicator1">
+          <span class="step-num">1</span>
+          <span data-i18n="onboarding_step_location">Set Your Location</span>
+        </div>
+        <div class="step-item" id="stepIndicator2">
+          <span class="step-num">2</span>
+          <span data-i18n="onboarding_step_preferences">Focus & Sound</span>
+        </div>
+        <div class="step-item" id="stepIndicator3">
+          <span class="step-num">3</span>
+          <span data-i18n="onboarding_step_pin">Pin Extension</span>
+        </div>
+      </nav>
+
+      <!-- Step Content Area -->
+      <div class="welcome-body">
+        <!-- ==================== STEP 1 ==================== -->
+        <section class="step-view is-active" id="step1View">
+          <div class="step-hero">
+            <h1 data-i18n="onboarding_title">Welcome to Adhan Focus</h1>
+            <p data-i18n="onboarding_welcome_sub">Never miss a prayer mid-scroll. When Adhan begins, media in all open tabs pauses automatically.</p>
+          </div>
+
+          <!-- 1. Language Selection First -->
+          <div class="lang-picker-card">
+            <span class="step-sublabel" data-i18n="choose_language">Select Language</span>
+            <div class="lang-chips" id="welcomeLangChips" role="group" aria-label="Language">
+              <button type="button" class="lang-chip is-active" data-lang="en"><span>🇬🇧</span> English</button>
+              <button type="button" class="lang-chip" data-lang="ar"><span>🇸🇦</span> العربية</button>
+              <button type="button" class="lang-chip" data-lang="ur"><span>🇵🇰</span> اردو</button>
+              <button type="button" class="lang-chip" data-lang="id"><span>🇮🇩</span> Bahasa Indonesia</button>
+              <button type="button" class="lang-chip" data-lang="tr"><span>🇹🇷</span> Türkçe</button>
+              <button type="button" class="lang-chip" data-lang="fr"><span>🇫🇷</span> Français</button>
+            </div>
+          </div>
+
+          <!-- 2. Location Search -->
+          <div class="loc-search-box">
+            <span class="step-sublabel" data-i18n="location">Location</span>
+            <div class="loc-input-row">
+              <input type="text" id="welcomeCity" class="loc-input" placeholder="Search your city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
+              <button type="button" id="detectLocBtn" class="btn-action-sm">
+                <span aria-hidden="true">📍</span>
+                <span id="detectText" data-i18n="detect_location">Detect location</span>
+              </button>
+              <div id="welcomeSuggest" class="suggest-list" hidden></div>
+            </div>
+          </div>
+
+          <div class="prayer-preview-card" id="previewCard">
+            <div class="pp-header">
+              <span id="previewCityLabel">Makkah, Saudi Arabia</span>
+              <span id="previewDateLabel">Today</span>
+            </div>
+            <div class="pp-grid">
+              <div class="pp-item"><div class="pp-name" data-i18n="prayer_Fajr">Fajr</div><div class="pp-time" id="ppFajr">--:--</div></div>
+              <div class="pp-item"><div class="pp-name" data-i18n="prayer_Dhuhr">Dhuhr</div><div class="pp-time" id="ppDhuhr">--:--</div></div>
+              <div class="pp-item"><div class="pp-name" data-i18n="prayer_Asr">Asr</div><div class="pp-time" id="ppAsr">--:--</div></div>
+              <div class="pp-item"><div class="pp-name" data-i18n="prayer_Maghrib">Maghrib</div><div class="pp-time" id="ppMaghrib">--:--</div></div>
+              <div class="pp-item"><div class="pp-name" data-i18n="prayer_Isha">Isha</div><div class="pp-time" id="ppIsha">--:--</div></div>
+            </div>
+          </div>
+
+          <div class="welcome-footer">
+            <span></span>
+            <button type="button" id="step1NextBtn" class="btn-primary" data-i18n="next_step">Next</button>
+          </div>
+        </section>
+
+        <!-- ==================== STEP 2 ==================== -->
+        <section class="step-view" id="step2View">
+          <div class="step-hero">
+            <h1 data-i18n="onboarding_step_preferences">Focus & Sound</h1>
+            <p>Customize how Adhan Focus notifies you and pauses playback during salah.</p>
+          </div>
+
+          <div class="pref-toggles">
+            <!-- Chime Sound -->
+            <div class="pref-card">
+              <div class="pref-info">
+                <strong data-i18n="adhan_chime">Chime Sound</strong>
+                <span>Play a gentle 3-strike chime at the start of prayer.</span>
+              </div>
+              <div class="pref-action">
+                <button type="button" id="previewChimeBtn" class="btn-preview-audio" data-i18n="play_preview">Listen</button>
+                <label class="switch">
+                  <input type="checkbox" id="welcomeChime" checked />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Notification Screen -->
+            <div class="pref-card">
+              <div class="pref-info">
+                <strong data-i18n="notification_screen">Notification Screen</strong>
+                <span>Serene full-screen reminder covering active tabs during salah.</span>
+              </div>
+              <div class="pref-action">
+                <label class="switch">
+                  <input type="checkbox" id="welcomeFullscreen" checked />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Lock Screen -->
+            <div class="pref-card">
+              <div class="pref-info">
+                <strong data-i18n="lock_screen">Lock Screen</strong>
+                <span data-i18n="lock_screen_desc">Disables the Escape key and Resume button until the timer finishes, ensuring you step away for salah.</span>
+              </div>
+              <div class="pref-action">
+                <label class="switch">
+                  <input type="checkbox" id="welcomeStrict" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="welcome-footer">
+            <button type="button" id="step2BackBtn" class="btn-secondary" data-i18n="prev_step">Back</button>
+            <button type="button" id="step2NextBtn" class="btn-primary" data-i18n="next_step">Next</button>
+          </div>
+        </section>
+
+        <!-- ==================== STEP 3 ==================== -->
+        <section class="step-view" id="step3View">
+          <div class="step-hero">
+            <h1 data-i18n="onboarding_step_pin">Pin Extension</h1>
+            <p data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
+          </div>
+
+          <div class="pin-guide-card">
+            <div class="pin-icon-wrap" aria-hidden="true">📌</div>
+            <div class="pin-desc">
+              <strong data-i18n="pin_extension_title">Pin to browser toolbar</strong>
+              <p id="browserPinGuidance">Click the Extensions puzzle icon 🧩 in your top-right browser bar, then click the Pin icon next to Adhan Focus.</p>
+            </div>
+          </div>
+
+          <div class="sim-box">
+            <p>Want to see how media pause works? Try a quick simulation:</p>
+            <button type="button" id="simPauseBtn" class="btn-sim" data-i18n="simulate_pause">Test prayer pause (10s)</button>
+            <div id="simBanner" class="test-banner" hidden>
+              <span>⏸️ Media paused for Maghrib · Auto-resumes in <b id="simCount">10</b>s</span>
+            </div>
+          </div>
+
+          <div class="welcome-footer">
+            <button type="button" id="step3BackBtn" class="btn-secondary" data-i18n="prev_step">Back</button>
+            <button type="button" id="finishBtn" class="btn-primary" data-i18n="finish_setup">Get Started</button>
+          </div>
+        </section>
+
+        <!-- ==================== COMPLETION VIEW ==================== -->
+        <section class="step-view" id="stepSuccessView" hidden>
+          <div style="padding: 48px 32px; text-align: center;">
+            <div class="success-sparkle-ico" aria-hidden="true">✨</div>
+            <h1 style="font-size: 26px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px;">You're All Set!</h1>
+            <p style="font-size: 14.5px; color: var(--muted); max-width: 440px; margin: 0 auto 26px; line-height: 1.5;">
+              Adhan Focus is now active and watching for prayer times in <b id="completionCity">your location</b>.
+              Click the extension icon in your toolbar anytime to see your prayer schedule and tracker.
+            </p>
+            <button type="button" id="closeWelcomeBtn" class="btn-primary" style="margin: 0 auto;">Close This Tab</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Confetti Canvas for Get Started celebration -->
+    <canvas id="confettiCanvas" class="confetti-canvas" hidden></canvas>
+
+    <!-- Full-Screen Serene Demo Overlay -->
+    <div id="welcomeFocusOverlay" class="demo-scrim" hidden role="dialog" aria-modal="true" aria-label="Prayer focus demo">
+      <div class="demo-bg"></div>
+      <div class="demo-stars" id="demoStars"></div>
+      <div class="demo-fbrand">
+        <img src="icons/icon48.png" alt="" />
+        <span class="demo-fbname" data-i18n="app_name">Adhan Focus</span>
+      </div>
+      <div class="demo-panel">
+        <div class="demo-crescent-wrap">
+          <span class="demo-halo"></span>
+          <span class="demo-glow"></span>
+          <span class="demo-crescent">🕌</span>
+        </div>
+        <div class="demo-ftitle" data-i18n="time_for_prayer">Time for prayer</div>
+        <div class="demo-fname" id="demoPrayerName" data-i18n="prayer_Maghrib">Maghrib</div>
+        <div class="demo-ftime" id="demoPrayerTime">06:45 PM</div>
+        <div class="demo-fmsg" data-i18n="media_paused_msg">Media is paused. Take a moment for your prayer.</div>
+        <div class="demo-fauto">
+          <span>Auto-resumes in <b id="demoAutoResumeCount">10</b>s</span>
+        </div>
+        <button type="button" id="demoResumeBtn" class="demo-fresume" data-i18n="resume">Resume</button>
+        <div class="demo-fhint" data-i18n="press_esc">Press Esc to resume</div>
+      </div>
+    </div>
+
+    <script type="module" src="welcome.js"></script>
+  </body>
+</html>

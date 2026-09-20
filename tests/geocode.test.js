@@ -1,4 +1,4 @@
-import { parseGeoResults, searchPlaces } from '../lib/geocode.js';
+import { parseGeoResults, searchPlaces, detectLocationByIp } from '../lib/geocode.js';
 
 const sample = {
   results: [
@@ -58,5 +58,80 @@ describe('searchPlaces', () => {
   it('throws on a non-ok response', async () => {
     global.fetch = async () => ({ ok: false, status: 500 });
     await expect(searchPlaces('London')).rejects.toThrow('geocode 500');
+  });
+});
+
+describe('detectLocationByIp', () => {
+  const orig = global.fetch;
+  afterEach(() => {
+    global.fetch = orig;
+  });
+
+  it('resolves location from BigDataCloud client IP endpoint', async () => {
+    global.fetch = async (url) => {
+      if (url.includes('bigdatacloud')) {
+        return {
+          ok: true,
+          json: async () => ({
+            latitude: 48.85,
+            longitude: 2.35,
+            city: 'Paris',
+            principalSubdivision: 'Île-de-France',
+            countryName: 'France',
+          }),
+        };
+      }
+      return { ok: false };
+    };
+
+    const place = await detectLocationByIp();
+    expect(place).toEqual({
+      city: 'Paris',
+      state: 'Île-de-France',
+      country: 'France',
+      lat: 48.85,
+      lon: 2.35,
+      label: 'Paris, Île-de-France, France',
+    });
+  });
+
+  it('falls back to ipapi.co if primary service fails', async () => {
+    global.fetch = async (url) => {
+      if (url.includes('bigdatacloud')) {
+        return { ok: false };
+      }
+      if (url.includes('ipapi.co')) {
+        return {
+          ok: true,
+          json: async () => ({
+            latitude: 51.5,
+            longitude: -0.12,
+            city: 'London',
+            region: 'England',
+            country_name: 'United Kingdom',
+          }),
+        };
+      }
+      return { ok: false };
+    };
+
+    const place = await detectLocationByIp();
+    expect(place).toEqual({
+      city: 'London',
+      state: 'England',
+      country: 'United Kingdom',
+      lat: 51.5,
+      lon: -0.12,
+      label: 'London, England, United Kingdom',
+    });
+  });
+
+  it('returns null safely without throwing if all services fail', async () => {
+    global.fetch = async () => {
+      throw new Error('Network offline');
+    };
+
+    const place = await detectLocationByIp();
+    expect(place).toBeNull();
   });
 });

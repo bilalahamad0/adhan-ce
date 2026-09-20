@@ -2,7 +2,7 @@
 //
 // Usage:
 //   node scripts/pack-xpi.mjs [outPath]
-//   outPath  defaults to ./adhan-caster-<manifest.version>.xpi (repo root)
+//   outPath  defaults to ./adhan-focus-<manifest.version>.xpi (repo root)
 //
 // Unlike the Chrome CRX there is NO local signing key — AMO signs XPIs
 // server-side (web-ext sign / the addons.mozilla.org API, wired up in Phase 3).
@@ -24,18 +24,19 @@ const pexec = promisify(execFile);
 // clobber each other when run back to back.
 const STAGE = join(REPO, 'dist', 'firefox');
 
-// Firefox/AMO caps the extension name at 45 chars; the shared (Chrome) name is
-// 46. The XPI ships this shorter name; the committed source and the Chrome
-// builds keep the full name. Must stay <= 45 (tests/pack.test.js enforces it).
-export const FIREFOX_NAME = 'Adhan Caster: Muslim Prayer Times & Autopause';
+// Firefox/AMO caps the extension name at 45 chars.
+// Must stay <= 45 (tests/pack.test.js enforces it).
+export const FIREFOX_NAME = 'Adhan Focus: Muslim Prayer Times & Auto-Pause';
 
 export async function packXpi(outPath) {
   const version = JSON.parse(await readFile(join(REPO, 'manifest.json'), 'utf8')).version;
-  const xpiPath = resolve(outPath || join(REPO, `adhan-caster-${version}.xpi`));
+  const xpiPath = resolve(outPath || join(REPO, `adhan-focus-${version}.xpi`));
 
   // stripServiceWorker: Gecko runs background.scripts and ignores
   // background.service_worker, which AMO validation flags on every submission.
-  await stageExtension(STAGE, { manifestName: FIREFOX_NAME, stripServiceWorker: true });
+  // stripOffscreen: Gecko uses background page Audio directly and rejects
+  // the Chromium-only offscreen permission.
+  await stageExtension(STAGE, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripOffscreen: true });
   await rm(xpiPath, { force: true });
   // -r recurse, -q quiet, -X strip platform extra-attrs for a reproducible zip.
   await pexec('zip', ['-rqX', xpiPath, '.'], { cwd: STAGE });

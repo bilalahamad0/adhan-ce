@@ -18,7 +18,7 @@ the `permissions` / `host_permissions` in `manifest.json` on every submission.
 
 ## Single purpose
 
-> Adhan Caster shows Muslim prayer times with a live countdown and automatically
+> Adhan Focus shows Muslim prayer times with a live countdown and automatically
 > pauses video and audio playback in every open browser tab when each prayer time
 > begins, then resumes playback afterward.
 
@@ -92,11 +92,8 @@ Check **only** the data type that actually leaves the device:
 
 `https://adhan.bilalahamad.com/privacy-policy.html` (source: `docs/privacy-policy.html`).
 
-> **Naming:** aligned 2026-06-10 — the manifest/store listing use the full title
-> "Adhan Caster: Muslim Prayer Times & Auto-Pause"; the privacy policy and
-> landing page use the short name "Adhan Caster" and reference the full listing
-> title once. The old "Adhan Caster Pro" branding is retired from user-facing
-> docs (it survives only in internal artifact/package names).
-> Update 2026-08-20: those internal identifiers (package name, build artifact
-> filenames, private-key path, docs slug) were renamed to `adhan-caster` too;
-> the old branding now appears nowhere except this historical note.
+> **Naming:** the manifest/store listing use the full title
+> "Adhan Focus: Muslim Prayer Times & Auto-Pause"; the privacy policy and
+> landing page use the short name "Adhan Focus" and reference the full listing
+> title once. The legacy "Adhan Caster" branding is preserved only in internal IDs
+> where required for compatibility (such as Firefox's immutable gecko.id).

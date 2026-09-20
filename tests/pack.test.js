@@ -46,7 +46,21 @@ describe('packaged runtime files', () => {
 
   it('ships the core top-level runtime files', async () => {
     const packaged = new Set(await runtimeFiles());
-    for (const f of ['manifest.json', 'background.js', 'content.js', 'content.css', 'popup.html', 'popup.js', 'popup.css']) {
+    for (const f of [
+      'manifest.json',
+      'background.js',
+      'content.js',
+      'content.css',
+      'popup.html',
+      'popup.js',
+      'popup.css',
+      'offscreen.html',
+      'offscreen.js',
+      'welcome.html',
+      'welcome.js',
+      'welcome.css',
+      'audio/chime.mp3',
+    ]) {
       expect(packaged).toContain(f);
     }
   });
@@ -126,7 +140,7 @@ describe('per-target Edge manifest', () => {
       expect(edge.background.scripts).toBeUndefined();
       expect(edge.name).toBe(cr.name); // no Firefox name truncation on Edge
       expect(cr.browser_specific_settings).toBeDefined(); // Chrome untouched
-      expect(cr.background.scripts).toEqual(['background.js']); // Chrome keeps both
+      expect(cr.background.scripts).toBeUndefined(); // Chrome has no background.scripts in MV3
     } finally {
       await rm(edgeDir, { recursive: true, force: true });
       await rm(crDir, { recursive: true, force: true });
@@ -146,13 +160,14 @@ describe('per-target Edge manifest', () => {
 });
 
 describe('per-target background entry point', () => {
-  it('source declares both entry points', () => {
+  it('source declares MV3 service worker entry point without background.scripts', () => {
     const bg = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).background;
     expect(bg.service_worker).toBeDefined();
-    expect(bg.scripts).toEqual(expect.arrayContaining([expect.any(String)]));
+    expect(bg.type).toBe('module');
+    expect(bg.scripts).toBeUndefined();
   });
 
-  it('Firefox build drops service_worker and keeps scripts; Chrome build keeps both', async () => {
+  it('Firefox build drops service_worker and sets scripts; Chrome build keeps service_worker without scripts', async () => {
     const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-bg-'));
     const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-bg-'));
     try {
@@ -163,6 +178,25 @@ describe('per-target background entry point', () => {
       expect(ff.background.service_worker).toBeUndefined();
       expect(ff.background.scripts).toEqual(['background.js']); // Gecko still has an entry point
       expect(cr.background.service_worker).toBe('background.js'); // Chrome untouched
+      expect(cr.background.scripts).toBeUndefined();
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('per-target Firefox manifest (offscreen permission strip)', () => {
+  it('Firefox build drops offscreen permission and Chrome build keeps it', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-offscreen-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-offscreen-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripOffscreen: true });
+      await stageExtension(crDir);
+      const ff = JSON.parse(await readFile(join(ffDir, 'manifest.json'), 'utf8'));
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      expect(ff.permissions).not.toContain('offscreen');
+      expect(cr.permissions).toContain('offscreen');
     } finally {
       await rm(ffDir, { recursive: true, force: true });
       await rm(crDir, { recursive: true, force: true });

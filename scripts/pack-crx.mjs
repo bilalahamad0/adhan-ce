@@ -4,8 +4,8 @@
 // Usage:
 //   node scripts/pack-crx.mjs [keyPath] [outPath]
 //
-//   keyPath  defaults to ./adhan-caster-private.pem (repo root)
-//   outPath  defaults to ./adhan-caster-<manifest.version>.crx (repo root)
+//   keyPath  defaults to ./adhan-focus-private.pem (repo root)
+//   outPath  defaults to ./adhan-focus-<manifest.version>.crx (repo root)
 //
 // Used by both the GitHub Actions release workflow and a local manual pack
 // (`npm run pack:crx`). Stages only the files Chrome needs at runtime into
@@ -35,8 +35,8 @@ async function readManifestVersion() {
 
 async function main() {
   const version = await readManifestVersion();
-  const keyPath = resolve(process.argv[2] || join(REPO, 'adhan-caster-private.pem'));
-  const crxPath = resolve(process.argv[3] || join(REPO, `adhan-caster-${version}.crx`));
+  const keyPath = resolve(process.argv[2] || join(REPO, 'adhan-focus-private.pem'));
+  const crxPath = resolve(process.argv[3] || join(REPO, `adhan-focus-${version}.crx`));
 
   if (!existsSync(keyPath)) {
     console.error(`ERROR: private key not found at ${keyPath}`);

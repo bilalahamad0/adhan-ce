@@ -54,6 +54,7 @@ export function makeChrome(opts = {}) {
     title: '',
     sent: [], // runtime.sendMessage payloads from content/popup
     popupOpened: 0,
+    offscreenDoc: null,
     onChanged,
     onMessage,
     onInstalled,
@@ -148,6 +149,15 @@ export function makeChrome(opts = {}) {
         // After injection the tab has a live content script — subsequent sends succeed.
         if (target) harness.deadTabs.delete(target.tabId);
       },
+    },
+    offscreen: {
+      createDocument: async (opts) => {
+        harness.offscreenDoc = opts;
+      },
+      closeDocument: async () => {
+        harness.offscreenDoc = null;
+      },
+      hasDocument: async () => !!harness.offscreenDoc,
     },
     notifications: {
       create: async (id, options) => {

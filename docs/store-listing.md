@@ -15,9 +15,9 @@ Goal: rank for the terms people actually search (**prayer times, adhan, azan, mu
 
 **✅ Live now in manifest:**
 ```
-Adhan Caster: Muslim Prayer Times & Auto-Pause
+Adhan Focus: Muslim Prayer Times & Auto-Pause
 ```
-Why: leads with the two highest-volume search terms (**Adhan**, **Muslim Prayer Times**) while keeping the "Adhan Caster" brand. The differentiator ("Auto-Pause") trails because it's not what people *search* — it's what makes you *win the click*.
+Why: leads with the two highest-volume search terms (**Adhan**, **Muslim Prayer Times**) while keeping the "Adhan Focus" brand. The differentiator ("Auto-Pause") trails because it's not what people *search* — it's what makes you *win the click*.
 
 **Alternates** (if you want to A/B later — only change once you have reviews, since a rename resets some momentum):
 - `Muslim Prayer Times & Adhan — Auto-Pause Media` (pure-keyword, drops brand)
@@ -41,14 +41,14 @@ Muslim prayer times with a live Adhan countdown that auto-pauses video & audio i
 ```
 🕌 Never miss a prayer because a video, podcast, or playlist pulled you in.
 
-Adhan Caster turns your browser into a calm, reliable prayer companion. It shows accurate Muslim prayer times — Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha — with a live countdown to the next salah and a real-time clock for your city. And the instant the Adhan begins, it automatically pauses every video and audio playing across all your open Chrome tabs. No scrambling for the mute button. No realizing an hour later that you prayed late.
+Adhan Focus turns your browser into a calm, reliable prayer companion. It shows accurate Muslim prayer times — Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha — with a live countdown to the next salah and a real-time clock for your city. And the instant the Adhan begins, it automatically pauses every video and audio playing across all your open Chrome tabs. No scrambling for the mute button. No realizing an hour later that you prayed late.
 
 When the moment comes, your screen settles: an optional full-screen Prayer Focus gently takes over with a softly animated reminder, so you can step away with intention. One click — or an automatic timer — brings everything back exactly where you left off.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ✨ WHAT MAKES IT SPECIAL
 ━━━━━━━━━━━━━━━━━━━━━━━━
-⏰ Live local clock — the current time for your chosen city, right in the popup. Stop glancing at the system clock.
+⏰ Live local clock — the current time for your chosen city, right in the popup.
 🕋 Every prayer + Sunrise — Fajr, Dhuhr, Asr, Maghrib, Isha, plus Shuruq (Sunrise), with the next prayer highlighted and a second-by-second countdown.
 ⏸️ Auto-pause everywhere — YouTube, Netflix, Spotify, podcasts, lecture tabs… all pause the instant the Adhan starts, in every open tab (even embedded players).
 🧘 Animated Prayer Focus — a calm, breathing full-screen reminder during the Adhan. On by default, from the notification, or via Ctrl/Cmd+Shift+Y. Dismiss with Resume or Esc.
@@ -56,7 +56,7 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ▶️ Effortless resume — one click, or auto-resume after a delay you choose. Always in your control.
 🌍 Any city on Earth — search and lock to your exact location; times are calculated precisely for you.
 🌐 Your language — English, العربية, اردو, Bahasa Indonesia, Türkçe, Français — switch instantly, with full right-to-left support.
-📅 Prayer tracking — check off each of the five daily prayers and watch your month fill in on a calendar, with a streak to keep you going. Kept entirely on your device.
+📅 Prayer tracking — check off each of the five daily prayers and watch your month fill in on a calendar, with color-coded prayer indicators and streaks. Kept entirely on your device.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 🔒 PRIVATE BY DESIGN — FREE FOREVER
@@ -69,12 +69,19 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ━━━━━━━━━━━━━━━━━━━━━━━━
 💡 MADE FOR REAL LIFE
 ━━━━━━━━━━━━━━━━━━━━━━━━
-Racing a deadline. Deep in a lecture playlist. Catching up on a series. Whatever has your attention, Adhan Caster quietly keeps watch and hands the moment back to you when it's time to stand before your Lord — then returns you to exactly where you were. Lightweight, distraction-free, and respectful of both your time and your privacy.
+Whatever has your attention, Adhan Focus quietly keeps watch and hands the moment back to you when it's time to stand before your Lord — then returns you to exactly where you were. Lightweight, distraction-free, and respectful of both your time and your privacy.
 
 Prayer times are powered by the trusted Aladhan service; city search by Open-Meteo.
 
 Made with care for the Ummah. We read every review and reply to feedback — tell us what would make your salah easier. 🤲
+```
 
+---
+
+## 4. Single-purpose description (for the "Privacy" tab)
+
+```
+Adhan Focus shows Muslim prayer times in the browser and automatically pauses audio/video playback in open tabs during the Adhan (call to prayer), then resumes it afterward.
 Keywords: Muslim prayer times, Adhan, Azan, Salah, Namaz, prayer reminder, Islamic prayer times, prayer notification, prayer clock, prayer tracker, salah tracker, Fajr, Dhuhr, Asr, Maghrib, Isha, Sunrise, Shuruq.
 ```
 
@@ -92,7 +99,7 @@ Keywords: Muslim prayer times, Adhan, Azan, Salah, Namaz, prayer reminder, Islam
 ## 5. Single-purpose description (required field)
 
 ```
-Adhan Caster shows Muslim prayer times in the browser and automatically pauses audio/video playback in open tabs during the Adhan (call to prayer), then resumes it afterward.
+Adhan Focus shows Muslim prayer times in the browser and automatically pauses audio/video playback in open tabs during the Adhan (call to prayer), then resumes it afterward.
 ```
 
 ---

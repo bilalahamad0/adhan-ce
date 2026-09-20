@@ -1,6 +1,6 @@
 # Testing & Chrome Web Store qualification
 
-How to verify Adhan Caster before publishing a production build.
+How to verify Adhan Focus before publishing a production build.
 
 ## Automated tests
 
@@ -49,7 +49,7 @@ Load unpacked from `chrome://extensions` (Developer mode) and verify:
 - [ ] Bottom-right heads-up notification appears within the lead window and counts down. **No Resume button on it.**
 - [ ] At zero, media pauses in the active tab **and** other tabs (test a 2nd tab + a same-site iframe).
 - [ ] Desktop notification fires (OS must allow notifications for Chrome).
-- [ ] Lead time honors the **Heads-up before Adhan** setting (15/30/60s).
+- [ ] Lead time honors the **Banner Heads-up before Adhan** setting (15/30/60s).
 
 ### Focus mode
 - [ ] With focus on, the full-screen focus screen takes over at Adhan time (no Resume-card flash beforehand).
@@ -64,7 +64,7 @@ Load unpacked from `chrome://extensions` (Developer mode) and verify:
 ### Edge cases
 - [ ] Restricted pages (`chrome://`, Web Store, PDF viewer) don't error — media there simply isn't paused.
 - [ ] Day rollover: after the last prayer, "next" becomes tomorrow's Fajr.
-- [ ] Toggling **Enable Adhan Caster** off stops notifications/pausing.
+- [ ] Toggling **Enable Adhan Focus** off stops notifications/pausing.
 
 ### Web Store listing requirements
 - [ ] `version` bumped beyond the published one.

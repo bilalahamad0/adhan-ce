@@ -11,7 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base href="/" />
     <link rel="stylesheet" href="/popup.css" />
-    <title>Adhan Caster — store popup</title>
+    <title>Adhan Focus — store popup</title>
     <style>html, body { margin: 0; background: transparent; }</style>
   </head>
   <body>
@@ -68,7 +68,7 @@
           runtime: {
             sendMessage: (m) => handle(m),
             getURL: (p) => '/' + String(p).replace(/^\/+/, ''),
-            getManifest: () => ({ version: '2.0.0', name: 'Adhan Caster' }),
+            getManifest: () => ({ version: '2.0.0', name: 'Adhan Focus' }),
             onMessage: { addListener() {} },
           },
           storage: { local: {

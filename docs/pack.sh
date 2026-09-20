@@ -10,7 +10,7 @@ echo "▶ Qualification: unit + manifest tests"
 ( cd "$HERE" && node --experimental-vm-modules node_modules/jest/bin/jest.js )
 
 VER="$(node -e "process.stdout.write(require('$HERE/manifest.json').version)")"
-OUT="$HERE/adhan-caster-$VER.zip"
+OUT="$HERE/adhan-focus-$VER.zip"
 STAGE="$HERE/dist/extension"
 rm -f "$OUT"
 

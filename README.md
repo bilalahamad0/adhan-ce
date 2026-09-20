@@ -1,4 +1,4 @@
-# Adhan Caster — Browser Extension
+# Adhan Focus — Browser Extension
 
 Upcoming Islamic prayer times with a live countdown, and **automatic pausing of
 media in every Chrome tab** at Adhan time — with an optional full-screen "prayer
@@ -32,7 +32,7 @@ and resolves locations via the free
 npm install      # installs Jest + jsdom (dev only — the extension itself has no runtime deps)
 npm test         # full suite: pure-lib units, service-worker / content / popup integration, manifest
 npm run test:cov # same, with a coverage report + enforced thresholds (~96% statements)
-npm run pack     # runs the tests, then zips a clean build → adhan-caster-<version>.zip
+npm run pack     # runs the tests, then zips a clean build → adhan-focus-<version>.zip
 ```
 
 Every push and pull request runs the suite on Linux, **Windows and macOS** (see

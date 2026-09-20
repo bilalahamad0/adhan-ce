@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="popup.css" />
-    <title>Adhan Caster</title>
+    <title>Adhan Focus</title>
   </head>
   <body>
     <div class="app" id="app">
@@ -22,7 +22,7 @@
         <span class="brand">
           <span class="brand-logo"><img src="icons/icon48.png" alt="" /></span>
           <span class="brand-text">
-            <strong data-i18n="app_name">Adhan Caster</strong>
+            <strong data-i18n="app_name">Adhan Focus</strong>
             <span id="locLabel" class="loc">—</span>
           </span>
         </span>
@@ -89,56 +89,79 @@
         <!-- ───────── SETTINGS ───────── -->
         <section class="view view-settings" id="view-settings" data-view="settings" hidden>
           <div class="scroll">
+            <!-- 1. Display, Notification & Focus Controls (Top) -->
             <div class="set-group glass">
-              <div class="set-row col">
+              <!-- 1. Appearance -->
+              <div class="set-row col" id="appearanceRow">
                 <span class="set-label" data-i18n="appearance">Appearance</span>
                 <div class="seg" id="appearance" role="group" aria-label="Appearance" style="--n:3">
                   <span class="seg-thumb" aria-hidden="true"></span>
-                  <button type="button" class="seg-opt" data-val="system" data-i18n="appearance_system">System</button>
-                  <button type="button" class="seg-opt" data-val="light" data-i18n="appearance_light">Light</button>
-                  <button type="button" class="seg-opt" data-val="dark" data-i18n="appearance_dark">Dark</button>
+                  <button type="button" class="seg-opt" data-val="system" data-i18n-attr="title:appearance_system;aria-label:appearance_system" title="System" aria-label="System">
+                    <svg class="seg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                  </button>
+                  <button type="button" class="seg-opt" data-val="light" data-i18n-attr="title:appearance_light;aria-label:appearance_light" title="Light" aria-label="Light">
+                    <svg class="seg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                  </button>
+                  <button type="button" class="seg-opt" data-val="dark" data-i18n-attr="title:appearance_dark;aria-label:appearance_dark" title="Dark" aria-label="Dark">
+                    <svg class="seg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                  </button>
                 </div>
               </div>
-              <div class="set-row col">
-                <span class="set-label" data-i18n="clock_style">Clock style</span>
-                <div class="seg" id="clockStyle" role="group" aria-label="Clock style" style="--n:2">
+
+              <!-- 2. Chime Sound -->
+              <div class="set-row col" id="chimeRow">
+                <div class="set-row-head">
+                  <span class="set-label" data-i18n="adhan_chime">Chime Sound</span>
+                  <span class="cc-tag" id="chimeTag" aria-hidden="true" hidden>ON</span>
+                </div>
+                <div class="seg" id="chimeTile" role="group" aria-label="Chime Sound" style="--n:2" tabindex="0">
                   <span class="seg-thumb" aria-hidden="true"></span>
-                  <button type="button" class="seg-opt" data-val="analog" data-i18n="clock_analog">Analog</button>
-                  <button type="button" class="seg-opt" data-val="digital" data-i18n="clock_digital">Digital</button>
+                  <button type="button" class="seg-opt" data-val="on" data-i18n-attr="title:tag_on;aria-label:tag_on" title="ON" aria-label="ON">
+                    <svg class="seg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  </button>
+                  <button type="button" class="seg-opt" data-val="off" data-i18n-attr="title:tag_off;aria-label:tag_off" title="OFF" aria-label="OFF">
+                    <svg class="seg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                  </button>
                 </div>
-              </div>
-            </div>
-
-            <div class="cc-toggles" role="group" aria-label="Toggles">
-              <div class="cc-tile" id="enabledTile" role="button" tabindex="0">
-                <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.8 6a8.5 8.5 0 0 1 0 12" /></svg></span>
-                <span class="cc-label" data-i18n="enable_caster">Adhan Caster</span>
-                <span class="cc-tag" id="enabledTag" aria-hidden="true">Enabled</span>
-                <input type="checkbox" id="enabled" class="cc-input" tabindex="-1" aria-hidden="true" />
-              </div>
-              <div class="cc-tile" id="focusTile" role="button" tabindex="0">
-                <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" /></svg></span>
-                <span class="cc-label" data-i18n="focus_fullscreen">Display Prayer Focus Screen</span>
-                <span class="cc-tag" id="focusTag" aria-hidden="true">Fullscreen</span>
-                <input type="checkbox" id="focusMode" class="cc-input" tabindex="-1" aria-hidden="true" />
+                <input type="checkbox" id="adhanChime" class="cc-input" tabindex="-1" aria-hidden="true" hidden />
               </div>
 
-              <div class="cc-tile-wrap" id="badgeTileWrap">
-                <div class="cc-tile" id="badgeTile" role="button" tabindex="0">
-                  <span class="cc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg></span>
-                  <span class="cc-label" data-i18n="badge_countdown">Display Countdown on Extension Icon</span>
-                  <span class="cc-tag" id="badgeTag" aria-hidden="true">ON</span>
-                  <input type="checkbox" id="badgeCountdown" class="cc-input" tabindex="-1" aria-hidden="true" />
+              <!-- 3. Countdown Timer on Pinned Icon -->
+              <div class="set-row col" id="badgeRow">
+                <div class="set-row-head">
+                  <span class="set-label" data-i18n="badge_countdown">Countdown Timer on Pinned Icon</span>
+                  <span class="cc-tag" id="badgeTag" aria-hidden="true" hidden>ON</span>
+                  <button type="button" class="btn-sub-toggle" id="badgeExpandBtn" aria-expanded="false" aria-controls="badgeSubpanel" title="Options">
+                    <span class="sub-toggle-text" data-i18n="options">Options</span>
+                    <svg class="sub-toggle-ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
                 </div>
+                <div class="seg" id="badgeTile" role="group" aria-label="Countdown Timer on Pinned Icon" style="--n:2" tabindex="0">
+                  <span class="seg-thumb" aria-hidden="true"></span>
+                  <button type="button" class="seg-opt" data-val="on" data-i18n="tag_on">ON</button>
+                  <button type="button" class="seg-opt" data-val="off" data-i18n="tag_off">OFF</button>
+                </div>
+                <input type="checkbox" id="badgeCountdown" class="cc-input" tabindex="-1" aria-hidden="true" hidden />
 
-                <div class="badge-subpanel glass" id="badgeSubpanel">
-                  <label class="set-row" id="badgeModeRow">
+                <div class="badge-subpanel glass" id="badgeSubpanel" hidden>
+                  <div class="set-row col" id="badgeModeRow" style="padding: 6px 0 4px;">
                     <span class="set-label" data-i18n="badge_mode">Icon countdown mode</span>
-                    <select id="badgeMode">
+                    <div class="seg" id="badgeModeSeg" role="group" aria-label="Icon countdown mode" style="--n:2">
+                      <span class="seg-thumb" aria-hidden="true"></span>
+                      <button type="button" class="seg-opt seg-opt-multi" data-val="auto">
+                        <span class="seg-main" data-i18n="badge_mode_auto_title">Auto</span>
+                        <span class="seg-sub" data-i18n="badge_mode_auto_sub">(always on)</span>
+                      </button>
+                      <button type="button" class="seg-opt seg-opt-multi" data-val="manual">
+                        <span class="seg-main" data-i18n="badge_mode_manual_title">Manual</span>
+                        <span class="seg-sub" data-i18n="badge_mode_manual_sub">(set hours)</span>
+                      </button>
+                    </div>
+                    <select id="badgeMode" hidden>
                       <option value="auto" data-i18n="badge_mode_auto">Auto (always on)</option>
                       <option value="manual" data-i18n="badge_mode_manual">Manual (set hours)</option>
                     </select>
-                  </label>
+                  </div>
                   <label class="set-row" id="badgeHoursRow">
                     <span class="set-label" data-i18n="badge_hours">Countdown window</span>
                     <select id="badgeManualHours">
@@ -153,22 +176,134 @@
                     <span class="pin-ico" aria-hidden="true">📌</span>
                     <div class="pin-text">
                       <strong data-i18n="pin_extension_title">Pin to browser toolbar</strong>
-                      <p data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Caster to keep the countdown visible at a glance.</p>
+                      <p data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
                     </div>
                   </div>
                   <div class="badge-saved" id="badgeSaved" aria-live="polite">✓ Saved</div>
                 </div>
               </div>
+
+              <!-- 4. Notification Screen -->
+              <div class="set-row col" id="focusTileWrap">
+                <div class="set-row-head">
+                  <span class="set-label" data-i18n="notification_screen">Notification Screen</span>
+                  <span class="cc-tag" id="focusTag" aria-hidden="true" hidden>Fullscreen</span>
+                  <button type="button" class="btn-sub-toggle" id="focusExpandBtn" aria-expanded="false" aria-controls="focusSubpanel" title="Options">
+                    <span class="sub-toggle-text" data-i18n="options">Options</span>
+                    <svg class="sub-toggle-ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                </div>
+                <div class="seg" id="focusTile" role="group" aria-label="Notification Screen" style="--n:2" tabindex="0">
+                  <span class="seg-thumb" aria-hidden="true"></span>
+                  <button type="button" class="seg-opt" data-val="fullscreen" data-i18n="tag_fullscreen">Fullscreen</button>
+                  <button type="button" class="seg-opt" data-val="subtle" data-i18n="tag_subtle_banner">Subtle Banner</button>
+                </div>
+                <input type="checkbox" id="focusMode" class="cc-input" tabindex="-1" aria-hidden="true" hidden />
+
+                <div class="badge-subpanel glass" id="focusSubpanel" hidden>
+                  <!-- 1. Banner Heads-up before Adhan (shown for both Fullscreen and Subtle Banner) -->
+                  <label class="set-row" id="headsUpRow">
+                    <span class="set-label" data-i18n="heads_up">Banner Heads-up before Adhan</span>
+                    <select id="leadSeconds">
+                      <option value="15" data-i18n="secs_15">15 sec</option>
+                      <option value="30" data-i18n="secs_30">30 sec</option>
+                      <option value="60" data-i18n="secs_60">60 sec</option>
+                    </select>
+                  </label>
+
+                  <!-- 2. Automatically resumes after (min) (shown only if Fullscreen) -->
+                  <label class="set-row" id="resumeMinRow">
+                    <span class="set-label" data-i18n="auto_resume_after">Automatically resumes after (min)</span>
+                    <input type="number" id="resumeMin" min="0" max="120" step="1" />
+                  </label>
+
+                  <!-- 3. Lock Screen (clubbed: shown only if Fullscreen) -->
+                  <div class="set-row col" id="strictFocusTileWrap" style="padding: 8px 0 2px;">
+                    <div class="set-row-head">
+                      <span class="set-label" data-i18n="lock_screen">Lock Screen</span>
+                      <span class="cc-tag" id="strictFocusTag" aria-hidden="true" hidden>Can Resume</span>
+                    </div>
+                    <div class="seg" id="strictFocusTile" role="group" aria-label="Lock Screen" style="--n:2" tabindex="0">
+                      <span class="seg-thumb" aria-hidden="true"></span>
+                      <button type="button" class="seg-opt" data-val="casual" data-i18n="tag_can_resume">Can Resume</button>
+                      <button type="button" class="seg-opt" data-val="strict" data-i18n="tag_strict_focus">Strict Focus</button>
+                    </div>
+                    <input type="checkbox" id="strictFocus" class="cc-input" tabindex="-1" aria-hidden="true" hidden />
+                    <div class="tile-hint alert-hint" id="strictFocusHint" hidden>
+                      <svg class="hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                      <span data-i18n="lock_screen_desc">Disables the Escape key and Resume button until the timer finishes, ensuring you step away for salah.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 5. Clock -->
+              <div class="set-row col" id="clockStyleRow">
+                <span class="set-label" data-i18n="clock_style">Clock style</span>
+                <div class="seg" id="clockStyle" role="group" aria-label="Clock style" style="--n:2">
+                  <span class="seg-thumb" aria-hidden="true"></span>
+                  <button type="button" class="seg-opt" data-val="analog" data-i18n="clock_analog">Analog</button>
+                  <button type="button" class="seg-opt" data-val="digital" data-i18n="clock_digital">Digital</button>
+                </div>
+              </div>
+
+              <!-- 6. Adhan Focus Master Switch -->
+              <div class="set-row col" id="enabledRow">
+                <div class="set-row-head">
+                  <span class="set-label" data-i18n="enable_caster">Adhan Focus</span>
+                  <span class="cc-tag" id="enabledTag" aria-hidden="true" hidden>Enabled</span>
+                </div>
+                <div class="seg" id="enabledTile" role="group" aria-label="Adhan Focus" style="--n:2" tabindex="0">
+                  <span class="seg-thumb" aria-hidden="true"></span>
+                  <button type="button" class="seg-opt" data-val="enabled" data-i18n="tag_enabled">Enabled</button>
+                  <button type="button" class="seg-opt" data-val="disabled" data-i18n="tag_disabled">Disabled</button>
+                </div>
+                <input type="checkbox" id="enabled" class="cc-input" tabindex="-1" aria-hidden="true" hidden />
+              </div>
             </div>
 
+            <!-- 2. Prayer Calculation & Location Setup (Core Setup) -->
             <div class="set-group glass">
+              <!-- Location -->
               <label class="set-row col field-stack">
-                <span class="set-label" data-i18n="location">Location</span>
+                <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                  <span class="set-label" data-i18n="location">Location</span>
+                  <button type="button" id="detectLocBtn" class="btn-action-sm">
+                    <span aria-hidden="true">📍</span> <span id="detectText" data-i18n="detect_location">Detect location</span>
+                  </button>
+                </div>
                 <span class="city-wrap">
                   <input type="text" id="city" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
                   <div id="cityResults" class="suggest" hidden></div>
                 </span>
               </label>
+
+              <!-- Calculation method -->
+              <label class="set-row col">
+                <span class="set-label" data-i18n="calc_method">Calculation method</span>
+                <select id="method"></select>
+              </label>
+
+              <!-- Asr (juristic) method -->
+              <label class="set-row col">
+                <span class="set-label" data-i18n="asr_method">Asr (juristic) method</span>
+                <select id="school">
+                  <option value="0" data-i18n="asr_standard">Standard (Shafi, Maliki, Hanbali)</option>
+                  <option value="1" data-i18n="asr_hanafi">Hanafi</option>
+                </select>
+              </label>
+
+              <!-- Hijri adjustment -->
+              <label class="set-row">
+                <span class="set-label" data-i18n="hijri_adjust">Hijri adjustment</span>
+                <select id="hijriOffset">
+                  <option value="-1">−1</option>
+                  <option value="0">0</option>
+                  <option value="1">+1</option>
+                </select>
+              </label>
+
+              <!-- Language -->
               <label class="set-row col">
                 <span class="set-label" data-i18n="language">Language</span>
                 <select id="lang">
@@ -180,37 +315,6 @@
                   <option value="fr">Français</option>
                 </select>
               </label>
-              <label class="set-row col">
-                <span class="set-label" data-i18n="calc_method">Calculation method</span>
-                <select id="method"></select>
-              </label>
-              <label class="set-row col">
-                <span class="set-label" data-i18n="asr_method">Asr (juristic) method</span>
-                <select id="school">
-                  <option value="0" data-i18n="asr_standard">Standard (Shafi, Maliki, Hanbali)</option>
-                  <option value="1" data-i18n="asr_hanafi">Hanafi</option>
-                </select>
-              </label>
-              <label class="set-row">
-                <span class="set-label" data-i18n="hijri_adjust">Hijri adjustment</span>
-                <select id="hijriOffset">
-                  <option value="-1">−1</option>
-                  <option value="0">0</option>
-                  <option value="1">+1</option>
-                </select>
-              </label>
-              <label class="set-row">
-                <span class="set-label" data-i18n="heads_up">Heads-up before Adhan</span>
-                <select id="leadSeconds">
-                  <option value="15" data-i18n="secs_15">15 sec</option>
-                  <option value="30" data-i18n="secs_30">30 sec</option>
-                  <option value="60" data-i18n="secs_60">60 sec</option>
-                </select>
-              </label>
-              <label class="set-row">
-                <span class="set-label" data-i18n="auto_resume_after">Auto-resume after (min)</span>
-                <input type="number" id="resumeMin" min="0" max="120" step="1" />
-              </label>
             </div>
 
             <div class="settings-actions">
@@ -218,6 +322,20 @@
               <span id="saveMsg" class="save-msg"></span>
             </div>
 
+            <!-- 3. Guide & Tutorial Card -->
+            <div class="set-group glass" id="tourCard">
+              <div class="set-row">
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
+                  <strong class="set-label" data-i18n="tour_title">Welcome Guide & Tutorial</strong>
+                  <span style="font-size:11px;color:var(--muted);" data-i18n="tour_desc">Learn how auto-pause, chime, and strict focus work</span>
+                </div>
+                <button type="button" id="openTourBtn" class="btn-action-sm">
+                  <span id="openTourText" data-i18n="open_tour">Open Guide</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 5. Activity on this device -->
             <div class="set-group glass usage-card" id="usageCard">
               <div class="usage-head">
                 <strong class="usage-title" data-i18n="usage_title">Activity on this device</strong>
@@ -244,13 +362,14 @@
 
             <div class="dev-row">
               <button id="testBtn" class="btn-ghost" data-i18n="test_adhan">Run test Adhan (30s)</button>
+              <button id="testChimeBtn" class="btn-ghost" type="button" data-i18n="test_chime">Test chime</button>
               <span id="testMsg" class="save-msg"></span>
             </div>
 
             <div class="about">
               <span id="updated"></span>
               <span class="about-sep" aria-hidden="true">·</span>
-              <span class="about-name" data-i18n="app_name">Adhan Caster</span>
+              <span class="about-name" data-i18n="app_name">Adhan Focus</span>
               <span id="version" class="ver"></span>
               <span class="about-sep" aria-hidden="true">·</span>
               <a href="#" id="refresh" data-i18n="refresh">Refresh</a>
@@ -258,6 +377,89 @@
           </div>
         </section>
       </main>
+
+      <!-- In-Popup Onboarding Carousel Modal -->
+      <div id="onboardingModal" class="ob-modal" hidden>
+        <div class="ob-card glass">
+          <div class="ob-header">
+            <div class="ob-dots" id="obDots">
+              <span class="ob-dot is-active"></span>
+              <span class="ob-dot"></span>
+              <span class="ob-dot"></span>
+              <span class="ob-dot"></span>
+            </div>
+            <button type="button" id="obSkipBtn" class="ob-skip" data-i18n="skip_setup">Skip</button>
+          </div>
+
+          <div class="ob-slides">
+            <!-- Slide 1: Welcome & Value -->
+            <div class="ob-slide is-active" id="obSlide1">
+              <div class="ob-icon" aria-hidden="true">🕌</div>
+              <h2 class="ob-title" data-i18n="onboarding_title">Welcome to Adhan Focus</h2>
+              <p class="ob-sub" data-i18n="onboarding_welcome_sub">Never miss a prayer mid-scroll. When Adhan begins, media in all open tabs pauses automatically.</p>
+              <div class="ob-perks">
+                <div class="ob-perk"><span class="ob-perk-ico" aria-hidden="true">⏸️</span><span>Auto-pauses YouTube, Netflix &amp; music</span></div>
+                <div class="ob-perk"><span class="ob-perk-ico" aria-hidden="true">🔔</span><span>Chime audio &amp; full-screen reminder</span></div>
+                <div class="ob-perk"><span class="ob-perk-ico" aria-hidden="true">🔒</span><span>Privacy-first: stays on your device</span></div>
+              </div>
+            </div>
+
+            <!-- Slide 2: Location -->
+            <div class="ob-slide" id="obSlide2">
+              <div class="ob-icon" aria-hidden="true">📍</div>
+              <h2 class="ob-title" data-i18n="onboarding_step_location">Set Your Location</h2>
+              <p class="ob-sub">Accurate prayer times calculated for your city.</p>
+              <div class="ob-loc-box">
+                <div class="ob-current-loc" id="obCurrentLoc">Makkah, Saudi Arabia</div>
+                <button type="button" id="obDetectBtn" class="btn-ghost ob-btn-detect">
+                  <span aria-hidden="true">📍</span> <span id="obDetectText" data-i18n="detect_location">Detect location</span>
+                </button>
+              </div>
+              <p class="ob-tip">You can also search any city anytime in Settings.</p>
+            </div>
+
+            <!-- Slide 3: Focus & Sound -->
+            <div class="ob-slide" id="obSlide3">
+              <div class="ob-icon" aria-hidden="true">🔔</div>
+              <h2 class="ob-title" data-i18n="onboarding_step_preferences">Focus & Sound</h2>
+              <p class="ob-sub">Choose your prayer time preferences.</p>
+              <div class="ob-pref-list">
+                <div class="ob-pref-row">
+                  <div>
+                    <strong data-i18n="adhan_chime">Chime Sound</strong>
+                    <small>Gentle 3-tone notification</small>
+                  </div>
+                  <button type="button" id="obChimePreviewBtn" class="btn-ghost ob-preview-btn" data-i18n="play_preview">Listen</button>
+                </div>
+                <div class="ob-pref-row">
+                  <div>
+                    <strong data-i18n="freeze_screen">Freeze Screen</strong>
+                    <small>Strict focus during prayer</small>
+                  </div>
+                  <span class="ob-badge" data-i18n="tag_strict_focus">Strict Focus</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Slide 4: Pin & Test -->
+            <div class="ob-slide" id="obSlide4">
+              <div class="ob-icon" aria-hidden="true">📌</div>
+              <h2 class="ob-title" data-i18n="onboarding_step_pin">Pin Extension</h2>
+              <p class="ob-sub" data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
+              <button type="button" id="obSimBtn" class="btn-ghost ob-sim-btn" data-i18n="simulate_pause">Test prayer pause (10s)</button>
+              <div id="obSimStatus" class="ob-sim-status" hidden>
+                <span>⏸️ Auto-pause test running…</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ob-footer">
+            <button type="button" id="obPrevBtn" class="btn-ghost" data-i18n="prev_step" style="visibility:hidden">Back</button>
+            <button type="button" id="obNextBtn" class="btn-primary ob-action-btn" data-i18n="next_step">Next</button>
+            <button type="button" id="obFinishBtn" class="btn-primary ob-action-btn" data-i18n="finish_setup" hidden>Get Started</button>
+          </div>
+        </div>
+      </div>
 
       <nav class="tabbar glass" id="tabbar" role="tablist" aria-label="Sections">
         <button class="tab is-active" data-tab="home" role="tab" aria-selected="true" type="button">

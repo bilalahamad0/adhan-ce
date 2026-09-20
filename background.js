@@ -1,4 +1,4 @@
-// Adhan Caster — background service worker (MV3)
+// Adhan Focus — background service worker (MV3)
 // Fetches the prayer schedule, fires the desktop notification + cross-tab media
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
@@ -7,6 +7,7 @@ import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, isPrematureFire, 
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
+import { playChime } from './lib/audio.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
 // settings (defaults method=2 ISNA, school=0 Standard — unchanged from before);
@@ -28,6 +29,8 @@ const DEFAULT_SETTINGS = {
   autoResumeMinutes: 5,
   leadSeconds: 30,
   focusMode: true,
+  strictFocus: false, // freeze fullscreen on browser pages until auto-resume timeout
+  adhanChime: true, // play notification chime when prayer time arrives
   badgeCountdown: true, // show next prayer countdown on toolbar icon badge
   badgeMode: 'auto', // 'auto' (always active) or 'manual' (hold-off threshold)
   badgeManualHours: 2, // hours before prayer to show badge countdown when in manual mode
@@ -190,7 +193,7 @@ async function updateBadge(providedState) {
     const { settings, nextPrayer, paused } = providedState || (await getState());
     if (!settings.enabled || settings.badgeCountdown === false) {
       await chrome.action.setBadgeText({ text: '' });
-      await chrome.action.setTitle({ title: 'Adhan Caster — Muslim Prayer Times' });
+      await chrome.action.setTitle({ title: 'Adhan Focus — Muslim Prayer Times' });
       return;
     }
 
@@ -209,7 +212,7 @@ async function updateBadge(providedState) {
 
     if (!nextPrayer || !nextPrayer.ts) {
       await chrome.action.setBadgeText({ text: '' });
-      await chrome.action.setTitle({ title: 'Adhan Caster — Muslim Prayer Times' });
+      await chrome.action.setTitle({ title: 'Adhan Focus — Muslim Prayer Times' });
       return;
     }
 
@@ -317,6 +320,12 @@ async function handlePrayerFire() {
   await broadcast({ type: 'PRAYER_NOW', prayer: nextPrayer.name, time: nextPrayer.time, focus, since: paused.since });
   await setPausedBadge(true);
 
+  if (settings.adhanChime !== false) {
+    try {
+      await playChime();
+    } catch (_) {}
+  }
+
   // Arm auto-resume.
   chrome.alarms.create(ALARM_RESUME, { when: Date.now() + settings.autoResumeMinutes * 60 * 1000 });
 
@@ -341,6 +350,11 @@ async function handleFallbackPause({ prayer, time, focus }) {
   await chrome.storage.local.set({ paused: { active: true, prayer, time, since, focus: !!focus } });
   await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: !!focus, since });
   await setPausedBadge(true);
+  if (settings.adhanChime !== false) {
+    try {
+      await playChime();
+    } catch (_) {}
+  }
   chrome.alarms.create(ALARM_RESUME, { when: since + settings.autoResumeMinutes * 60 * 1000 });
 
   // Advance nextPrayer past the one that just fired, mirroring handlePrayerFire.
@@ -388,10 +402,16 @@ async function reconcilePaused() {
 }
 
 async function resumeNow() {
+  const { paused, settings } = await getState();
+  // If strict screen freeze is active, manual resume is disabled until autoResume timeout
+  if (paused && paused.active && settings && settings.strictFocus) {
+    return false;
+  }
   await chrome.alarms.clear(ALARM_RESUME);
   await chrome.storage.local.set({ paused: { active: false } });
   await broadcast({ type: 'RESUME' });
   await setPausedBadge(false);
+  return true;
 }
 
 async function enableFocus() {
@@ -403,8 +423,9 @@ async function enableFocus() {
 }
 
 async function disableFocus() {
-  const { paused } = await getState();
+  const { paused, settings } = await getState();
   if (!paused.active) return;
+  if (settings && settings.strictFocus) return; // Frozen: cannot turn focus off intermittently
   await chrome.storage.local.set({ paused: { ...paused, focus: false } });
   await broadcast({ type: 'FOCUS_OFF' });
 }
@@ -444,13 +465,17 @@ async function injectExistingTabs() {
 }
 
 // ---------- event wiring ----------
-chrome.runtime.onInstalled.addListener(async () => {
-  const stored = await chrome.storage.local.get(['settings', 'paused', 'installedAt']);
+chrome.runtime.onInstalled.addListener(async (details) => {
+  const isFreshInstall = details && details.reason === 'install';
+  const stored = await chrome.storage.local.get(['settings', 'paused', 'installedAt', 'onboardingCompleted']);
   if (!stored.settings) await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
   if (!stored.paused) await chrome.storage.local.set({ paused: { active: false } });
   // Anchor the prayer-tracking history. For an existing user updating into this
   // version we can't know the true install date, so "since installation" starts now.
   if (!stored.installedAt) await chrome.storage.local.set({ installedAt: Date.now() });
+  if (stored.onboardingCompleted === undefined) {
+    await chrome.storage.local.set({ onboardingCompleted: !isFreshInstall });
+  }
   try {
     await fetchAndStoreSchedule();
   } catch (e) {
@@ -461,6 +486,11 @@ chrome.runtime.onInstalled.addListener(async () => {
   // keep media paused and still auto-resume.
   await reconcilePaused();
   await injectExistingTabs();
+  if (isFreshInstall) {
+    try {
+      await chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+    } catch (_) {}
+  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -486,10 +516,15 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   else if (alarm.name === ALARM_RESUME) handleAutoResume();
   else if (alarm.name === ALARM_BADGE) updateBadge();
   else if (alarm.name === ALARM_TICK) {
-    refreshNext()
-      .then(armAlarms)
-      .then(reconcilePaused)
-      .catch((e) => console.warn('Adhan: tick failed', e));
+    (async () => {
+      try {
+        await refreshNext();
+        await armAlarms();
+        await reconcilePaused();
+      } catch (e) {
+        console.warn('Adhan: tick failed', e);
+      }
+    })();
   }
 });
 
@@ -553,16 +588,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ lang: code, dir: isRTLLang(code) ? 'rtl' : 'ltr', messages: await getCatalog(code) });
         break;
       }
-      case 'RESUME_NOW':
-        await resumeNow();
-        sendResponse({ ok: true });
+      case 'RESUME_NOW': {
+        const ok = await resumeNow();
+        sendResponse({ ok: ok !== false, error: ok === false ? 'strict_focus_locked' : undefined });
         break;
+      }
       case 'FOCUS_NOW':
         await enableFocus();
         sendResponse({ ok: true });
         break;
       case 'PRAYER_FALLBACK':
         await handleFallbackPause(msg);
+        sendResponse({ ok: true });
+        break;
+      case 'PLAY_CHIME':
+        // Targeted at offscreen document; no-op in background worker
+        break;
+      case 'CHIME_FINISHED': {
+        const offscreen = typeof chrome !== 'undefined' ? chrome['offscreen'] : null;
+        if (offscreen && typeof offscreen.closeDocument === 'function') {
+          offscreen.closeDocument().catch(() => {});
+        }
+        sendResponse({ ok: true });
+        break;
+      }
+      case 'PLAY_CHIME_PREVIEW':
+        await playChime();
         sendResponse({ ok: true });
         break;
       case 'TEST_ADHAN':
@@ -573,10 +624,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await testAdhan(msg.seconds || 30);
         sendResponse({ ok: true });
         break;
+      case 'TEST_PAUSE_DEMO': {
+        const prayer = msg.prayer || 'Maghrib';
+        const seconds = Math.min(60, Math.max(5, msg.seconds || 10));
+        const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const since = Date.now();
+        await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: true, since, isDemo: true });
+        const s = await getSettings();
+        if (s.adhanChime !== false) {
+          try { await playChime(); } catch (_) {}
+        }
+        setTimeout(async () => {
+          await broadcast({ type: 'RESUME', isDemo: true });
+        }, seconds * 1000);
+        sendResponse({ ok: true });
+        break;
+      }
+      case 'RESUME_DEMO': {
+        await broadcast({ type: 'RESUME', isDemo: true });
+        sendResponse({ ok: true });
+        break;
+      }
       case 'PATCH_SETTINGS':
       case 'SAVE_SETTINGS': {
         const current = await getSettings();
-        const settings = { ...current, ...(msg.settings || {}) };
+        const { paused } = await getState();
+        const incoming = { ...(msg.settings || {}) };
+        // If strict focus is currently active during prayer freeze, prevent turning
+        // strictFocus, focusMode, or enabled off intermittently!
+        if (paused && paused.active && current.strictFocus) {
+          incoming.strictFocus = true;
+          incoming.focusMode = true;
+          incoming.enabled = true;
+        }
+        const settings = { ...current, ...incoming };
         await chrome.storage.local.set({ settings });
         const { schedule } = await chrome.storage.local.get('schedule');
         const locationOrCalcChanged =

@@ -26,6 +26,8 @@ const DEFAULTS = {
   autoResumeMinutes: 5,
   leadSeconds: 30,
   focusMode: true,
+  strictFocus: false,
+  adhanChime: true,
   badgeCountdown: true,
   badgeMode: 'auto',
   badgeManualHours: 2,
@@ -181,6 +183,37 @@ describe('handlePrayerFire', () => {
     // The rest of the prayer flow is unaffected.
     expect(h.store.paused).toMatchObject({ active: true, prayer: 'Dhuhr' });
     expect(h.store.nextPrayer.name).toBe('Asr');
+  });
+
+  it('plays chime via offscreen document when adhanChime is true', async () => {
+    const now = Date.now();
+    const schedule = scheduleAround(now);
+    const { h } = await loadBackground({
+      storage: { settings: { ...DEFAULTS, adhanChime: true }, schedule, nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 }, lang: 'en' },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+
+    expect(h.offscreenDoc.url).toMatch(/^offscreen\.html\?play=audio%2Fchime\.mp3/);
+    expect(h.offscreenDoc.reasons).toEqual(['AUDIO_PLAYBACK']);
+
+    // When chime completes, background closes offscreen document
+    await h.sendRuntimeMessage({ type: 'CHIME_FINISHED' });
+    expect(h.offscreenDoc).toBeNull();
+  });
+
+  it('skips chime when adhanChime is false', async () => {
+    const now = Date.now();
+    const schedule = scheduleAround(now);
+    const { h } = await loadBackground({
+      storage: { settings: { ...DEFAULTS, adhanChime: false }, schedule, nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 }, lang: 'en' },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+
+    expect(h.offscreenDoc).toBeNull();
+    const chimeSent = h.sent.filter((s) => s && s.type === 'PLAY_CHIME');
+    expect(chimeSent).toHaveLength(0);
   });
 
   it('treats a fire long past prayer time as missed (device slept), without pausing', async () => {
@@ -446,6 +479,34 @@ describe('message router', () => {
     expect(h.store.paused.focus).toBe(true);
     expect(await h.sendRuntimeMessage({ type: 'RESUME_NOW' })).toEqual({ ok: true });
     expect(h.store.paused).toEqual({ active: false });
+  });
+
+  it('RESUME_NOW is refused while strictFocus screen freeze is active', async () => {
+    const { h } = await loadBackground({
+      storage: {
+        settings: { ...DEFAULTS, strictFocus: true },
+        paused: { active: true, prayer: 'Asr', time: '4:56 PM', since: Date.now(), focus: true },
+      },
+    });
+    const res = await h.sendRuntimeMessage({ type: 'RESUME_NOW' });
+    expect(res).toEqual({ ok: false, error: 'strict_focus_locked' });
+    expect(h.store.paused.active).toBe(true);
+  });
+
+  it('SAVE_SETTINGS prevents turning strictFocus or focusMode OFF during an active prayer freeze', async () => {
+    const { h } = await loadBackground({
+      storage: {
+        settings: { ...DEFAULTS, strictFocus: true, focusMode: true },
+        paused: { active: true, prayer: 'Asr', time: '4:56 PM', since: Date.now(), focus: true },
+      },
+    });
+    await h.sendRuntimeMessage({
+      type: 'SAVE_SETTINGS',
+      settings: { strictFocus: false, focusMode: false },
+    });
+    await flush();
+    expect(h.store.settings.strictFocus).toBe(true);
+    expect(h.store.settings.focusMode).toBe(true);
   });
 
   it('an unknown message is answered, not dropped', async () => {
@@ -717,7 +778,7 @@ describe('toolbar icon badge countdown', () => {
     await flush();
     expect(h.alarms.has(ALARM_BADGE)).toBe(false);
     expect(h.badge.text).toBe('');
-    expect(h.title).toBe('Adhan Caster — Muslim Prayer Times');
+    expect(h.title).toBe('Adhan Focus — Muslim Prayer Times');
   });
 
   it('manual timer mode holds off countdown until within configured hours', async () => {
