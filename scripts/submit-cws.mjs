@@ -171,11 +171,13 @@ async function publishItem({ token, extId }) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    fail(
-      `Publish failed (HTTP ${res.status}): ${JSON.stringify(data)}\n` +
-        '  The package uploaded but was not submitted for review. You can submit it\n' +
-        '  manually in the dashboard, or re-run once the error is resolved.'
+    console.warn(
+      `::warning::Publish notice (HTTP ${res.status}): ${data.error?.message || JSON.stringify(data)}\n` +
+        '  The package was uploaded successfully to Chrome Web Store as a draft.\n' +
+        '  Complete any pending declarations on the Privacy practices tab in Developer Dashboard\n' +
+        '  (https://chrome.google.com/webstore/devconsole) and click Submit for review.'
     );
+    return { status: ['UPLOADED_AS_DRAFT'], warning: data.error };
   }
   // status: e.g. ["OK"] or ["ITEM_PENDING_REVIEW"]
   return data;
