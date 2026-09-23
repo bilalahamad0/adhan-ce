@@ -159,6 +159,33 @@ describe('per-target Edge manifest', () => {
   });
 });
 
+describe('per-target Opera manifest & package', () => {
+  it('Opera build drops browser_specific_settings and keeps the Chromium service worker', async () => {
+    const operaDir = await mkdtemp(join(tmpdir(), 'adhan-opera-'));
+    try {
+      await stageExtension(operaDir, { stripGecko: true, stripBackgroundScripts: true });
+      const opera = JSON.parse(await readFile(join(operaDir, 'manifest.json'), 'utf8'));
+      expect(opera.browser_specific_settings).toBeUndefined();
+      expect(opera.background.service_worker).toBe('background.js');
+      expect(opera.background.scripts).toBeUndefined();
+      expect(opera.manifest_version).toBe(3);
+    } finally {
+      await rm(operaDir, { recursive: true, force: true });
+    }
+  });
+
+  it('Opera staging forces DEV=false (store-safety invariant)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'adhan-opera-dev-'));
+    try {
+      await stageExtension(dir, { stripGecko: true, stripBackgroundScripts: true });
+      const staged = await readFile(join(dir, 'lib', 'buildinfo.js'), 'utf8');
+      expect(staged.trim()).toBe('export const DEV = false;');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('per-target background entry point', () => {
   it('source declares MV3 service worker entry point without background.scripts', () => {
     const bg = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).background;
@@ -200,6 +227,32 @@ describe('per-target Firefox manifest (offscreen permission strip)', () => {
     } finally {
       await rm(ffDir, { recursive: true, force: true });
       await rm(crDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('per-target Firefox Mobile (Android) manifest', () => {
+  it('Firefox build retains gecko_android while Edge and Opera strip it', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-android-'));
+    const edgeDir = await mkdtemp(join(tmpdir(), 'adhan-edge-android-'));
+    const operaDir = await mkdtemp(join(tmpdir(), 'adhan-opera-android-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripOffscreen: true });
+      await stageExtension(edgeDir, { stripGecko: true, stripBackgroundScripts: true });
+      await stageExtension(operaDir, { stripGecko: true, stripBackgroundScripts: true });
+
+      const ff = JSON.parse(await readFile(join(ffDir, 'manifest.json'), 'utf8'));
+      const edge = JSON.parse(await readFile(join(edgeDir, 'manifest.json'), 'utf8'));
+      const opera = JSON.parse(await readFile(join(operaDir, 'manifest.json'), 'utf8'));
+
+      expect(ff.browser_specific_settings.gecko_android).toBeDefined();
+      expect(ff.browser_specific_settings.gecko_android.strict_min_version).toBe('142.0');
+      expect(edge.browser_specific_settings).toBeUndefined();
+      expect(opera.browser_specific_settings).toBeUndefined();
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(edgeDir, { recursive: true, force: true });
+      await rm(operaDir, { recursive: true, force: true });
     }
   });
 });

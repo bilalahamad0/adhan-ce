@@ -109,7 +109,7 @@ function renderPNG(size) {
   ]);
 }
 
-for (const size of [16, 48, 128]) {
+for (const size of [16, 48, 64, 128]) {
   const out = path.join(__dirname, `icon${size}.png`);
   fs.writeFileSync(out, renderPNG(size));
   console.log(`wrote ${out} (${size}x${size})`);

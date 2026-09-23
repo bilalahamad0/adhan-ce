@@ -1,0 +1,124 @@
+{
+  "fetchedAt": "2026-09-22T03:22:57.392Z",
+  "manifestVersion": "2.1.1",
+  "summary": {
+    "totalPublicActiveUsers": 18,
+    "totalDevActiveUsers": 15,
+    "activeUsersRange": "15 - 18",
+    "totalPlatforms": 4
+  },
+  "platforms": {
+    "chrome": {
+      "platform": "Google Chrome",
+      "publicListing": {
+        "status": "active",
+        "publicUsers": 17,
+        "rating": 0,
+        "ratingCount": 0,
+        "ratingText": "No ratings",
+        "version": "2.1.0",
+        "storeUrl": "https://chromewebstore.google.com/detail/adhan-focus-muslim-prayer/jfjknglldcdminelckmmfdbnlikiogia",
+        "measurementType": "Weekly Active Users (WAU, bucketed public tier)"
+      },
+      "devConsole": {
+        "activeUsers": 14,
+        "consoleUrl": "https://chrome.google.com/webstore/devconsole/1441ca88-135b-4f7f-8ea0-a310657241d9/jfjknglldcdminelckmmfdbnlikiogia/analytics/users",
+        "measurementType": "Daily / 7-Day Active Telemetry Pings",
+        "note": "Requires authenticated developer dashboard access; no public REST API is provided by Google."
+      },
+      "discrepancyNote": "Public Web Store shows 17 users (7-day active user count rounded/bucketed for privacy). Developer Console shows 14 users (unrounded real-time active devices tracked by Google update heartbeat)."
+    },
+    "firefox": {
+      "platform": "Mozilla Firefox",
+      "metrics": {
+        "status": "active",
+        "name": "Adhan Caster: Prayer Times",
+        "averageDailyUsers": 1,
+        "weeklyDownloads": 1,
+        "rating": 0,
+        "ratingCount": 0,
+        "version": "2.1.1",
+        "lastUpdated": "2026-09-21T23:21:19Z",
+        "slug": "adhan-caster-prayer-times",
+        "guid": "adhan-caster@bilalahamad.com",
+        "storeUrl": "https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/",
+        "androidStoreUrl": "https://addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/",
+        "isAndroidCompatible": true,
+        "supportedPlatforms": [
+          "Desktop",
+          "Firefox for Android"
+        ],
+        "apiUrl": "https://addons.mozilla.org/api/v5/addons/addon/adhan-caster-prayer-times/",
+        "measurementType": "Average Daily Users (ADU, 7-day rolling daily ping average)"
+      },
+      "notes": "Queried directly from public AMO REST API v5. ADU (Average Daily Users) is Mozilla standard 7-day trailing average."
+    },
+    "edge": {
+      "platform": "Microsoft Edge",
+      "metrics": {
+        "status": "active",
+        "name": "Adhan Focus: Muslim Prayer Times & Auto-Pause",
+        "activeInstallCount": 0,
+        "rating": 0,
+        "ratingCount": 0,
+        "version": "2.1.0",
+        "lastUpdated": "2026-09-20T06:04:12.114Z",
+        "crxId": "kapmpaofgphfbkpkmhhiooafplhckblg",
+        "developer": "Bilal Ahamad",
+        "storeUrl": "https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg",
+        "apiUrl": "https://microsoftedge.microsoft.com/addons/getproductdetailsbycrxid/kapmpaofgphfbkpkmhhiooafplhckblg",
+        "measurementType": "Active Install Count (from Microsoft Edge catalog)"
+      },
+      "notes": "Queried directly from Edge catalog endpoint. Detailed weekly retention and daily install metrics are accessible in Microsoft Partner Center."
+    },
+    "opera": {
+      "platform": "Opera Add-ons",
+      "metrics": {
+        "status": "active",
+        "packageId": "306857",
+        "addonId": "ihapdbcdjejganglngampmdkeehonimn",
+        "slug": "adhan-focus-muslim-prayer-times-auto-pause",
+        "packageFile": "adhan-focus-2.1.1-opera.zip",
+        "isBuilt": true,
+        "isSubmitted": true,
+        "version": "2.1.1",
+        "publicUsers": 0,
+        "devUsers": 0,
+        "rating": 0,
+        "storeUrl": "https://addons.opera.com/extensions/details/adhan-focus-muslim-prayer-times-auto-pause/",
+        "developerPortalUrl": "https://addons.opera.com/developer/package/306857/?tab=general",
+        "statsUrl": "https://addons.opera.com/developer/package/306857/?tab=stats",
+        "versionsUrl": "https://addons.opera.com/developer/package/306857/?tab=versions",
+        "measurementType": "Opera Add-ons Public Catalog & Installs",
+        "note": "Live on Opera Add-ons"
+      },
+      "notes": "Chromium MV3 package built via npm run pack:opera. Ready for moderation upload via https://addons.opera.com/developer/."
+    }
+  },
+  "telematics": {
+    "privacyPolicy": "Zero-remote-telemetry design. No user identifiable data, browsing history, or analytics ever leave the client.",
+    "inAppCounters": {
+      "storageType": "chrome.storage.local",
+      "module": "lib/usage.js",
+      "events": [
+        "pauses",
+        "resumes",
+        "notifications",
+        "focusUsed"
+      ],
+      "retentionPolicy": "Pruned after 90 days; displayed exclusively to user in extension popup"
+    },
+    "storeUpdateProtocols": {
+      "chrome": "Omaha / Google Update (clients2.google.com/service/update2/crx)",
+      "firefox": "Mozilla Add-on Version Check (versioncheck.addons.mozilla.org)",
+      "edge": "Microsoft Edge Add-on Catalog & Partner Center Telemetry"
+    },
+    "engineeringMetrics": {
+      "tokens": 103522508,
+      "linesOfCode": 13362,
+      "tests": 249,
+      "testSuites": 15,
+      "aiContribution": "95%"
+    }
+  }
+}
