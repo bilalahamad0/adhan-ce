@@ -1,17 +1,22 @@
 # Adhan Focus — Browser Extension
 
+[![Featured on Product Hunt](https://img.shields.io/badge/Product%20Hunt-Adhan%20Focus-DA552F?style=flat&logo=producthunt&logoColor=white)](https://www.producthunt.com/products/adhan-focus)
+[![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Adhan%20Focus-2B96D7?style=flat&logo=alternative-to&logoColor=white)](https://alternativeto.net/software/adhan-focus/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-253%20passing-brightgreen.svg)](tests/)
+
 Upcoming Islamic prayer times with a live countdown, and **automatic pausing of
 media in every Chrome tab** at Adhan time — with an optional full-screen "prayer
 focus" screen.
 
 It's a standalone browser extension — published on the Chrome Web Store,
-Firefox Add-ons and Microsoft Edge Add-ons from this one MV3 codebase. It
+Firefox Add-ons, Microsoft Edge Add-ons, and Opera Add-ons from this one MV3 codebase. It
 fetches prayer times directly from the
 public [AlAdhan API](https://aladhan.com/prayer-times-api) (`api.aladhan.com`)
 and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
-**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[Edge](https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
+**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox (Desktop)](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[Firefox for Android](https://addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/)** &nbsp;·&nbsp; **[Edge](https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg)** &nbsp;·&nbsp; **[Opera](https://addons.opera.com/)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
 
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 

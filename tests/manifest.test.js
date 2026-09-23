@@ -83,8 +83,14 @@ describe('manifest qualification', () => {
     // off-device; declaring "none" would be inaccurate for that transmission.
     const gecko = manifest.browser_specific_settings.gecko;
     expect(gecko.id).toBe('adhan-caster@bilalahamad.com');
-    expect(gecko.strict_min_version).toBe('127.0');
+    expect(gecko.strict_min_version).toBe('140.0');
     expect(gecko.data_collection_permissions.required).toEqual(['locationInfo']);
+  });
+
+  it('configures Firefox for Android compatibility (gecko_android)', () => {
+    const geckoAndroid = manifest.browser_specific_settings.gecko_android;
+    expect(geckoAndroid).toBeDefined();
+    expect(geckoAndroid.strict_min_version).toBe('142.0');
   });
 });
 

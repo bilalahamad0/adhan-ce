@@ -138,7 +138,9 @@
 }
 
 /* ---------------------------------------------------------------- frame --- */
-html, body { width: 300px; }
+html, body {
+  width: 300px;
+}
 body {
   height: 500px;
   overflow: hidden;
@@ -152,10 +154,21 @@ body {
   position: relative;
   width: 100%;
   height: 500px;
+  max-width: 480px;
+  margin: 0 auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   isolation: isolate;
+}
+
+/* Mobile viewport support (e.g. Firefox for Android bottom sheet or tab overlay) */
+@media screen and (min-width: 301px) {
+  html, body {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
 }
 
 /* ------------------------------------------------------------- backdrop --- */

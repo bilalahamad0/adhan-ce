@@ -1,6 +1,6 @@
 {
   "name": "adhan-focus",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Chrome extension for Muslim prayer times — a live Adhan countdown that auto-pauses video & audio in every browser tab at prayer time. Privacy-first, no ads, no tracking.",
   "keywords": [
     "adhan",
@@ -31,13 +31,20 @@
     "pack:crx": "node scripts/pack-crx.mjs",
     "pack:xpi": "node scripts/pack-xpi.mjs",
     "pack:edge": "node scripts/pack-edge.mjs",
+    "pack:opera": "node scripts/pack-opera.mjs",
     "lint:firefox": "node scripts/pack-xpi.mjs && addons-linter dist/firefox",
     "submit:cws": "node scripts/submit-cws.mjs",
+    "submit:firefox": "node scripts/submit-firefox.mjs",
     "submit:edge": "node scripts/submit-edge.mjs",
+    "submit:opera": "node scripts/submit-opera.mjs",
+    "publish:all": "node scripts/release-all.mjs",
     "icons": "node icons/generate-icons.cjs",
     "demo": "bash docs/make-demo.sh",
     "shots": "bash docs/make-store-shots.sh",
-    "tiles": "bash docs/make-promo-tiles.sh"
+    "tiles": "bash docs/make-promo-tiles.sh",
+    "metrics": "node scripts/fetch-store-metrics.mjs",
+    "dashboard": "node scripts/serve-dashboard.mjs",
+    "growth:assets": "node scripts/generate-growth-assets.mjs"
   },
   "devDependencies": {
     "addons-linter": "^10.6.0",

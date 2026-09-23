@@ -11,12 +11,14 @@ Edge Add-ons.
 >   builds + AMO-signs the XPI and submits to **addons.mozilla.org**.
 > - **`edge-v<version>`** → [`Release (Edge)`](.github/workflows/release-edge.yml):
 >   builds the ZIP and submits to **Microsoft Edge Add-ons**.
+> - **`opera-v<version>`** → [`Release (Opera)`](.github/workflows/release-opera.yml):
+>   builds the clean Chromium MV3 ZIP for **Opera Add-ons**.
 >
 > A bare `v<version>` tag is **retired** — it triggers no release and
 > [`release-tag-guard.yml`](.github/workflows/release-tag-guard.yml) fails it on
-> purpose. This keeps one store's release from ever touching another. All three
-> stores share one `manifest.json` version, so you can tag the same commit
-> `chrome-v2.1.0`, `firefox-v2.1.0` and `edge-v2.1.0`.
+> purpose. This keeps one store's release from ever touching another. All stores
+> share one `manifest.json` version, so you can tag the same commit
+> `chrome-v2.1.0`, `firefox-v2.1.0`, `edge-v2.1.0`, and `opera-v2.1.0`.
 
 > **Verified CRX uploads is enabled** on the Chrome listing. Every CWS upload
 > must be a `.crx` signed with the project's verified-uploads private key. Plain
@@ -201,6 +203,18 @@ you upload the XPI from the draft release manually. AMO review is publish-first
 **AMO version numbers are immutable** — a botched upload burns that number, so
 bump and re-tag rather than re-pushing.
 
+### Firefox for Android (Mobile) Support
+Adhan Focus includes native **Firefox for Android** support enabled via AMO:
+- **Unified Package**: Mozilla AMO uses the exact same signed `.xpi` for both desktop and mobile.
+- **Android Compatibility Flag**: `manifest.json` declares `"gecko_android": { "strict_min_version": "142.0" }`. AMO reads this block and automatically unlocks mobile installation.
+- **Mobile Store URL**: [`addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/`](https://addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/)
+- **Mobile Testing**: Test on a physical Android device or emulator with USB debugging enabled:
+  ```bash
+  # Run directly on an attached Android device with Firefox Nightly/Beta
+  npx web-ext run --target=firefox-android --android-device <device-id>
+  ```
+  Or connect via desktop Firefox at `about:debugging` → **Connect to Android device** → **Load Temporary Add-on** pointing to `dist/firefox/manifest.json`.
+
 ## 7. Edge Add-ons release
 
 Edge is Chromium, so the package is the Chrome one: same MV3 manifest, same
@@ -243,6 +257,43 @@ no developer fee, unlike Chrome's one-time $5), upload
 `npm run pack:edge`'s ZIP by hand to create the product, then copy its **product
 ID** (a GUID on the extension's Overview page — not the storefront URL slug) into
 the `EDGE_PRODUCT_ID` secret. After that every version is tag-driven.
+
+## 8. Opera Add-ons release
+
+Opera is Chromium-based (Blink), so the package is the clean Chromium package:
+same MV3 manifest, same `background.service_worker`, same runtime files. Like
+Edge, `scripts/pack-opera.mjs` strips `browser_specific_settings` and
+`background.scripts` so the manifest strictly conforms to Chromium MV3 standards.
+
+### Packaging locally
+
+```bash
+npm run pack:opera
+```
+
+Produces `adhan-focus-<version>-opera.zip` at the repo root and leaves the staged
+files in `dist/opera` for inspection.
+
+### Tag-driven release
+
+Tag the merge commit with the **`opera-v`** prefix:
+
+```bash
+git tag opera-v2.1.0 <merge-commit-sha>
+git push origin opera-v2.1.0
+```
+
+The [`Release (Opera)` workflow](.github/workflows/release-opera.yml) tests,
+verifies the tag matches the version in `manifest.json`, builds the ZIP, and
+attaches it to a draft GitHub Release.
+
+### Submitting to Opera Add-ons
+
+1. Sign in to the [Opera Developer Dashboard](https://addons.opera.com/developer/).
+2. Click **Upload an extension** (or select **Adhan Focus** if updating).
+3. Upload `adhan-focus-<version>-opera.zip` (from repo root or GitHub Release).
+4. Fill in / review extension metadata (reuse screenshots from `docs/store/`).
+5. Submit for moderation. Typical review turnaround is 1–3 business days.
 
 ## Common upload errors
 
