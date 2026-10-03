@@ -30,6 +30,11 @@ jobs:
   release:
     name: Build & attach CRX
     runs-on: ubuntu-latest
+    # One Chrome Web Store upload at a time: the v2 API reports async upload
+    # progress per item, not per upload, so overlapping runs could misread it.
+    concurrency:
+      group: cws-release
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -130,6 +135,9 @@ jobs:
           CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
           CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          # Optional repo variable (not a secret); empty falls back to the
+          # publisher ID built into scripts/submit-cws.mjs.
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
         run: |
           set -euo pipefail
           if [ -z "${CWS_CLIENT_ID:-}" ] || [ -z "${CWS_CLIENT_SECRET:-}" ] || [ -z "${CWS_REFRESH_TOKEN:-}" ]; then
