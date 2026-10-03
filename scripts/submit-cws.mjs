@@ -34,9 +34,10 @@
 // See .github/RELEASE_SETUP.md for how to obtain the OAuth credentials once.
 
 import { readFile, stat } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inflateRawSync } from 'node:zlib';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -74,8 +75,9 @@ function loadDotEnv() {
 export const DEFAULT_EXTENSION_ID = 'jfjknglldcdminelckmmfdbnlikiogia';
 
 // Publisher ID of the developer account that owns the item: the UUID in the
-// Developer Dashboard URL (chrome.google.com/webstore/devconsole/<id>/...) and
-// under Account → Publisher ID. Not a secret. Overridable via CWS_PUBLISHER_ID.
+// Developer Dashboard URL (chrome.google.com/webstore/devconsole/<id>/...), also
+// shown in the dashboard's publisher settings. Not a secret. Overridable via
+// CWS_PUBLISHER_ID.
 export const DEFAULT_PUBLISHER_ID = '1441ca88-135b-4f7f-8ea0-a310657241d9';
 
 // Chrome Web Store API v2. v1.1 is unsupported after 2026-10-15.
@@ -84,6 +86,9 @@ export const API_ROOT = 'https://chromewebstore.googleapis.com';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const PUBLISHER_ID_HINT =
+  'the UUID in the Developer Dashboard URL (chrome.google.com/webstore/devconsole/<publisher-id>/…)';
 
 const UPLOAD_HINT =
   '  A version-number error means manifest.json was not bumped above the published version.\n' +
@@ -105,7 +110,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export function resolvePublisherId(value) {
   const id = (value || '').trim() || DEFAULT_PUBLISHER_ID;
   if (/[/?#%\s]/.test(id)) {
-    fail(`Invalid CWS_PUBLISHER_ID '${id}'. Copy it from Developer Dashboard → Account → Publisher ID.`);
+    fail(`Invalid CWS_PUBLISHER_ID '${id}'. Use ${PUBLISHER_ID_HINT}.`);
   }
   return id;
 }
@@ -131,6 +136,45 @@ async function manifestVersion() {
   } catch (_) {
     return null;
   }
+}
+
+// Version from the manifest.json inside a CRX3, so version checks describe the
+// package being shipped rather than whatever the local checkout holds. A CRX3
+// is 'Cr24', a u32 format version, a u32 header length, the header, then a
+// plain ZIP whose offsets are relative to its own start. Returns null if the
+// file can't be read this way; the store still validates the version itself.
+export function crxVersion(buf) {
+  try {
+    const zip = buf.subarray(12 + buf.readUInt32LE(8));
+    let eocd = -1;
+    for (let i = zip.length - 22; i >= Math.max(0, zip.length - 22 - 0xffff); i--) {
+      if (zip.readUInt32LE(i) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) return null;
+    let p = zip.readUInt32LE(eocd + 16);
+    for (let n = zip.readUInt16LE(eocd + 10); n > 0; n--) {
+      if (zip.readUInt32LE(p) !== 0x02014b50) return null;
+      const method = zip.readUInt16LE(p + 10);
+      const size = zip.readUInt32LE(p + 20);
+      const nameLen = zip.readUInt16LE(p + 28);
+      const next = p + 46 + nameLen + zip.readUInt16LE(p + 30) + zip.readUInt16LE(p + 32);
+      if (zip.toString('utf8', p + 46, p + 46 + nameLen) === 'manifest.json') {
+        const local = zip.readUInt32LE(p + 42);
+        const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+        const data = zip.subarray(start, start + size);
+        const raw = method === 8 ? inflateRawSync(data) : method === 0 ? data : null;
+        const v = raw && JSON.parse(raw.toString('utf8')).version;
+        return typeof v === 'string' ? v : null;
+      }
+      p = next;
+    }
+  } catch (_) {
+    // truncated or non-standard archive
+  }
+  return null;
 }
 
 // Validate that the file exists and is a real CRX3 ('Cr24' magic). A verified
@@ -219,7 +263,7 @@ export async function preflight({ token, name, version }) {
       r.res.status === 401
         ? 'The access token was rejected. Regenerate CWS_REFRESH_TOKEN (see .github/RELEASE_SETUP.md).'
         : r.res.status === 403 || r.res.status === 404
-          ? 'Check CWS_PUBLISHER_ID (Developer Dashboard → Account → Publisher ID) and CWS_EXTENSION_ID,\n' +
+          ? `Check CWS_PUBLISHER_ID (${PUBLISHER_ID_HINT}) and CWS_EXTENSION_ID,\n` +
             '  and that the refresh token belongs to an account that manages this item.'
           : 'This may be transient; re-run the job.';
     fail(`Item status check failed for ${name} (${describeError(r)}).\n  ${hint}\n  Nothing was uploaded.`);
@@ -252,8 +296,8 @@ export async function preflight({ token, name, version }) {
     const notOlder = publishedVersions.filter((v) => compareVersions(version, v) <= 0);
     if (notOlder.length) {
       fail(
-        `manifest.json version ${version} is not above the published version ${notOlder.join(', ')}.\n` +
-          '  Bump manifest.json, package.json and the lockfile, then re-tag. Nothing was uploaded.'
+        `The CRX is version ${version}, which is not above the published version ${notOlder.join(', ')}.\n` +
+          '  Ship a CRX built from a bumped manifest.json (and package.json + lockfile). Nothing was uploaded.'
       );
     }
   }
@@ -280,8 +324,8 @@ export async function uploadCrx({ token, name, crx, version, pollIntervalMs = 5_
   if (uploadState === 'SUCCEEDED') {
     if (version && crxVersion && crxVersion !== version) {
       fail(
-        `The uploaded package reports version ${crxVersion}, but manifest.json is ${version}.\n` +
-          '  Not submitting. Check which CRX was passed; the dashboard draft now holds that package.'
+        `The store reports the uploaded package as version ${crxVersion}, but the CRX is ${version}.\n` +
+          '  Not submitting. Check the draft in the Developer Dashboard before submitting it for review.'
       );
     }
     return { uploadState, crxVersion: crxVersion || null };
@@ -388,16 +432,22 @@ export async function main(args = process.argv.slice(2)) {
 
   loadDotEnv();
 
-  const version = await manifestVersion();
+  const manifestVer = await manifestVersion();
   const crxPath = resolve(
-    positional[0] || join(REPO, `adhan-focus-${version}.crx`)
+    positional[0] || join(REPO, `adhan-focus-${manifestVer}.crx`)
   );
   const extId = process.env.CWS_EXTENSION_ID || DEFAULT_EXTENSION_ID;
   const publisherId = resolvePublisherId(process.env.CWS_PUBLISHER_ID);
   const name = itemName(publisherId, extId);
 
   const crx = await validateCrx(crxPath);
-  console.log(`• CRX:       ${crxPath} (${crx.size} bytes${version ? `, manifest v${version}` : ''})`);
+  const version = crxVersion(crx.buf);
+  console.log(`• CRX:       ${crxPath} (${crx.size} bytes${version ? `, v${version}` : ''})`);
+  if (!version) {
+    console.warn("::warning::Couldn't read the version inside the CRX; skipping version checks (the store still validates it).");
+  } else if (manifestVer && manifestVer !== version) {
+    console.log(`  note: the local manifest.json is v${manifestVer}; checks use the CRX's v${version}.`);
+  }
   console.log(`• Extension: ${extId}`);
   console.log(`• Publisher: ${publisherId}${(process.env.CWS_PUBLISHER_ID || '').trim() ? '' : ' (default)'}`);
   if (!UUID_RE.test(publisherId)) {
@@ -450,7 +500,18 @@ export async function main(args = process.argv.slice(2)) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Compare real paths: the ESM loader resolves symlinks for import.meta.url, so a
+// plain resolve(argv[1]) would silently skip main() for a symlinked checkout.
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch (_) {
+    return false;
+  }
+}
+
+if (isMainModule()) {
   main().catch((e) => {
     console.error(`✗ ${e.message || String(e)}`);
     process.exit(e instanceof CwsError ? e.code : 1);

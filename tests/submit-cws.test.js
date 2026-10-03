@@ -2,11 +2,19 @@
 // fake fetch. Guards the v1.1 → v2 migration (v1.1 is unsupported after
 // 2026-10-15): endpoint shapes, the renamed upload states, async-upload polling
 // and the publish-refused-but-uploaded fallback.
+import { spawnSync } from 'node:child_process';
+import { generateKeyPairSync } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import crx3 from 'crx3';
 import {
   API_ROOT,
   DEFAULT_PUBLISHER_ID,
   CwsError,
   compareVersions,
+  crxVersion,
   itemName,
   preflight,
   publishItem,
@@ -14,6 +22,9 @@ import {
   uploadCrx,
   verifySubmission,
 } from '../scripts/submit-cws.mjs';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const SCRIPT = join(ROOT, 'scripts', 'submit-cws.mjs');
 
 const EXT = 'jfjknglldcdminelckmmfdbnlikiogia';
 const NAME = itemName(DEFAULT_PUBLISHER_ID, EXT);
@@ -84,6 +95,77 @@ describe('config helpers', () => {
   });
 });
 
+describe('CRX version and CLI', () => {
+  let dir;
+  let keyPath;
+
+  async function packCrx(version, extra = {}) {
+    const src = mkdtempSync(join(dir, 'src-'));
+    writeFileSync(join(src, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 't', version, ...extra }));
+    writeFileSync(join(src, 'a.js'), 'console.log("x");\n'.repeat(200));
+    const crxPath = join(dir, `adhan-focus-${version}.crx`);
+    await crx3([join(src, 'manifest.json')], { keyPath, crxPath });
+    return crxPath;
+  }
+
+  const run = (args, scriptPath = SCRIPT) =>
+    spawnSync(process.execPath, [scriptPath, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, CWS_PUBLISHER_ID: '', CWS_EXTENSION_ID: '' },
+    });
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'submit-cws-'));
+    keyPath = join(dir, 'key.pem');
+    const { privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+    });
+    writeFileSync(keyPath, privateKey);
+  });
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('reads the version from the manifest inside a real CRX3', async () => {
+    expect(crxVersion(readFileSync(await packCrx('9.8.7')))).toBe('9.8.7');
+    expect(crxVersion(readFileSync(await packCrx('1.2.3.4', { description: 'y'.repeat(5000) })))).toBe('1.2.3.4');
+  });
+
+  it('returns null for files it cannot read as a CRX3 archive', () => {
+    expect(crxVersion(Buffer.from('Cr24'))).toBeNull();
+    expect(crxVersion(Buffer.from('Cr24fake-crx-bytes-without-a-zip'))).toBeNull();
+    expect(crxVersion(Buffer.alloc(0))).toBeNull();
+  });
+
+  it('dry run checks the CRX being shipped, not the local manifest.json', async () => {
+    const crxPath = await packCrx('9.8.7');
+    const r = run([crxPath, '--dry-run']);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/v9\.8\.7\)/);
+    expect(r.stdout).toMatch(/local manifest\.json is v[\d.]+; checks use the CRX's v9\.8\.7/);
+    expect(r.stdout).toMatch(new RegExp(`Publisher: ${DEFAULT_PUBLISHER_ID} \\(default\\)`));
+    expect(r.stdout).toMatch(/No network calls made/);
+  });
+
+  it('keeps exit code 2 for a missing or non-CRX file', () => {
+    expect(run([join(dir, 'missing.crx'), '--dry-run']).status).toBe(2);
+    const notCrx = join(dir, 'not.crx');
+    writeFileSync(notCrx, 'PK\u0003\u0004');
+    const r = run([notCrx, '--dry-run']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/Not a CRX file/);
+  });
+
+  (process.platform === 'win32' ? it.skip : it)('still runs when invoked through a symlinked path', () => {
+    const link = join(dir, 'repo-link');
+    symlinkSync(ROOT, link, 'dir');
+    const r = run([join(dir, 'missing.crx'), '--dry-run'], join(link, 'scripts', 'submit-cws.mjs'));
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/CRX not found/);
+  });
+});
+
 describe('preflight (fetchStatus)', () => {
   const published = (v) => ({ name: NAME, publishedItemRevisionStatus: { state: 'PUBLISHED', distributionChannels: [{ deployPercentage: 100, crxVersion: v }] } });
 
@@ -112,7 +194,7 @@ describe('preflight (fetchStatus)', () => {
     await expect(preflight({ token: TOKEN, name: NAME, version: '2.1.1' })).rejects.toThrow(/still in review/);
   });
 
-  it('refuses when the manifest version is not above the published one', async () => {
+  it('refuses when the CRX version is not above the published one', async () => {
     fakeFetch(reply(200, published('2.1.1')));
     await expect(preflight({ token: TOKEN, name: NAME, version: '2.1.1' })).rejects.toThrow(/not above the published version 2\.1\.1/);
   });
@@ -161,9 +243,9 @@ describe('uploadCrx', () => {
     await expect(uploadCrx({ token: TOKEN, name: NAME, crx, version: '2.1.1' })).rejects.toThrow(/state SUCCESS/);
   });
 
-  it('fails when the uploaded package version differs from manifest.json', async () => {
+  it('fails when the store reports a different version than the CRX', async () => {
     fakeFetch(reply(200, { uploadState: 'SUCCEEDED', crxVersion: '2.1.0' }));
-    await expect(uploadCrx({ token: TOKEN, name: NAME, crx, version: '2.1.1' })).rejects.toThrow(/reports version 2\.1\.0/);
+    await expect(uploadCrx({ token: TOKEN, name: NAME, crx, version: '2.1.1' })).rejects.toThrow(/package as version 2\.1\.0, but the CRX is 2\.1\.1/);
   });
 
   it('surfaces a JSON error envelope and a plain-text front-end error', async () => {

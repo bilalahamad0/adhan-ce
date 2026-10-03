@@ -98,8 +98,8 @@ build/sign/release still runs and you submit manually from the draft release.
 
 v2 addresses items as `publishers/<publisher-id>/items/<item-id>`. The publisher
 ID is built into the script: it is the UUID in the Developer Dashboard URL
-(`chrome.google.com/webstore/devconsole/<publisher-id>/…`), also shown under
-**Account → Publisher ID**. It isn't secret. To point at a different publisher,
+(`chrome.google.com/webstore/devconsole/<publisher-id>/…`), also shown in the
+dashboard's publisher settings. It isn't secret. To point at a different publisher,
 set a repo **variable** (not a secret) `CWS_PUBLISHER_ID` under
 **Settings → Secrets and variables → Actions → Variables**. If it's wrong, step 1
 fails with `PERMISSION_DENIED` and nothing is uploaded.
