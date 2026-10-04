@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, ymdInTz, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS } from './lib/schedule.js';
+import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
@@ -19,6 +19,12 @@ const ALADHAN_BASE = 'https://api.aladhan.com/v1/timingsByCity';
 function ddmmyyyy(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`;
+}
+
+// 'YYYY-MM-DD' -> Aladhan's 'DD-MM-YYYY'.
+function ymdToAladhan(s) {
+  const [y, m, d] = String(s).split('-');
+  return `${d}-${m}-${y}`;
 }
 
 const DEFAULT_SETTINGS = {
@@ -44,6 +50,11 @@ const ALARM_PRAYER = 'adhan-prayer-fire';
 const ALARM_RESUME = 'adhan-auto-resume';
 const ALARM_TICK = 'adhan-tick';
 const ALARM_BADGE = 'adhan-badge-tick';
+// Pre-prayer revalidation (see REVALIDATE_* in lib/schedule.js): a one-shot timer at
+// T-45 for the next prayer (or T-35 after a T-45 held by the quiet period after a
+// prayer), re-armed by armAlarms(), and a one-shot retry after a failed attempt.
+const ALARM_REVALIDATE = 'adhan-revalidate';
+const ALARM_REVALIDATE_RETRY = 'adhan-revalidate-retry';
 
 // ---------- storage helpers ----------
 async function getSettings() {
@@ -92,62 +103,311 @@ function recordUsage(event) {
 }
 
 // ---------- schedule fetch ----------
-async function fetchAndStoreSchedule() {
-  const settings = await getSettings();
-  const date = ddmmyyyy(new Date());
+// The settings that make up the Aladhan request. A fetched answer belongs to these.
+const REQUEST_KEYS = ['city', 'country', 'state', 'method', 'school'];
+function sameRequest(a, b) {
+  return REQUEST_KEYS.every((k) => (a && a[k]) === (b && b[k]));
+}
+
+// Revalidation fetches give up after this long, so a hung connection never holds
+// the popup or the retry logic hostage.
+const REVALIDATE_FETCH_TIMEOUT_MS = 10 * 1000;
+// How long opening the popup waits for an in-window revalidation before answering
+// from storage (the revalidation carries on, and re-arms if the times moved).
+const POPUP_REVALIDATION_WAIT_MS = 2500;
+
+function timeoutSignal(ms) {
+  try {
+    return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ms) : undefined;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+// Resolves with `promise`'s value, or undefined once `ms` elapsed first.
+function waitAtMost(promise, ms) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// Noon of the 'YYYY-MM-DD' `day` in IANA `zone` (machine-local without one): a base
+// date that buildPrayers / parseTimeToday read as that day.
+function noonOf(day, zone) {
+  const [y, m, d] = String(day).split('-').map(Number);
+  return new Date(zone ? zonedToEpoch(y, m, d, 12, 0, zone) : new Date(y, m - 1, d, 12).getTime());
+}
+
+// Fetch + parse one day's timings for `settings` into the stored schedule shape
+// ({date, prayers, sunrise, tz, fetchedAt}) without writing anything, so callers
+// can check the answer is still wanted before committing it. Throws unless each of
+// the five prayers (and Sunrise, when present) is a strict 24h 'H:MM' time (see
+// parseAladhanTime). `day` ('YYYY-MM-DD') pins the requested date — the answer must
+// then be for that date, and is stored as that day's times; omitted, it is this
+// machine's local date, stored under the location's today. `tz`, when given, is
+// the timezone the answer must carry.
+async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
+  const date = day ? ymdToAladhan(day) : ddmmyyyy(new Date());
   let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(
     settings.country
   )}&method=${settings.method}&school=${settings.school}`;
   if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
-  const res = await fetch(url, { cache: 'no-store' });
+  const init = { cache: 'no-store' };
+  const signal = timeoutMs ? timeoutSignal(timeoutMs) : undefined;
+  if (signal) init.signal = signal;
+  const res = await fetch(url, init);
   if (!res.ok) throw new Error(`Aladhan ${res.status}`);
   const json = await res.json();
   const data = json && json.data;
   if (!data || !data.timings) throw new Error('Aladhan: malformed response');
   const tmg = data.timings;
-  const base = new Date();
-  // Aladhan returns 24h "HH:mm"; convert to the "hh:mm a" the app already parses
-  // and displays, so scheduling/firing is byte-identical to before.
-  const five = {
-    Fajr: hhmmTo12h(tmg.Fajr),
-    Dhuhr: hhmmTo12h(tmg.Dhuhr),
-    Asr: hhmmTo12h(tmg.Asr),
-    Maghrib: hhmmTo12h(tmg.Maghrib),
-    Isha: hhmmTo12h(tmg.Isha),
-  };
   // Anchor every prayer's epoch to the LOCATION's timezone (data.meta.timezone),
   // so "next prayer" / countdown / firing are correct even when the chosen city is
   // in a different timezone than this machine.
-  const tz = (data.meta && data.meta.timezone) || null;
-  const prayers = buildPrayers(five, base, tz);
-  // Sunrise is informational only (no pause/notification), shown greyed in the popup.
-  const sunriseTime = tmg.Sunrise ? hhmmTo12h(tmg.Sunrise) : null;
-  const sunrise = sunriseTime ? { time: sunriseTime, ts: parseTimeToday(sunriseTime, base, tz) } : null;
-  const schedule = { date: ymdInTz(tz, base), prayers, sunrise, tz, fetchedAt: Date.now() };
-  const nextPrayer = computeNext(prayers, Date.now());
-  await chrome.storage.local.set({ schedule, nextPrayer });
-  return { schedule, nextPrayer };
+  const zone = (data.meta && data.meta.timezone) || null;
+  if (day) {
+    const answered = data.date && data.date.gregorian && data.date.gregorian.date;
+    if (answered !== date) throw new Error(`Aladhan: answer is for ${answered}, expected ${date}`);
+  }
+  if (tz !== undefined && zone !== tz) throw new Error(`Aladhan: timezone ${zone}, expected ${tz}`);
+  const base = day ? noonOf(day, zone) : new Date();
+  // Aladhan returns 24h "HH:mm"; convert to the "hh:mm a" the app already parses
+  // and displays, so scheduling/firing is byte-identical to before.
+  const five = {};
+  for (const name of PRAYER_ORDER) {
+    const hm = parseAladhanTime(tmg[name]);
+    if (!hm) throw new Error(`Aladhan: unreadable ${name} time`);
+    five[name] = hhmmTo12h(hm);
+  }
+  const prayers = buildPrayers(five, base, zone);
+  // An unreadable time would be stored with ts:null and break "next prayer".
+  if (prayers.length !== PRAYER_ORDER.length || !prayers.every((p) => Number.isFinite(p.ts))) {
+    throw new Error('Aladhan: unreadable prayer time');
+  }
+  // Sunrise is informational only (no pause/notification), shown greyed in the
+  // popup. It is optional, but when present it must parse like the prayers.
+  let sunrise = null;
+  if (tmg.Sunrise != null) {
+    const hm = parseAladhanTime(tmg.Sunrise);
+    if (!hm) throw new Error('Aladhan: unreadable Sunrise time');
+    const time = hhmmTo12h(hm);
+    sunrise = { time, ts: parseTimeToday(time, base, zone) };
+    if (!Number.isFinite(sunrise.ts)) throw new Error('Aladhan: unreadable Sunrise time');
+  }
+  return { date: ymdInTz(zone, base), prayers, sunrise, tz: zone, fetchedAt: Date.now() };
 }
 
-// Recompute "next" from the stored schedule; refetch if the day rolled over.
-async function refreshNext() {
-  const { schedule } = await chrome.storage.local.get('schedule');
+// Schedule commits (the check-then-write after a fetch) run one at a time, so a
+// commit's check can't be invalidated by another writer landing between its read
+// and its write. Fetches themselves run outside it.
+let scheduleCommit = Promise.resolve();
+function commitSchedule(fn) {
+  const run = scheduleCommit.then(fn);
+  scheduleCommit = run.catch(() => {});
+  return run;
+}
+
+async function storedScheduleState(extra = {}) {
+  const { schedule, nextPrayer } = await chrome.storage.local.get(['schedule', 'nextPrayer']);
+  return { schedule: schedule || null, nextPrayer: nextPrayer || null, ...extra };
+}
+
+// The day's fetch: the rollover to a new day, Refresh, an update, a settings save.
+// With `tz` — the stored schedule's timezone, whenever the stored schedule may be
+// for the same location — it asks for THAT zone's today, the date the answer is
+// stored under (this machine can be in another timezone, so its own date can be a
+// day off); the answer must then be for that date. The stored schedule can be for
+// an earlier location (a settings save whose fetch failed), so an answer in another
+// timezone is accepted when that zone's today is the date asked for; when it is
+// not, the request is made again for that zone's today, and that answer must match
+// both. Without `tz` (first install, a new city) it asks for this machine's date,
+// as it always has.
+async function fetchAndStoreSchedule({ tz } = {}) {
+  const settings = await getSettings();
+  let schedule;
+  if (tz) {
+    const day = ymdInTz(tz);
+    schedule = await fetchSchedule(settings, { day });
+    const zoneDay = ymdInTz(schedule.tz);
+    if (schedule.tz !== tz && zoneDay !== day) {
+      schedule = await fetchSchedule(settings, { day: zoneDay, tz: schedule.tz });
+    }
+  } else {
+    schedule = await fetchSchedule(settings);
+  }
+  return commitSchedule(async () => {
+    // The location/calculation changed while this was in flight: the answer is for
+    // the old settings, and whoever changed them fetches for the new ones.
+    if (!sameRequest(await getSettings(), settings)) return storedScheduleState({ superseded: true });
+    const nextPrayer = computeNext(schedule.prayers, Date.now());
+    await chrome.storage.local.set({ schedule, nextPrayer });
+    return { schedule, nextPrayer };
+  });
+}
+
+// What identifies a pause for the revalidation commit: a prayer that fires while
+// the re-fetch is in flight changes it; a focus toggle does not.
+function pauseMark(paused) {
+  return paused && paused.active ? `${paused.prayer}|${paused.since}` : 'none';
+}
+
+// Pre-prayer revalidation (see REVALIDATE_* in lib/schedule.js): re-fetch TODAY's
+// timings with the same request and let the freshest Aladhan answer win. The date
+// is pinned to the stored schedule's (location) day, which is always "today" here;
+// the answer must be for that day and timezone. Nothing is written when the stored
+// schedule or the request settings changed during the fetch (a settings save or
+// Refresh got there first), a prayer fired meanwhile (a new pause started), or the
+// answer landed at or after the window's end, T-30 ({superseded}). A pause that
+// was already running when the fetch started — or that ends during it — does not
+// block it: a long auto-resume window would otherwise skip the next prayer's check. Identical answer → only fetchedAt is recorded. Different answer
+// → stored, unless it would move a prayer across "now" (revalidationCrossesNow):
+// then nothing is written ({held}) and the attempt is retried, so a prayer never
+// fires twice or gets skipped. Throws — leaving the stored schedule untouched —
+// when the fetch fails or the answer is malformed.
+async function revalidateSchedule(old, pausedAtStart, pendingTs) {
+  const settings = await getSettings();
+  const fresh = await fetchSchedule(settings, { day: old.date, tz: old.tz || undefined, timeoutMs: REVALIDATE_FETCH_TIMEOUT_MS });
+  return commitSchedule(async () => {
+    const cur = await chrome.storage.local.get(['schedule', 'settings', 'paused']);
+    if (
+      !cur.schedule ||
+      cur.schedule.date !== old.date ||
+      cur.schedule.fetchedAt !== old.fetchedAt ||
+      !sameRequest({ ...DEFAULT_SETTINGS, ...(cur.settings || {}) }, settings) ||
+      (cur.paused && cur.paused.active && pauseMark(cur.paused) !== pauseMark(pausedAtStart)) ||
+      Date.now() >= pendingTs - REVALIDATE_WINDOW_END_MS
+    ) {
+      return storedScheduleState({ changed: false, superseded: true });
+    }
+    if (fresh.date !== old.date) throw new Error(`Aladhan: answer is for ${fresh.date}, expected ${old.date}`);
+    const now = Date.now();
+    if (sameTimings(old, fresh)) {
+      const kept = { ...old, fetchedAt: fresh.fetchedAt };
+      const nextPrayer = computeNext(kept.prayers, now);
+      await chrome.storage.local.set({ schedule: kept, nextPrayer });
+      return { schedule: kept, nextPrayer, changed: false };
+    }
+    const crossing = revalidationCrossesNow(old.prayers, fresh.prayers, now);
+    if (crossing.length) {
+      console.warn(`Adhan: revalidated times would move ${crossing.join(', ')} across now; keeping current times`);
+      return storedScheduleState({ changed: false, held: true });
+    }
+    const nextPrayer = computeNext(fresh.prayers, now);
+    await chrome.storage.local.set({ schedule: fresh, nextPrayer });
+    return { schedule: fresh, nextPrayer, changed: true };
+  });
+}
+
+// The one retry, at T-35 (see revalidationRetryAt).
+function armRevalidationRetry(prayerTs) {
+  const retryAt = revalidationRetryAt(prayerTs, Date.now());
+  if (retryAt) chrome.alarms.create(ALARM_REVALIDATE_RETRY, { when: retryAt });
+}
+
+// Runs one revalidation for the upcoming prayer `pending`, first recording the
+// attempt (and the recomputed nextPrayer). Never throws: a failure keeps the
+// stored times and warns. A failed or held attempt arms one retry, unless it was
+// that retry.
+async function runRevalidation(old, pending, { nextPrayer, now, paused, retry }) {
+  let r;
+  try {
+    await chrome.storage.local.set({ nextPrayer, revalidateAttemptAt: now });
+    r = await revalidateSchedule(old, paused, pending.ts);
+  } catch (e) {
+    console.warn('Adhan: pre-prayer revalidation failed; keeping current times', e);
+    if (!retry) armRevalidationRetry(pending.ts);
+    return storedScheduleState({ changed: false, failed: true }).catch(() => ({ changed: false, failed: true }));
+  }
+  if (r.held) {
+    if (!retry) armRevalidationRetry(pending.ts);
+  } else if (!r.superseded) {
+    await chrome.alarms.clear(ALARM_REVALIDATE_RETRY);
+  }
+  return r;
+}
+
+// The revalidation / day-rollover fetch in flight, if any. Concurrent triggers (a
+// browser start and a missed tick, the popup and a tick, the retry and a tick)
+// share it instead of sending a second Aladhan request.
+let revalidationInFlight = null;
+let rolloverInFlight = null;
+
+// Recompute "next" from the stored schedule; refetch if the day rolled over, and
+// revalidate today's timings before each prayer (see REVALIDATE_* in
+// lib/schedule.js). With `background`, a revalidation is not awaited: the result
+// carries it as `revalidation` (a promise that never rejects). `retry` marks the
+// call made by the retry alarm, which does not arm another retry.
+async function refreshNext({ background = false, retry = false } = {}) {
+  const data = await chrome.storage.local.get(['settings', 'schedule', 'nextPrayer', 'paused', 'revalidateAttemptAt']);
+  const schedule = data.schedule || null;
   // Rolled over to a new day *in the location's timezone* → refetch the new day.
   if (!schedule || schedule.date !== ymdInTz(schedule.tz)) {
-    return fetchAndStoreSchedule();
+    if (!rolloverInFlight) {
+      const run = fetchAndStoreSchedule({ tz: (schedule && schedule.tz) || undefined });
+      const done = () => {
+        if (rolloverInFlight === run) rolloverInFlight = null;
+      };
+      rolloverInFlight = run;
+      run.then(done, done);
+    }
+    return rolloverInFlight;
   }
-  const nextPrayer = computeNext(schedule.prayers, Date.now());
-  await chrome.storage.local.set({ nextPrayer });
-  return { schedule, nextPrayer };
+  const now = Date.now();
+  const nextPrayer = computeNext(schedule.prayers, now);
+  // A revalidation is already in flight: share it. It records nextPrayer itself.
+  if (revalidationInFlight) {
+    return background ? { schedule, nextPrayer, revalidation: revalidationInFlight } : revalidationInFlight;
+  }
+  const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+  const enabled = settings.enabled !== false; // a disabled install never re-fetches
+  // A pending dev test fire blocks it (isRevalidationDue rejects test fires).
+  // Attempts are spaced REVALIDATE_MIN_GAP_MS apart, so a failure isn't retried on
+  // every popup open.
+  const pending = data.nextPrayer && data.nextPrayer.test ? data.nextPrayer : nextPrayer;
+  const sinceAttempt = typeof data.revalidateAttemptAt === 'number' ? now - data.revalidateAttemptAt : Infinity;
+  // One attempt per window (the T-45 alarm, or the first catch-up after it), then
+  // the one retry alarm at T-35 — the same two sampling moments as any other
+  // client using this rule.
+  const attempted =
+    !retry && typeof data.revalidateAttemptAt === 'number' && data.revalidateAttemptAt >= pending.ts - REVALIDATE_AT_MS;
+  const due =
+    enabled &&
+    !attempted &&
+    isRevalidationDue(schedule, pending, now) &&
+    !(sinceAttempt >= 0 && sinceAttempt < REVALIDATE_MIN_GAP_MS);
+  if (!due) {
+    // (A T-45 check held by the quiet period after a prayer is tried again at T-35:
+    // armAlarms arms ALARM_REVALIDATE for it — see revalidationAlarmAt.)
+    await chrome.storage.local.set({ nextPrayer });
+    return { schedule, nextPrayer };
+  }
+  const run = runRevalidation(schedule, pending, { nextPrayer, now, paused: data.paused || { active: false }, retry });
+  const done = () => {
+    if (revalidationInFlight === run) revalidationInFlight = null;
+  };
+  revalidationInFlight = run;
+  run.then(done, done);
+  return background ? { schedule, nextPrayer, revalidation: run } : run;
 }
 
 // ---------- alarms ----------
 async function armAlarms() {
-  const { settings, nextPrayer } = await getState();
+  const { settings, nextPrayer, schedule } = await getState();
   await chrome.alarms.clear(ALARM_PRAYER);
   if (settings.enabled && nextPrayer) {
     chrome.alarms.create(ALARM_PRAYER, { when: Math.max(Date.now() + 500, nextPrayer.ts) });
   }
+  // Pre-prayer revalidation timer for the next prayer: T-45 whenever that moment is
+  // still ahead, or T-35 after a T-45 that fell in the quiet period after a prayer
+  // (see revalidationAlarmAt). Either runs as a first attempt, so its own failure
+  // gets the one retry. The tick, startup and popup catch up on a missed one.
+  await chrome.alarms.clear(ALARM_REVALIDATE);
+  const { revalidateAttemptAt } = await chrome.storage.local.get('revalidateAttemptAt');
+  const revalidateAt = settings.enabled ? revalidationAlarmAt(schedule, nextPrayer, Date.now(), revalidateAttemptAt) : null;
+  if (revalidateAt) chrome.alarms.create(ALARM_REVALIDATE, { when: revalidateAt });
+  if (!settings.enabled) await chrome.alarms.clear(ALARM_REVALIDATE_RETRY);
   await chrome.alarms.clear(ALARM_BADGE);
   if (settings.enabled && settings.badgeCountdown !== false && nextPrayer) {
     chrome.alarms.create(ALARM_BADGE, {
@@ -467,7 +727,7 @@ async function injectExistingTabs() {
 // ---------- event wiring ----------
 chrome.runtime.onInstalled.addListener(async (details) => {
   const isFreshInstall = details && details.reason === 'install';
-  const stored = await chrome.storage.local.get(['settings', 'paused', 'installedAt', 'onboardingCompleted']);
+  const stored = await chrome.storage.local.get(['settings', 'paused', 'installedAt', 'onboardingCompleted', 'schedule']);
   if (!stored.settings) await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
   if (!stored.paused) await chrome.storage.local.set({ paused: { active: false } });
   // Anchor the prayer-tracking history. For an existing user updating into this
@@ -477,7 +737,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     await chrome.storage.local.set({ onboardingCompleted: !isFreshInstall });
   }
   try {
-    await fetchAndStoreSchedule();
+    // An update keeps the location: ask for its today (see fetchAndStoreSchedule).
+    await fetchAndStoreSchedule({ tz: (stored.schedule && stored.schedule.tz) || undefined });
   } catch (e) {
     console.warn('Adhan: initial schedule fetch failed', e);
   }
@@ -515,10 +776,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_PRAYER) handlePrayerFire();
   else if (alarm.name === ALARM_RESUME) handleAutoResume();
   else if (alarm.name === ALARM_BADGE) updateBadge();
-  else if (alarm.name === ALARM_TICK) {
+  else if (alarm.name === ALARM_TICK || alarm.name === ALARM_REVALIDATE || alarm.name === ALARM_REVALIDATE_RETRY) {
     (async () => {
       try {
-        await refreshNext();
+        await refreshNext({ retry: alarm.name === ALARM_REVALIDATE_RETRY });
         await armAlarms();
         await reconcilePaused();
       } catch (e) {
@@ -570,9 +831,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     switch (msg && msg.type) {
       case 'GET_STATE':
         // Self-heal on open: if the day rolled over (location tz) refetch; otherwise
-        // just recompute nextPrayer. Failures fall back to the stored state.
+        // just recompute nextPrayer (revalidating in the pre-prayer window). The
+        // popup waits for a revalidation at most POPUP_REVALIDATION_WAIT_MS, then
+        // answers from storage while it carries on. One that moved today's times
+        // re-arms the prayer alarm here — the tick/startup paths re-arm on their
+        // own. Failures fall back to the stored state.
         try {
-          await refreshNext();
+          const r = await refreshNext({ background: true });
+          if (r && r.revalidation) {
+            const rearmed = r.revalidation.then((v) => (v && v.changed ? armAlarms() : undefined)).catch(() => {});
+            await waitAtMost(rearmed, POPUP_REVALIDATION_WAIT_MS);
+          }
         } catch (_) {}
         sendResponse(await getState());
         break;
@@ -660,16 +929,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const settings = { ...current, ...incoming };
         await chrome.storage.local.set({ settings });
         const { schedule } = await chrome.storage.local.get('schedule');
+        const locationChanged =
+          settings.city !== current.city || settings.country !== current.country || settings.state !== current.state;
         const locationOrCalcChanged =
-          !schedule ||
-          settings.city !== current.city ||
-          settings.country !== current.country ||
-          settings.state !== current.state ||
-          settings.method !== current.method ||
-          settings.school !== current.school;
+          !schedule || locationChanged || settings.method !== current.method || settings.school !== current.school;
         if (locationOrCalcChanged) {
           try {
-            await fetchAndStoreSchedule();
+            // A new city may be in another timezone: ask for this machine's date, as
+            // before. A calculation change keeps the location's timezone.
+            await fetchAndStoreSchedule({ tz: (!locationChanged && schedule && schedule.tz) || undefined });
           } catch (e) {
             await armAlarms();
             sendResponse({ ok: false, error: String(e.message || e) });
@@ -682,7 +950,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       case 'REFRESH':
         try {
-          await fetchAndStoreSchedule();
+          const { schedule } = await chrome.storage.local.get('schedule');
+          await fetchAndStoreSchedule({ tz: (schedule && schedule.tz) || undefined });
           await armAlarms();
           sendResponse({ ok: true });
         } catch (e) {
