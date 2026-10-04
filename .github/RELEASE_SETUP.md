@@ -83,6 +83,27 @@ produces.)
 Were these secrets absent, the step would **no-op** instead — the
 build/sign/release still runs and you submit manually from the draft release.
 
+`scripts/submit-cws.mjs` uses the [Chrome Web Store API v2](https://developer.chrome.com/docs/webstore/api).
+(v1.1 is unsupported after 2026-10-15.) Each run:
+
+1. **Checks the item's status** (read-only `fetchStatus`). It stops before uploading
+   if the publisher ID is wrong, a previous submission is still in review or
+   staged, or `manifest.json` isn't above the published version.
+2. **Uploads the signed CRX.** If the store processes it asynchronously, the
+   script waits up to 5 minutes for it to finish.
+3. **Submits it for review.** If the store refuses the submission (for example,
+   the Privacy practices tab is incomplete), the package stays uploaded as a
+   draft. The step then emits a warning, not a failure, and you click
+   **Submit for review** in the dashboard.
+
+v2 addresses items as `publishers/<publisher-id>/items/<item-id>`. The publisher
+ID is built into the script: it is the UUID in the Developer Dashboard URL
+(`chrome.google.com/webstore/devconsole/<publisher-id>/…`), also shown in the
+dashboard's publisher settings. It isn't secret. To point at a different publisher,
+set a repo **variable** (not a secret) `CWS_PUBLISHER_ID` under
+**Settings → Secrets and variables → Actions → Variables**. If it's wrong, step 1
+fails with `PERMISSION_DENIED` and nothing is uploaded.
+
 ### One-time OAuth setup
 
 You need an OAuth2 client and a long-lived refresh token scoped to the Chrome
@@ -117,16 +138,21 @@ required + one optional:
 | `CWS_CLIENT_ID` | OAuth client ID from step 3 |
 | `CWS_CLIENT_SECRET` | OAuth client secret from step 3 |
 | `CWS_REFRESH_TOKEN` | Refresh token from step 4 |
-| `CWS_EXTENSION_ID` | _(optional)_ item ID — defaults to the published Adhan Caster ID |
+| `CWS_EXTENSION_ID` | _(optional)_ item ID — defaults to the published Adhan Focus ID |
+
+The same OAuth client and refresh token work for API v2; it uses the same
+`chromewebstore` scope. v2 can also authenticate as a
+[service account](https://developer.chrome.com/docs/webstore/service-accounts)
+linked in the dashboard, but this script uses the refresh token.
 
 ### Test it without cutting a release
 
-Locally, copy `.env.example` → `.env`, fill in the same four values, then:
+Locally, copy `.env.example` → `.env`, fill in the same values, then:
 
 ```bash
-npm run submit:cws -- adhan-caster-<version>.crx --dry-run   # validate, no network
-npm run submit:cws -- adhan-caster-<version>.crx --no-publish # upload only, you submit in the dashboard
-npm run submit:cws -- adhan-caster-<version>.crx              # upload + submit for review
+npm run submit:cws -- adhan-focus-<version>.crx --dry-run   # validate, no network
+npm run submit:cws -- adhan-focus-<version>.crx --no-publish # status check + upload, you submit in the dashboard
+npm run submit:cws -- adhan-focus-<version>.crx              # status check + upload + submit for review
 ```
 
 `.env` is gitignored. A refresh token is as sensitive as a password — anyone

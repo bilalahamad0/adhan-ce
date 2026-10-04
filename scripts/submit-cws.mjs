@@ -3,8 +3,9 @@
 //
 // This is the last mile of the release pipeline. The Release workflow already
 // builds + signs the CRX with the verified-uploads key; this script takes that
-// CRX and (1) uploads it as a new package, then (2) publishes it (submits for
-// review). On approval Google auto-publishes it to all users.
+// CRX and (1) checks the item's status, (2) uploads it as a new package, then
+// (3) publishes it (submits for review). On approval Google auto-publishes it
+// to all users.
 //
 // Usage:
 //   node scripts/submit-cws.mjs <path-to.crx> [--dry-run] [--no-publish]
@@ -15,23 +16,28 @@
 //                   and needs NO credentials — safe to run anywhere, including
 //                   CI smoke tests. This is the only path that can be exercised
 //                   without a live OAuth token.
-//   --no-publish    upload the package but skip the publish/submit-for-review
-//                   step (leaves it staged as a draft in the dashboard).
+//   --no-publish    check status + upload the package, but skip the
+//                   publish/submit-for-review step (leaves it staged as a draft
+//                   in the dashboard).
 //
 // Required env (for a real run — not needed for --dry-run):
 //   CWS_CLIENT_ID        OAuth2 client ID (Google Cloud, Web application type)
 //   CWS_CLIENT_SECRET    OAuth2 client secret
 //   CWS_REFRESH_TOKEN    OAuth2 refresh token with the chromewebstore scope
+// Optional env:
 //   CWS_EXTENSION_ID     the published item's ID
 //                        (defaults to the known Adhan Focus ID below)
+//   CWS_PUBLISHER_ID     the developer account's publisher ID
+//                        (defaults to the Adhan Focus publisher below)
 //
 // Locally these come from a gitignored .env; in CI they come from repo secrets.
 // See .github/RELEASE_SETUP.md for how to obtain the OAuth credentials once.
 
 import { readFile, stat } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inflateRawSync } from 'node:zlib';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -66,20 +72,63 @@ function loadDotEnv() {
 
 // Published Adhan Focus item ID (public — it's in the store URL/README).
 // Overridable via env so this script isn't hard-wired to one listing.
-const DEFAULT_EXTENSION_ID = 'jfjknglldcdminelckmmfdbnlikiogia';
+export const DEFAULT_EXTENSION_ID = 'jfjknglldcdminelckmmfdbnlikiogia';
 
-// Chrome Web Store API v1.1. Chosen over v2 because it keys off the item ID
-// alone (no separate publisher ID to look up) and is the longest-standing,
-// most widely-used endpoint. Verified-CRX listings upload the signed CRX here
-// exactly as a ZIP would be uploaded for a non-verified one.
-const API = 'https://www.googleapis.com/upload/chromewebstore/v1.1/items';
-const PUBLISH = 'https://www.googleapis.com/chromewebstore/v1.1/items';
+// Publisher ID of the developer account that owns the item: the UUID in the
+// Developer Dashboard URL (chrome.google.com/webstore/devconsole/<id>/...), also
+// shown in the dashboard's publisher settings. Not a secret. Overridable via
+// CWS_PUBLISHER_ID.
+export const DEFAULT_PUBLISHER_ID = '1441ca88-135b-4f7f-8ea0-a310657241d9';
+
+// Chrome Web Store API v2. v1.1 is unsupported after 2026-10-15.
+// https://developer.chrome.com/docs/webstore/api
+export const API_ROOT = 'https://chromewebstore.googleapis.com';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-function fail(msg, code = 1) {
-  console.error(`✗ ${msg}`);
-  process.exit(code);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const PUBLISHER_ID_HINT =
+  'the UUID in the Developer Dashboard URL (chrome.google.com/webstore/devconsole/<publisher-id>/…)';
+
+const UPLOAD_HINT =
+  '  A version-number error means manifest.json was not bumped above the published version.\n' +
+  "  A signature or package-format error means the CRX wasn't signed with the verified-uploads key.";
+
+export class CwsError extends Error {
+  constructor(message, code = 1) {
+    super(message);
+    this.code = code;
+  }
 }
+
+function fail(msg, code = 1) {
+  throw new CwsError(msg, code);
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export function resolvePublisherId(value) {
+  const id = (value || '').trim() || DEFAULT_PUBLISHER_ID;
+  if (/[/?#%\s]/.test(id)) {
+    fail(`Invalid CWS_PUBLISHER_ID '${id}'. Use ${PUBLISHER_ID_HINT}.`);
+  }
+  return id;
+}
+
+export const itemName = (publisherId, extId) => `publishers/${publisherId}/items/${extId}`;
+
+export function compareVersions(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return Math.sign(d);
+  }
+  return 0;
+}
+
+const channelVersions = (revision) =>
+  (revision?.distributionChannels || []).map((c) => c.crxVersion).filter(Boolean);
 
 async function manifestVersion() {
   try {
@@ -87,6 +136,45 @@ async function manifestVersion() {
   } catch (_) {
     return null;
   }
+}
+
+// Version from the manifest.json inside a CRX3, so version checks describe the
+// package being shipped rather than whatever the local checkout holds. A CRX3
+// is 'Cr24', a u32 format version, a u32 header length, the header, then a
+// plain ZIP whose offsets are relative to its own start. Returns null if the
+// file can't be read this way; the store still validates the version itself.
+export function crxVersion(buf) {
+  try {
+    const zip = buf.subarray(12 + buf.readUInt32LE(8));
+    let eocd = -1;
+    for (let i = zip.length - 22; i >= Math.max(0, zip.length - 22 - 0xffff); i--) {
+      if (zip.readUInt32LE(i) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) return null;
+    let p = zip.readUInt32LE(eocd + 16);
+    for (let n = zip.readUInt16LE(eocd + 10); n > 0; n--) {
+      if (zip.readUInt32LE(p) !== 0x02014b50) return null;
+      const method = zip.readUInt16LE(p + 10);
+      const size = zip.readUInt32LE(p + 20);
+      const nameLen = zip.readUInt16LE(p + 28);
+      const next = p + 46 + nameLen + zip.readUInt16LE(p + 30) + zip.readUInt16LE(p + 32);
+      if (zip.toString('utf8', p + 46, p + 46 + nameLen) === 'manifest.json') {
+        const local = zip.readUInt32LE(p + 42);
+        const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+        const data = zip.subarray(start, start + size);
+        const raw = method === 8 ? inflateRawSync(data) : method === 0 ? data : null;
+        const v = raw && JSON.parse(raw.toString('utf8')).version;
+        return typeof v === 'string' ? v : null;
+      }
+      p = next;
+    }
+  } catch (_) {
+    // truncated or non-standard archive
+  }
+  return null;
 }
 
 // Validate that the file exists and is a real CRX3 ('Cr24' magic). A verified
@@ -121,6 +209,7 @@ async function getAccessToken({ clientId, clientSecret, refreshToken }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
+    signal: AbortSignal.timeout(30_000),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.access_token) {
@@ -133,73 +222,237 @@ async function getAccessToken({ clientId, clientSecret, refreshToken }) {
   return data.access_token;
 }
 
-async function uploadCrx({ token, extId, crx }) {
-  // PUT the raw CRX bytes. For a verified listing the upload must be the signed
-  // CRX (not a ZIP); these headers tell the upload service it's a raw CRX body.
-  const res = await fetch(`${API}/${extId}`, {
-    method: 'PUT',
+// API errors are a JSON google.rpc.Status envelope, but Google's front end
+// answers some failures (bad path, 411, bad upload protocol) in plain text, so
+// keep the raw body as a fallback.
+async function call(url, { token, method = 'GET', headers = {}, body, timeoutMs = 60_000 }) {
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...headers },
+    body,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const text = await res.text().catch(() => '');
+  let json = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch (_) {
+    // not JSON — describeError falls back to the text
+  }
+  return { res, json: json && typeof json === 'object' ? json : {}, text };
+}
+
+function describeError({ res, json, text }) {
+  const e = json.error;
+  if (e && typeof e === 'object') {
+    const details = Array.isArray(e.details) && e.details.length ? ` ${JSON.stringify(e.details)}` : '';
+    return `HTTP ${res.status}${e.status ? ` ${e.status}` : ''}: ${e.message || ''}${details}`;
+  }
+  return `HTTP ${res.status}: ${(text || '').trim().slice(0, 500) || 'no response body'}`;
+}
+
+const statusUrl = (name) => `${API_ROOT}/v2/${name}:fetchStatus`;
+
+// Read-only check before touching the item. Catches a wrong publisher ID, a
+// submission already in review (which the store refuses to edit) and an
+// unbumped version, all before anything is uploaded.
+export async function preflight({ token, name, version }) {
+  const r = await call(statusUrl(name), { token });
+  if (!r.res.ok) {
+    const hint =
+      r.res.status === 401
+        ? 'The access token was rejected. Regenerate CWS_REFRESH_TOKEN (see .github/RELEASE_SETUP.md).'
+        : r.res.status === 403 || r.res.status === 404
+          ? `Check CWS_PUBLISHER_ID (${PUBLISHER_ID_HINT}) and CWS_EXTENSION_ID,\n` +
+            '  and that the refresh token belongs to an account that manages this item.'
+          : 'This may be transient; re-run the job.';
+    fail(`Item status check failed for ${name} (${describeError(r)}).\n  ${hint}\n  Nothing was uploaded.`);
+  }
+  const s = r.json;
+  if (s.name && s.name !== name) {
+    fail(`Item status check returned ${s.name}, expected ${name}. Nothing was uploaded.`);
+  }
+  if (s.takenDown) {
+    fail('The item is taken down for a policy violation. Resolve it in the Developer Dashboard first. Nothing was uploaded.');
+  }
+  if (s.warned) {
+    console.warn('::warning::The item has a policy warning in the Developer Dashboard; it will be taken down if unresolved.');
+  }
+  const submitted = s.submittedItemRevisionStatus?.state;
+  if (submitted === 'PENDING_REVIEW') {
+    fail(
+      'A previous submission is still in review, and an item in review cannot be edited.\n' +
+        '  Wait for the review to finish, or cancel it in the Developer Dashboard, then re-run. Nothing was uploaded.'
+    );
+  }
+  if (submitted === 'STAGED') {
+    fail(
+      'A previous submission is approved and staged. Publish or cancel it in the Developer Dashboard first.\n' +
+        '  Nothing was uploaded.'
+    );
+  }
+  const publishedVersions = channelVersions(s.publishedItemRevisionStatus);
+  if (version) {
+    const notOlder = publishedVersions.filter((v) => compareVersions(version, v) <= 0);
+    if (notOlder.length) {
+      fail(
+        `The CRX is version ${version}, which is not above the published version ${notOlder.join(', ')}.\n` +
+          '  Ship a CRX built from a bumped manifest.json (and package.json + lockfile). Nothing was uploaded.'
+      );
+    }
+  }
+  return { publishedVersions, submittedState: submitted || null };
+}
+
+export async function uploadCrx({ token, name, crx, version, pollIntervalMs = 5_000, pollTimeoutMs = 300_000 }) {
+  const r = await call(`${API_ROOT}/upload/v2/${name}:upload`, {
+    token,
+    method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
-      'x-goog-api-version': '2',
+      // A verified-CRX listing must receive the signed CRX itself; these tell
+      // the upload service the body is a raw .crx rather than a ZIP.
       'X-Goog-Upload-Protocol': 'raw',
-      'X-Goog-Upload-File-Name': `adhan-focus.crx`,
+      'X-Goog-Upload-File-Name': 'adhan-focus.crx',
       'Content-Type': 'application/octet-stream',
     },
     body: crx.buf,
+    timeoutMs: 180_000,
   });
-  const data = await res.json().catch(() => ({}));
-  // uploadState: SUCCESS | IN_PROGRESS | FAILURE | NOT_FOUND
-  if (!res.ok || data.uploadState === 'FAILURE') {
-    const detail = (data.itemError || []).map((e) => e.error_detail || e.errorDetail).join('; ');
-    fail(
-      `Upload failed (HTTP ${res.status}, state ${data.uploadState || 'unknown'}): ${detail || JSON.stringify(data)}\n` +
-        '  A version-number error means manifest.json was not bumped above the published version.\n' +
-        "  A signature error means the CRX wasn't signed with the verified-uploads key."
-    );
+  if (!r.res.ok) fail(`Upload failed (${describeError(r)}).\n${UPLOAD_HINT}`);
+
+  const { uploadState, crxVersion } = r.json;
+  if (uploadState === 'SUCCEEDED') {
+    if (version && crxVersion && crxVersion !== version) {
+      fail(
+        `The store reports the uploaded package as version ${crxVersion}, but the CRX is ${version}.\n` +
+          '  Not submitting. Check the draft in the Developer Dashboard before submitting it for review.'
+      );
+    }
+    return { uploadState, crxVersion: crxVersion || null };
   }
-  return data;
+  // The docs call this UPLOAD_IN_PROGRESS in prose, but the enum value is IN_PROGRESS.
+  if (uploadState === 'IN_PROGRESS' || uploadState === 'UPLOAD_IN_PROGRESS') {
+    console.log('  upload is processing; waiting for it to finish…');
+    const finalState = await waitForUpload({ token, name, pollIntervalMs, pollTimeoutMs });
+    return { uploadState: finalState, crxVersion: null };
+  }
+  fail(`Upload failed (HTTP ${r.res.status}, state ${uploadState || 'missing'}): ${r.text || 'no response body'}\n${UPLOAD_HINT}`);
 }
 
-async function publishItem({ token, extId }) {
-  const res = await fetch(`${PUBLISH}/${extId}/publish`, {
+async function waitForUpload({ token, name, pollIntervalMs, pollTimeoutMs }) {
+  const deadline = Date.now() + pollTimeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(pollIntervalMs);
+    let r;
+    try {
+      r = await call(statusUrl(name), { token });
+    } catch (_) {
+      continue; // network blip or per-request timeout: retry until the deadline
+    }
+    if (r.res.status === 429 || r.res.status >= 500) continue;
+    if (!r.res.ok) {
+      fail(
+        `Upload status check failed (${describeError(r)}).\n` +
+          '  The package may still be processing. Check the Developer Dashboard and Submit for review there.'
+      );
+    }
+    const state = r.json.lastAsyncUploadState;
+    if (state === 'SUCCEEDED') return state;
+    if (state === 'FAILED' || state === 'NOT_FOUND') {
+      fail(`Upload processing ended with state ${state}.\n${UPLOAD_HINT}`);
+    }
+  }
+  fail(
+    `Upload was still processing after ${Math.round(pollTimeoutMs / 1000)}s. Nothing was submitted.\n` +
+      '  Check the Developer Dashboard and Submit for review there once the package has processed.'
+  );
+}
+
+export async function publishItem({ token, name }) {
+  const r = await call(`${API_ROOT}/v2/${name}:publish`, {
+    token,
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'x-goog-api-version': '2',
-      'Content-Length': '0',
-    },
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ publishType: 'DEFAULT_PUBLISH' }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  // A 400 is the store refusing the submission (e.g. "Publish condition not met"
+  // for an incomplete Privacy practices tab). The package is already uploaded,
+  // so leave it as a draft for a manual Submit for review instead of failing.
+  if (r.res.status === 400) {
     console.warn(
-      `::warning::Publish notice (HTTP ${res.status}): ${data.error?.message || JSON.stringify(data)}\n` +
+      `::warning::Publish notice (${describeError(r)})\n` +
         '  The package was uploaded successfully to Chrome Web Store as a draft.\n' +
         '  Complete any pending declarations on the Privacy practices tab in Developer Dashboard\n' +
-        '  (https://chrome.google.com/webstore/devconsole) and click Submit for review.'
+        '  (https://chrome.google.com/webstore/devconsole), make sure visibility was not changed there since the\n' +
+        '  last publish, and click Submit for review.'
     );
-    return { status: ['UPLOADED_AS_DRAFT'], warning: data.error };
+    return { state: 'UPLOADED_AS_DRAFT', warning: r.json.error || r.text };
   }
-  // status: e.g. ["OK"] or ["ITEM_PENDING_REVIEW"]
-  return data;
+  if (!r.res.ok) {
+    fail(
+      `Publish failed (${describeError(r)}).\n` +
+        '  The package is uploaded as a draft. Submit it for review in the Developer Dashboard.'
+    );
+  }
+  for (const w of r.json.warningInfo?.warnings || []) {
+    console.warn(`::warning::Chrome Web Store warning: ${[w.reason, w.description].filter(Boolean).join(' — ')}`);
+  }
+  if (r.json.state === 'REJECTED' || r.json.state === 'CANCELLED') {
+    fail(`Publish returned state ${r.json.state}. Check the item in the Developer Dashboard.`);
+  }
+  return r.json;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
+// Best-effort: confirm the revision now in review carries this version. The
+// async-upload path can't tie its SUCCEEDED state to this exact CRX, so this is
+// the cross-check. Never fails the run.
+export async function verifySubmission({ token, name, version }) {
+  try {
+    const r = await call(statusUrl(name), { token });
+    if (!r.res.ok) {
+      console.warn(`::warning::Could not confirm the submission (${describeError(r)}). Check the Developer Dashboard.`);
+      return;
+    }
+    const versions = channelVersions(r.json.submittedItemRevisionStatus);
+    if (version && versions.length && !versions.includes(version)) {
+      console.warn(
+        `::warning::The submission in review reports version ${versions.join(', ')}, not ${version}.\n` +
+          '  Check the Developer Dashboard and cancel the submission there if it is the wrong package.'
+      );
+    }
+  } catch (e) {
+    console.warn(`::warning::Could not confirm the submission: ${e.message || e}`);
+  }
+}
+
+export async function main(args = process.argv.slice(2)) {
   const dryRun = args.includes('--dry-run');
   const noPublish = args.includes('--no-publish');
   const positional = args.filter((a) => !a.startsWith('--'));
 
   loadDotEnv();
 
-  const version = await manifestVersion();
+  const manifestVer = await manifestVersion();
   const crxPath = resolve(
-    positional[0] || join(REPO, `adhan-focus-${version}.crx`)
+    positional[0] || join(REPO, `adhan-focus-${manifestVer}.crx`)
   );
   const extId = process.env.CWS_EXTENSION_ID || DEFAULT_EXTENSION_ID;
+  const publisherId = resolvePublisherId(process.env.CWS_PUBLISHER_ID);
+  const name = itemName(publisherId, extId);
 
   const crx = await validateCrx(crxPath);
-  console.log(`• CRX:       ${crxPath} (${crx.size} bytes${version ? `, manifest v${version}` : ''})`);
+  const version = crxVersion(crx.buf);
+  console.log(`• CRX:       ${crxPath} (${crx.size} bytes${version ? `, v${version}` : ''})`);
+  if (!version) {
+    console.warn("::warning::Couldn't read the version inside the CRX; skipping version checks (the store still validates it).");
+  } else if (manifestVer && manifestVer !== version) {
+    console.log(`  note: the local manifest.json is v${manifestVer}; checks use the CRX's v${version}.`);
+  }
   console.log(`• Extension: ${extId}`);
+  console.log(`• Publisher: ${publisherId}${(process.env.CWS_PUBLISHER_ID || '').trim() ? '' : ' (default)'}`);
+  if (!UUID_RE.test(publisherId)) {
+    console.warn(`::warning::CWS_PUBLISHER_ID '${publisherId}' is not a UUID; Chrome Web Store publisher IDs normally are.`);
+  }
 
   if (dryRun) {
     console.log('✓ Dry run: CRX is valid and config resolved. No network calls made.');
@@ -225,9 +478,13 @@ async function main() {
   console.log('• Refreshing access token…');
   const token = await getAccessToken(creds);
 
+  console.log('• Checking item status…');
+  const pre = await preflight({ token, name, version });
+  console.log(`  published: ${pre.publishedVersions.join(', ') || 'none'}; pending submission: ${pre.submittedState || 'none'}`);
+
   console.log('• Uploading signed CRX…');
-  const up = await uploadCrx({ token, extId, crx });
-  console.log(`  upload state: ${up.uploadState}`);
+  const up = await uploadCrx({ token, name, crx, version });
+  console.log(`  upload state: ${up.uploadState}${up.crxVersion ? ` (v${up.crxVersion})` : ''}`);
 
   if (noPublish) {
     console.log('✓ Uploaded. Skipping publish (--no-publish). Submit for review in the dashboard when ready.');
@@ -235,10 +492,28 @@ async function main() {
   }
 
   console.log('• Submitting for review…');
-  const pub = await publishItem({ token, extId });
-  const status = Array.isArray(pub.status) ? pub.status.join(', ') : JSON.stringify(pub.status);
-  console.log(`✓ Submitted for review. Status: ${status}`);
-  console.log('  Google review (in-depth, due to broad host permissions) typically takes hours to ~3 days.');
+  const pub = await publishItem({ token, name });
+  console.log(`✓ Submitted for review. Status: ${pub.state || 'unknown'}`);
+  if (pub.state !== 'UPLOADED_AS_DRAFT') {
+    await verifySubmission({ token, name, version });
+    console.log('  Google review (in-depth, due to broad host permissions) typically takes hours to ~3 days.');
+  }
 }
 
-main().catch((e) => fail(e.message || String(e)));
+// Compare real paths: the ESM loader resolves symlinks for import.meta.url, so a
+// plain resolve(argv[1]) would silently skip main() for a symlinked checkout.
+function isMainModule() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch (_) {
+    return false;
+  }
+}
+
+if (isMainModule()) {
+  main().catch((e) => {
+    console.error(`✗ ${e.message || String(e)}`);
+    process.exit(e instanceof CwsError ? e.code : 1);
+  });
+}
