@@ -2,9 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/:path(.*)",
       "has": [{ "type": "host", "value": "adhan-ce.vercel.app" }],
-      "destination": "https://adhan.bilalahamad.com/:path*",
+      "destination": "https://adhan.bilalahamad.com/:path",
       "permanent": true
     },
     {
