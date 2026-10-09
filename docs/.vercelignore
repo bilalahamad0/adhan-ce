@@ -6,3 +6,9 @@
 *.sh
 store-assets.html
 architecture.html
+# Screenshot/demo sources and the internal metrics dashboard: rendered locally
+# by make-demo.sh / make-promo-tiles.sh, iframed by store-assets.html.
+dashboard.html
+demo.html
+promo-tiles.html
+store-popup.html
