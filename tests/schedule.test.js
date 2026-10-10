@@ -586,9 +586,9 @@ describe('pre-prayer revalidation', () => {
 });
 
 describe('per-prayer minute adjustments', () => {
-  it('prayerAdjustments keeps whole minutes within ±3 for each of the five prayers', () => {
-    expect(ADJUST_LIMIT_MIN).toBe(3);
-    expect(prayerAdjustments({ Fajr: 2, Dhuhr: -3, Asr: 9, Maghrib: -7, Isha: 1.6 })).toEqual({ Fajr: 2, Dhuhr: -3, Asr: 3, Maghrib: -3, Isha: 2 });
+  it('prayerAdjustments keeps whole minutes within ±5 for each of the five prayers', () => {
+    expect(ADJUST_LIMIT_MIN).toBe(5);
+    expect(prayerAdjustments({ Fajr: 2, Dhuhr: -5, Asr: 9, Maghrib: -7, Isha: 4.6 })).toEqual({ Fajr: 2, Dhuhr: -5, Asr: 5, Maghrib: -5, Isha: 5 });
     expect(prayerAdjustments({ Fajr: '2', Dhuhr: 'x', Sunrise: 3 })).toEqual({ Fajr: 2, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 });
     for (const none of [undefined, null, {}, 'junk']) expect(prayerAdjustments(none)).toEqual({ Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 });
     expect(Object.is(prayerAdjustments({ Fajr: -0.4 }).Fajr, 0)).toBe(true); // never -0

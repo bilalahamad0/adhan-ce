@@ -967,7 +967,7 @@ describe("the clock reads the location's time from Aladhan's offsets (Morocco +0
   });
 });
 
-describe('per-prayer minute adjustments (±3)', () => {
+describe('per-prayer minute adjustments (±5)', () => {
   function adjustedState() {
     const base = defaultState();
     return {
@@ -982,12 +982,44 @@ describe('per-prayer minute adjustments (±3)', () => {
     };
   }
 
-  it('Settings shows each prayer\'s adjustment, from −3 to +3', async () => {
+  const NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  const values = () => NAMES.map((n) => $('adjust-' + n).value);
+  const choose = (id, value) => {
+    $(id).value = value;
+    $(id).dispatchEvent(new Event('change'));
+  };
+
+  it('Settings shows each prayer\'s adjustment, from −5 to +5', async () => {
     await load({ state: adjustedState() });
-    const values = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((n) => $('adjust-' + n).value);
-    expect(values).toEqual(['0', '2', '0', '-1', '0']);
-    expect([...$('adjust-Fajr').options].map((o) => o.textContent)).toEqual(['−3', '−2', '−1', '0', '+1', '+2', '+3']);
+    expect(values()).toEqual(['0', '2', '0', '-1', '0']);
+    expect([...$('adjust-Fajr').options].map((o) => o.textContent)).toEqual(['−5', '−4', '−3', '−2', '−1', '0', '+1', '+2', '+3', '+4', '+5']);
     expect($('adjustRow').querySelector('.set-label').textContent).toBe(EN.adjust_times);
+  });
+
+  it('"All prayers" sets the five at once, and shows "—" once they differ', async () => {
+    await load({ state: adjustedState() });
+    expect($('adjust-all').value).toBe(''); // they differ: "—"
+    expect($('adjust-all').selectedOptions[0].textContent).toBe('—');
+    expect($('adjust-all').closest('label').textContent).toContain(EN.adjust_all);
+    choose('adjust-all', '4');
+    expect(values()).toEqual(['4', '4', '4', '4', '4']);
+    choose('adjust-Asr', '-1'); // one tuned on its own
+    expect($('adjust-all').value).toBe('');
+    choose('adjust-Asr', '4'); // back in step
+    expect($('adjust-all').value).toBe('4');
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings.adjustMinutes).toEqual({ Fajr: 4, Dhuhr: 4, Asr: 4, Maghrib: 4, Isha: 4 });
+  });
+
+  it('"All prayers" shows the common value when the saved ones agree', async () => {
+    const state = adjustedState();
+    state.settings.adjustMinutes = { Fajr: -2, Dhuhr: -2, Asr: -2, Maghrib: -2, Isha: -2 };
+    await load({ state });
+    expect($('adjust-all').value).toBe('-2');
+    await load(); // none saved yet: all 0
+    expect($('adjust-all').value).toBe('0');
   });
 
   it('Save sends them with the other settings', async () => {

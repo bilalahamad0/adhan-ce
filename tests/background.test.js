@@ -2257,7 +2257,7 @@ describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz
   });
 });
 
-describe('per-prayer minute adjustments (±3, Settings)', () => {
+describe('per-prayer minute adjustments (±5, Settings)', () => {
   // Aladhan's answer for Casablanca on 2026-10-10 (+00:00), at 06:00Z.
   const NOW = Date.parse('2026-10-10T06:00:00Z');
   const utc = (hm) => Date.parse(`2026-10-10T${hm}:00Z`);
@@ -2297,20 +2297,20 @@ describe('per-prayer minute adjustments (±3, Settings)', () => {
     expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('12:19'));
   });
 
-  it('saving new adjustments re-reads the day with them, kept within ±3', async () => {
+  it('saving new adjustments re-reads the day with them, kept within ±5', async () => {
     const { h, fetch } = await loadBackground({ storage: { settings: CASA_SETTINGS }, fetchRoutes: [casa()] });
     await h.fireAlarm(ALARM_TICK);
     await flush();
     // (two requests when this machine's date is not Casablanca's: see fetchSchedule)
     const fetched = aladhanCalls(fetch).length;
     expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { adjustMinutes: { Dhuhr: 9, Isha: '-2', Fajr: 'x' } } })).toEqual({ ok: true });
-    expect(h.store.settings.adjustMinutes).toEqual({ Fajr: 0, Dhuhr: 3, Asr: 0, Maghrib: 0, Isha: -2 });
+    expect(h.store.settings.adjustMinutes).toEqual({ Fajr: 0, Dhuhr: 5, Asr: 0, Maghrib: 0, Isha: -2 });
     expect(aladhanCalls(fetch)).toHaveLength(fetched + 1);
     expect(aladhanCalls(fetch).at(-1)).toContain('/timingsByCity/10-10-2026?');
-    expect(timeOf(h, 'Dhuhr')).toMatchObject({ time: '12:20 PM', ts: utc('12:20'), adjustMin: 3 });
+    expect(timeOf(h, 'Dhuhr')).toMatchObject({ time: '12:22 PM', ts: utc('12:22'), adjustMin: 5 });
     expect(timeOf(h, 'Isha')).toMatchObject({ time: '07:09 PM', ts: utc('19:09'), adjustMin: -2 });
     // The same adjustments again: nothing to re-read.
-    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { adjustMinutes: { Dhuhr: 3, Isha: -2 } } })).toEqual({ ok: true });
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { adjustMinutes: { Dhuhr: 5, Isha: -2 } } })).toEqual({ ok: true });
     expect(aladhanCalls(fetch)).toHaveLength(fetched + 1);
   });
 
@@ -2330,7 +2330,7 @@ describe('per-prayer minute adjustments (±3, Settings)', () => {
 
   it('never moves a prayer across the day\'s midnight, where the next day takes over', async () => {
     const late = ['api.aladhan.com', (url) => aladhanPayload({ timings: { ...CASA, Fajr: '00:01', Isha: '23:58' }, meta: { timezone: 'Africa/Casablanca' }, data: requestedDay(url), isoOffset: '+00:00' })];
-    const { h } = await loadBackground({ storage: { settings: { ...CASA_SETTINGS, adjustMinutes: { Fajr: -3, Isha: 3 } } }, fetchRoutes: [late] });
+    const { h } = await loadBackground({ storage: { settings: { ...CASA_SETTINGS, adjustMinutes: { Fajr: -5, Isha: 5 } } }, fetchRoutes: [late] });
     await h.fireAlarm(ALARM_TICK);
     await flush();
     expect(timeOf(h, 'Isha')).toMatchObject({ time: '11:59 PM', ts: utc('23:59'), adjustMin: 1 });

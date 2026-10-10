@@ -46,7 +46,7 @@ Load unpacked from `chrome://extensions` (Developer mode) and verify:
 - [ ] Location search returns real places ("City, Region, Country"); picking one resolves region + country and reloads the schedule.
 - [ ] Save is blocked unless a real geocoded place is selected (free-typed text is rejected).
 - [ ] Countdown in the popup ticks down each second.
-- [ ] Settings → **Adjust prayer times**: set Dhuhr to +2 and Save — the list shows Dhuhr 2 minutes later with a `+2` mark, and the countdown/auto-pause follow it; set it back to 0 and the mark goes.
+- [ ] Settings → **Adjust prayer times**: **All prayers** to +5 sets all five boxes (and shows "—" once one is changed on its own); set Dhuhr to +2 and Save — the list shows Dhuhr 2 minutes later with a `+2` mark, and the countdown/auto-pause follow it; set it back to 0 and the mark goes.
 - [ ] Pick **Casablanca, Morocco**: the popup clock reads GMT+0 (the real time in Morocco, not an hour ahead), the times match aladhan.com, and the next prayer fires at its listed time.
 
 ### Heads-up + pause flow (use **Run test Adhan (30s)** in dev)

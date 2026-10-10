@@ -61,18 +61,43 @@ function populateMethods() {
 // Signed minutes as shown: "+2", "−1", "0".
 const signedMin = (n) => (n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0');
 
-// The per-prayer minute adjustment selects: -ADJUST_LIMIT_MIN … +ADJUST_LIMIT_MIN.
+// The per-prayer minute adjustment selects: -ADJUST_LIMIT_MIN … +ADJUST_LIMIT_MIN,
+// plus "All prayers", which sets the five at once. It shows their value while they
+// agree and "—" once they differ: each prayer keeps a single number, the one applied.
+const ADJUST_MIXED = '';
+function addAdjustOptions(sel) {
+  for (let n = -ADJUST_LIMIT_MIN; n <= ADJUST_LIMIT_MIN; n++) {
+    const opt = document.createElement('option');
+    opt.value = String(n);
+    opt.textContent = signedMin(n);
+    sel.appendChild(opt);
+  }
+}
+function syncAdjustAll() {
+  const all = $('adjust-all');
+  if (!all) return;
+  const values = PRAYER_ORDER.map((name) => $('adjust-' + name) && $('adjust-' + name).value);
+  all.value = values.every((v) => v === values[0]) ? values[0] : ADJUST_MIXED;
+}
 function populateAdjustments() {
   for (const name of PRAYER_ORDER) {
     const sel = $('adjust-' + name);
     if (!sel || sel.options.length) continue;
-    for (let n = -ADJUST_LIMIT_MIN; n <= ADJUST_LIMIT_MIN; n++) {
-      const opt = document.createElement('option');
-      opt.value = String(n);
-      opt.textContent = signedMin(n);
-      sel.appendChild(opt);
-    }
+    addAdjustOptions(sel);
+    sel.addEventListener('change', syncAdjustAll);
   }
+  const all = $('adjust-all');
+  if (!all || all.options.length) return;
+  const mixed = document.createElement('option');
+  mixed.value = ADJUST_MIXED;
+  mixed.textContent = '\u2014';
+  mixed.disabled = true; // shown when the five differ; not a choice
+  all.appendChild(mixed);
+  addAdjustOptions(all);
+  all.addEventListener('change', () => {
+    if (all.value === ADJUST_MIXED) return;
+    for (const name of PRAYER_ORDER) if ($('adjust-' + name)) $('adjust-' + name).value = all.value;
+  });
 }
 
 // ───────────────────────────── appearance / theme ─────────────────────────
@@ -472,6 +497,7 @@ function renderAll() {
   $('hijriOffset').value = String(settings.hijriOffset || 0);
   const adjust = prayerAdjustments(settings.adjustMinutes);
   for (const name of PRAYER_ORDER) if ($('adjust-' + name)) $('adjust-' + name).value = String(adjust[name]);
+  syncAdjustAll();
   $('badgeCountdown').checked = settings.badgeCountdown !== false;
   if ($('badgeMode')) $('badgeMode').value = settings.badgeMode === 'manual' ? 'manual' : 'auto';
   if ($('badgeManualHours')) $('badgeManualHours').value = String(settings.badgeManualHours || 2);

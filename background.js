@@ -51,7 +51,7 @@ const DEFAULT_SETTINGS = {
   school: 0, // Asr juristic method: 0 = Standard (Shafi/Maliki/Hanbali), 1 = Hanafi
   showHijri: true, // show the Hijri (Islamic) date in the popup header
   hijriOffset: 0, // ±days moon-sighting correction applied to the displayed Hijri date
-  adjustMinutes: { Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 }, // ±3 min per prayer, to match a local mosque (see prayerAdjustments)
+  adjustMinutes: { Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 }, // ±5 min per prayer, to match a local mosque (see prayerAdjustments)
 };
 
 const ALARM_PRAYER = 'adhan-prayer-fire';

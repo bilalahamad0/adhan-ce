@@ -785,11 +785,13 @@ body {
 .adjust-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .adjust-cell { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; font-size: 10px; font-weight: 650; color: var(--muted); text-align: center; }
 .adjust-cell > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.set-row .adjust-grid select {
+.adjust-all { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 650; color: var(--text); }
+.set-row .adjust-grid select, .set-row .adjust-all select {
   width: 100%; height: 30px; padding: 4px 2px; border-radius: 8px; background-image: none;
   font-size: 12.5px; font-weight: 650; text-align: center; text-align-last: center; font-variant-numeric: tabular-nums;
   direction: ltr; /* "+2", not "2+", in Arabic and Urdu */
 }
+.set-row .adjust-all select { width: 64px; flex-shrink: 0; }
 
 .city-wrap { position: relative; width: 100%; }
 .suggest {
