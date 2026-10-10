@@ -24,12 +24,12 @@ const settle = async () => {
   for (let i = 0; i < 25; i++) await Promise.resolve();
 };
 
-async function load({ send, uiLang } = {}) {
+async function load({ send, uiLang, storage = {} } = {}) {
   document.body.innerHTML = BODY;
   document.documentElement.lang = 'en';
   document.documentElement.dir = '';
   window.HTMLCanvasElement.prototype.getContext = () => null; // no confetti under jsdom
-  chrome = makeChrome({ initialStorage: { settings: INSTALLED }, uiLang, handleSendMessage: send || (() => ({ ok: true })) });
+  chrome = makeChrome({ initialStorage: { settings: INSTALLED, ...storage }, uiLang, handleSendMessage: send || (() => ({ ok: true })) });
   globalThis.chrome = chrome;
   globalThis.fetch = makeFetch([
     ['locales/', (url) => cat(url.match(/locales\/(\w+)\.json/)[1])],
@@ -103,6 +103,30 @@ describe('onboarding location', () => {
     document.getElementById('finishBtn').click();
     await settle();
     expect(chrome.__.store.settings).toMatchObject({ city: 'Casablanca', country: 'Morocco' });
+  });
+});
+
+describe('onboarding location field', () => {
+  // On install the worker stores its defaults (Sunnyvale) and fetches their times
+  // before the page opens: neither is the user's choice yet.
+  const INSTALL_SCHEDULE = { prayers: [{ name: 'Fajr', time: '04:27 AM', ts: 1 }] };
+
+  it('starts empty on a fresh install, so typing searches what is typed', async () => {
+    await load({ storage: { schedule: INSTALL_SCHEDULE } });
+    expect(document.getElementById('welcomeCity').value).toBe('');
+    expect(document.getElementById('previewCityLabel').textContent).not.toContain('Sunnyvale');
+    const input = document.getElementById('welcomeCity');
+    input.value = 'Casab';
+    input.dispatchEvent(new Event('input'));
+    await jest.advanceTimersByTimeAsync(300);
+    await settle();
+    expect(globalThis.fetch.calls.find((u) => u.includes('geocoding-api'))).toContain('name=Casab&');
+  });
+
+  it('shows the saved place once onboarding is done', async () => {
+    await load({ storage: { onboardingCompleted: true, schedule: INSTALL_SCHEDULE } });
+    expect(document.getElementById('welcomeCity').value).toBe('Sunnyvale');
+    expect(document.getElementById('previewCityLabel').textContent).toContain('Sunnyvale');
   });
 });
 

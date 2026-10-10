@@ -6,6 +6,9 @@ let t = (k) => k;
 let currentStep = 1;
 let selectedPlace = null;
 let simTimer = null;
+// Until onboarding is done, the stored city is the install default (Sunnyvale), not
+// the user's: the location field starts empty and no default-city preview is shown.
+let onboarded = false;
 
 // Initial state cache
 let state = {
@@ -47,12 +50,13 @@ async function init() {
   // Load existing settings if available
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     try {
-      const stored = await chrome.storage.local.get(['settings', 'schedule']);
+      const stored = await chrome.storage.local.get(['settings', 'schedule', 'onboardingCompleted']);
+      onboarded = stored.onboardingCompleted === true;
       if (stored.settings) {
         state.settings = { ...state.settings, ...stored.settings };
         if (stored.settings.lang) activeLang = stored.settings.lang;
       }
-      if (stored.schedule && stored.schedule.prayers) {
+      if (onboarded && stored.schedule && stored.schedule.prayers) {
         updatePrayerPreview(stored.schedule.prayers, state.settings.city, state.settings.country);
       }
     } catch (_) {}
@@ -127,7 +131,7 @@ function syncInputsFromSettings() {
   const fullscreenToggle = document.getElementById('welcomeFullscreen');
   const strictToggle = document.getElementById('welcomeStrict');
 
-  if (cityInput && s.city) cityInput.value = s.city;
+  if (cityInput && s.city && onboarded) cityInput.value = s.city;
   if (chimeToggle) chimeToggle.checked = s.adhanChime !== false;
   if (fullscreenToggle) fullscreenToggle.checked = s.focusMode !== false;
   if (strictToggle) strictToggle.checked = s.strictFocus === true;
