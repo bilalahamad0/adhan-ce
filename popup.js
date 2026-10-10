@@ -4,7 +4,7 @@
 // selected location's time (see clockParts), an Appearance control (System /
 // Light / Dark), a prayer-log Tracker (check-offs + streaks + a month heatmap),
 // and on-device Hijri dates. Pure helpers live in ./lib.
-import { formatCountdown, ymd, PRAYER_ORDER, locationClock } from './lib/schedule.js';
+import { formatCountdown, ymd, PRAYER_ORDER, locationClock, prayerAdjustments, ADJUST_LIMIT_MIN } from './lib/schedule.js';
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { emptyUsage, recent, activeDays } from './lib/usage.js';
 import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
@@ -55,6 +55,23 @@ function populateMethods() {
     opt.value = String(m.id);
     opt.textContent = m.name;
     sel.appendChild(opt);
+  }
+}
+
+// Signed minutes as shown: "+2", "−1", "0".
+const signedMin = (n) => (n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0');
+
+// The per-prayer minute adjustment selects: -ADJUST_LIMIT_MIN … +ADJUST_LIMIT_MIN.
+function populateAdjustments() {
+  for (const name of PRAYER_ORDER) {
+    const sel = $('adjust-' + name);
+    if (!sel || sel.options.length) continue;
+    for (let n = -ADJUST_LIMIT_MIN; n <= ADJUST_LIMIT_MIN; n++) {
+      const opt = document.createElement('option');
+      opt.value = String(n);
+      opt.textContent = signedMin(n);
+      sel.appendChild(opt);
+    }
   }
 }
 
@@ -453,6 +470,8 @@ function renderAll() {
   $('method').value = String(settings.method != null ? settings.method : 2);
   $('school').value = String(settings.school != null ? settings.school : 0);
   $('hijriOffset').value = String(settings.hijriOffset || 0);
+  const adjust = prayerAdjustments(settings.adjustMinutes);
+  for (const name of PRAYER_ORDER) if ($('adjust-' + name)) $('adjust-' + name).value = String(adjust[name]);
   $('badgeCountdown').checked = settings.badgeCountdown !== false;
   if ($('badgeMode')) $('badgeMode').value = settings.badgeMode === 'manual' ? 'manual' : 'auto';
   if ($('badgeManualHours')) $('badgeManualHours').value = String(settings.badgeManualHours || 2);
@@ -559,7 +578,7 @@ function renderList() {
   const now = Date.now();
   const nextName = st.nextPrayer && st.nextPrayer.name;
 
-  const makeRow = (cls, icon, name, time, { tomorrow = false, prayer = null } = {}) => {
+  const makeRow = (cls, icon, name, time, { tomorrow = false, prayer = null, adjustMin = 0 } = {}) => {
     const row = document.createElement('div');
     row.className = 'row' + (cls ? ' ' + cls : '');
     row.appendChild(icon);
@@ -570,6 +589,14 @@ function renderList() {
     const pt = document.createElement('span');
     pt.className = 'ptime';
     pt.textContent = time;
+    if (adjustMin) {
+      // Moved by the user's adjustment (Settings): say so, as aladhan.com shows the time unmoved.
+      const adj = document.createElement('span');
+      adj.className = 'adj';
+      adj.textContent = signedMin(adjustMin);
+      adj.title = t('adjusted_by', { min: signedMin(adjustMin) });
+      pt.appendChild(adj);
+    }
     if (tomorrow) {
       const em = document.createElement('span');
       em.className = 'em';
@@ -598,7 +625,7 @@ function renderList() {
     const past = p.ts < now;
     const isNext = p.name === nextName;
     const cls = [past ? 'past' : '', isNext ? 'next' : '', 'p-' + p.name.toLowerCase()].filter(Boolean).join(' ');
-    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name });
+    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name, adjustMin: p.adjustMin });
     if (p.name === 'Fajr' && sched.sunrise) {
       makeRow('sunrise', ico(ICO_SUN), t('sunrise'), sched.sunrise.time, {});
     }
@@ -836,6 +863,7 @@ $('save').addEventListener('click', async () => {
     method: Number.isFinite(method) ? method : 2,
     school: parseInt($('school').value, 10) === 1 ? 1 : 0,
     hijriOffset: parseInt($('hijriOffset').value, 10) || 0,
+    adjustMinutes: Object.fromEntries(PRAYER_ORDER.map((name) => [name, parseInt($('adjust-' + name).value, 10) || 0])),
     badgeCountdown: $('badgeCountdown').checked,
     badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
     badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
@@ -1118,6 +1146,7 @@ async function start() {
   applyStaticI18n(document);
   $('lang').value = getLang();
   populateMethods();
+  populateAdjustments();
 
   // Reveal all views to the router (CSS .is-active controls visibility now).
   document.querySelectorAll('.view[hidden]').forEach((v) => v.removeAttribute('hidden'));

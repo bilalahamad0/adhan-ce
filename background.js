@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, parseAladhanIso, epochAtOffset, locationYmd, locationTime12h, isNewDay, dayBeforeMark, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
+import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, parseAladhanIso, epochAtOffset, locationYmd, locationTime12h, isNewDay, dayBeforeMark, prayerAdjustments, shiftHm, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
@@ -51,6 +51,7 @@ const DEFAULT_SETTINGS = {
   school: 0, // Asr juristic method: 0 = Standard (Shafi/Maliki/Hanbali), 1 = Hanafi
   showHijri: true, // show the Hijri (Islamic) date in the popup header
   hijriOffset: 0, // ±days moon-sighting correction applied to the displayed Hijri date
+  adjustMinutes: { Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 }, // ±3 min per prayer, to match a local mosque (see prayerAdjustments)
 };
 
 const ALARM_PRAYER = 'adhan-prayer-fire';
@@ -110,10 +111,12 @@ function recordUsage(event) {
 }
 
 // ---------- schedule fetch ----------
-// The settings that make up the Aladhan request. A fetched answer belongs to these.
+// The settings that make up the Aladhan request, plus the minute adjustments
+// applied to its answer. A fetched schedule belongs to these.
 const REQUEST_KEYS = ['city', 'country', 'state', 'method', 'school'];
+const adjustKey = (s) => Object.values(prayerAdjustments(s && s.adjustMinutes)).join(',');
 function sameRequest(a, b) {
-  return REQUEST_KEYS.every((k) => (a && a[k]) === (b && b[k]));
+  return REQUEST_KEYS.every((k) => (a && a[k]) === (b && b[k])) && adjustKey(a) === adjustKey(b);
 }
 
 // Revalidation fetches give up after this long, so a hung connection never holds
@@ -195,6 +198,13 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
   }
   const withOffset = names.filter((name) => read[name].offsetMin !== null).length;
   if (withOffset && withOffset !== names.length) throw new Error('Aladhan: mixed time formats');
+  // The user's minute adjustments (see prayerAdjustments), applied to a prayer's
+  // time and instant alike. Sunrise is never adjusted.
+  const adjust = prayerAdjustments(settings.adjustMinutes);
+  const tune = (p) => {
+    const min = adjust[p.name];
+    return min ? { ...p, time: hhmmTo12h(shiftHm(read[p.name].hm, min)), ts: p.ts + min * 60000, adjustMin: min } : p;
+  };
   if (withOffset) {
     // Each instant from the UTC offset Aladhan's tz data gives that time — never
     // from this browser's, which can be out of date (Morocco's +00 since
@@ -205,7 +215,7 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
       ts: epochAtOffset(asked, read[name].hm, read[name].offsetMin),
       offsetMin: read[name].offsetMin,
     });
-    const prayers = PRAYER_ORDER.map((name) => ({ name, ...timed(name) }));
+    const prayers = PRAYER_ORDER.map((name) => tune({ name, ...timed(name) }));
     const sunrise = read.Sunrise ? timed('Sunrise') : null;
     // This machine's date was asked for, and it is another day at the location:
     // ask for that day's own times (its offsets can differ, e.g. across a DST night).
@@ -231,7 +241,7 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
     sunrise = { time, ts: parseTimeToday(time, base, zone) };
     if (!Number.isFinite(sunrise.ts)) throw new Error('Aladhan: unreadable Sunrise time');
   }
-  return { date: ymdInTz(zone, base), prayers, sunrise, tz: zone, fetchedAt: Date.now() };
+  return { date: ymdInTz(zone, base), prayers: prayers.map(tune), sunrise, tz: zone, fetchedAt: Date.now() };
 }
 
 // Schedule commits (the check-then-write after a fetch) run one at a time, so a
@@ -971,13 +981,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           incoming.focusMode = true;
           incoming.enabled = true;
         }
+        if (incoming.adjustMinutes !== undefined) incoming.adjustMinutes = prayerAdjustments(incoming.adjustMinutes);
         const settings = { ...current, ...incoming };
         await chrome.storage.local.set({ settings });
         const { schedule } = await chrome.storage.local.get('schedule');
         const locationChanged =
           settings.city !== current.city || settings.country !== current.country || settings.state !== current.state;
         const locationOrCalcChanged =
-          !schedule || locationChanged || settings.method !== current.method || settings.school !== current.school;
+          !schedule ||
+          locationChanged ||
+          settings.method !== current.method ||
+          settings.school !== current.school ||
+          adjustKey(settings) !== adjustKey(current);
         if (locationOrCalcChanged) {
           try {
             // A new city may be in another timezone: ask for this machine's date, as

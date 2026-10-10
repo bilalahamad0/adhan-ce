@@ -966,3 +966,47 @@ describe("the clock reads the location's time from Aladhan's offsets (Morocco +0
     expect($('updated').textContent).toContain(hm(utc(9, 15) + 345 * 60e3)); // fetched 09:15Z = 15:00 there
   });
 });
+
+describe('per-prayer minute adjustments (±3)', () => {
+  function adjustedState() {
+    const base = defaultState();
+    return {
+      ...base,
+      settings: { ...base.settings, adjustMinutes: { Fajr: 0, Dhuhr: 2, Asr: 0, Maghrib: -1, Isha: 0 } },
+      schedule: {
+        ...base.schedule,
+        prayers: base.schedule.prayers.map((p) =>
+          p.name === 'Dhuhr' ? { ...p, time: '01:07 PM', adjustMin: 2 } : p.name === 'Maghrib' ? { ...p, time: '08:16 PM', adjustMin: -1 } : p
+        ),
+      },
+    };
+  }
+
+  it('Settings shows each prayer\'s adjustment, from −3 to +3', async () => {
+    await load({ state: adjustedState() });
+    const values = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((n) => $('adjust-' + n).value);
+    expect(values).toEqual(['0', '2', '0', '-1', '0']);
+    expect([...$('adjust-Fajr').options].map((o) => o.textContent)).toEqual(['−3', '−2', '−1', '0', '+1', '+2', '+3']);
+    expect($('adjustRow').querySelector('.set-label').textContent).toBe(EN.adjust_times);
+  });
+
+  it('Save sends them with the other settings', async () => {
+    await load({ state: adjustedState() });
+    $('adjust-Fajr').value = '3';
+    $('adjust-Maghrib').value = '0';
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings.adjustMinutes).toEqual({ Fajr: 3, Dhuhr: 2, Asr: 0, Maghrib: 0, Isha: 0 });
+  });
+
+  it('marks an adjusted time in the list', async () => {
+    await load({ state: adjustedState() });
+    const marks = [...document.querySelectorAll('#list .row')].filter((r) => r.querySelector('.adj'));
+    expect(marks.map((r) => [r.querySelector('.pname').textContent, r.querySelector('.adj').textContent, r.querySelector('.adj').title])).toEqual([
+      ['Dhuhr', '+2', 'Adjusted by +2 min'],
+      ['Maghrib', '−1', 'Adjusted by −1 min'],
+    ]);
+    expect(document.querySelector('#list .row.p-dhuhr .ptime').textContent).toBe('01:07 PM+2');
+  });
+});

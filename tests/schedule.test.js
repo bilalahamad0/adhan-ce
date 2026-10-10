@@ -25,6 +25,9 @@ import {
   revalidationAlarmAt,
   revalidationQuietUntil,
   parseAladhanTime,
+  prayerAdjustments,
+  shiftHm,
+  ADJUST_LIMIT_MIN,
   sameTimings,
   revalidationCrossesNow,
   revalidationRetryAt,
@@ -578,5 +581,24 @@ describe('pre-prayer revalidation', () => {
       expect(revalidationRetryAt(ASR, ASR - 31 * MIN)).toBeNull();
       expect(revalidationRetryAt(undefined, ASR)).toBeNull();
     });
+  });
+});
+
+describe('per-prayer minute adjustments', () => {
+  it('prayerAdjustments keeps whole minutes within ±3 for each of the five prayers', () => {
+    expect(ADJUST_LIMIT_MIN).toBe(3);
+    expect(prayerAdjustments({ Fajr: 2, Dhuhr: -3, Asr: 9, Maghrib: -7, Isha: 1.6 })).toEqual({ Fajr: 2, Dhuhr: -3, Asr: 3, Maghrib: -3, Isha: 2 });
+    expect(prayerAdjustments({ Fajr: '2', Dhuhr: 'x', Sunrise: 3 })).toEqual({ Fajr: 2, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 });
+    for (const none of [undefined, null, {}, 'junk']) expect(prayerAdjustments(none)).toEqual({ Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 });
+    expect(Object.is(prayerAdjustments({ Fajr: -0.4 }).Fajr, 0)).toBe(true); // never -0
+  });
+
+  it('shiftHm moves a 24h time by whole minutes, wrapping around midnight', () => {
+    expect(shiftHm('12:17', 2)).toBe('12:19');
+    expect(shiftHm('12:59', 3)).toBe('13:02');
+    expect(shiftHm('05:01', -3)).toBe('04:58');
+    expect(shiftHm('23:59', 3)).toBe('00:02');
+    expect(shiftHm('00:01', -3)).toBe('23:58');
+    expect(shiftHm('19:11', 0)).toBe('19:11');
   });
 });

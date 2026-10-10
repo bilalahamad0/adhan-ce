@@ -23,6 +23,7 @@ and resolves locations via the free
 ## Features
 
 - **Next-prayer popup** — all five daily prayers with the next one highlighted and a live countdown.
+- **Per-prayer adjustment** — move any Adhan up to 3 minutes earlier or later (Settings → Adjust prayer times) to match your local mosque; the time shown, the countdown, the notification and the auto-pause all follow, and an adjusted time is marked (e.g. `+2`) in the list.
 - **Prayer tracking** — check each prayer off as you pray (enabled only once its time has passed); a monthly calendar shows your history as a heat-map with a streak, navigable month to month. Stored on-device (`prayerLog`).
 - **In-page heads-up countdown** — a card pinned to the bottom-right of whatever tab you're looking at, appearing before the prayer (default **30s**, configurable 15/30/60). No Resume button here, so it never competes with the focus screen.
 - **Auto-pause across tabs** — at the exact prayer time, every playing `<video>`/`<audio>` (including same-/cross-origin iframes) is paused.
