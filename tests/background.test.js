@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeChrome, flush } from './helpers/chrome-mock.js';
 import { makeFetch, aladhanPayload } from './helpers/fetch-mock.js';
+import { simulateStaleTzData } from './helpers/stale-icu.js';
 import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, parseTimeToday, hhmmTo12h, PRAYER_ORDER, DAY_MS } from '../lib/schedule.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -124,6 +125,10 @@ describe('onInstalled (first run)', () => {
     expect(url).toContain('method=2');
     expect(url).toContain('school=0');
     expect(url).toMatch(/timingsByCity\/\d{2}-\d{2}-\d{4}\?/); // DD-MM-YYYY date path
+    expect(url).toMatch(/&iso8601=true$/); // times carry their UTC offset
+    // Each prayer's instant comes from that offset, which is kept with it.
+    expect(h.store.schedule.prayers.every((p) => Number.isInteger(p.offsetMin))).toBe(true);
+    expect(Number.isInteger(h.store.schedule.sunrise.offsetMin)).toBe(true);
   });
 
   it('does not overwrite settings/paused that already exist', async () => {
@@ -1025,7 +1030,7 @@ describe('pre-prayer revalidation (self-healing schedule)', () => {
   // The daily request with today's (location) date pinned — the same request any
   // other client following the rule sends.
   const TODAY_URL =
-    'https://api.aladhan.com/v1/timingsByCity/03-10-2026?city=Sunnyvale&country=United%20States&method=2&school=0&state=California';
+    'https://api.aladhan.com/v1/timingsByCity/03-10-2026?city=Sunnyvale&country=United%20States&method=2&school=0&state=California&iso8601=true';
 
   // The schedule background.js would have stored from a morning fetch of `timings`.
   function morningSchedule(timings = TIMINGS, fetchedAt = NOW - 8 * 3600e3) {
@@ -1770,6 +1775,10 @@ describe('pre-prayer revalidation (self-healing schedule)', () => {
     ['text after the zone label', () => payload({ Asr: '16:16 (PDT) approx' })],
     ['a number instead of a string', () => payload({ Maghrib: 1845 })],
     ['an unreadable Sunrise', () => payload({ Sunrise: 'soon' })],
+    ['an iso8601 time without its offset', () => payload({ Asr: '2026-10-03T16:16:00' })],
+    ['an iso8601 time with an out-of-range hour', () => payload({ Isha: '2026-10-03T24:10:00-07:00' })],
+    ['an iso8601 time with an out-of-range offset', () => payload({ Asr: '2026-10-03T16:16:00-15:00' })],
+    ['iso8601 and plain times mixed', () => ({ ...payload({ Asr: '2026-10-03T16:16:00-07:00' }), __plain: true })],
     ['another timezone', () => payload({}, { meta: { timezone: 'America/Phoenix' } })],
     ['another day', () => aladhanPayload({ timings: TIMINGS, data: { date: { gregorian: { date: '04-10-2026' } } } })],
     ['no day at all', () => aladhanPayload({ timings: TIMINGS })],
@@ -2032,5 +2041,128 @@ describe('day-start fetch date: the location\'s, not this machine\'s', () => {
     expect(aladhanCalls(fetch)).toHaveLength(2);
     expect(h.store.schedule).toEqual(other);
     expect(warnSpy).toHaveBeenCalledWith('Adhan: tick failed', expect.any(Error));
+  });
+});
+
+describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz data", () => {
+  // Morocco moved to permanent +00 on 2026-09-20 (IANA tzdata 2026c); a browser
+  // shipping older data still reads Africa/Casablanca as +01, and every prayer was
+  // armed an hour early. British Columbia (2026b) and Alberta (2026c) stopped
+  // falling back on 2026-11-01: an hour late there. simulateStaleTzData makes Intl
+  // answer like such a browser on any CI runner.
+  const NOW = Date.parse('2026-10-10T10:58:00Z'); // the report: 10:58, Saturday 10/10/2026
+  const utc = (hm, day = '2026-10-10') => Date.parse(`${day}T${hm}:00Z`);
+  // Aladhan's live answer for Casablanca on 2026-10-10 (iso8601=true: all +00:00).
+  const CASA = { Fajr: '05:23', Sunrise: '06:31', Dhuhr: '12:17', Asr: '15:35', Sunset: '18:03', Maghrib: '18:03', Isha: '19:11' };
+  const CASA_SETTINGS = { ...DEFAULTS, city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', method: 21 };
+  const answer = (timings, timezone, isoOffset) => [
+    'api.aladhan.com',
+    (url) => aladhanPayload({ timings, meta: { timezone }, data: requestedDay(url), isoOffset }),
+  ];
+  const casaAnswer = answer(CASA, 'Africa/Casablanca', '+00:00');
+  const aladhanCalls = (fetch) => fetch.calls.filter((u) => u.includes('api.aladhan.com'));
+  // The schedule stored from that answer.
+  const casaSchedule = (day = '2026-10-10') => ({
+    date: day,
+    prayers: PRAYER_ORDER.map((name) => ({ name, time: hhmmTo12h(CASA[name]), ts: utc(CASA[name], day), offsetMin: 0 })),
+    sunrise: { time: hhmmTo12h(CASA.Sunrise), ts: utc(CASA.Sunrise, day), offsetMin: 0 },
+    tz: 'Africa/Casablanca',
+    fetchedAt: NOW,
+  });
+
+  let restore;
+  beforeEach(() => {
+    restore = simulateStaleTzData();
+    jest.useFakeTimers({
+      now: NOW,
+      doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance'],
+    });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    restore();
+  });
+
+  it('Casablanca: each prayer is armed at its +00 time', async () => {
+    const { h, fetch } = await loadBackground({ storage: { settings: DEFAULTS }, fetchRoutes: [casaAnswer] });
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CASA_SETTINGS })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch)[0]).toContain('city=Casablanca');
+    expect(aladhanCalls(fetch)[0]).toMatch(/&iso8601=true$/);
+    expect(h.store.schedule).toEqual(casaSchedule());
+    // Dhuhr at 12:17 — not 11:17, where this browser's +01 would put it.
+    expect(h.store.nextPrayer).toEqual({ name: 'Dhuhr', time: '12:17 PM', ts: utc('12:17') });
+    expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('12:17'));
+  });
+
+  it("the day rolls over at Casablanca's midnight, not an hour before it", async () => {
+    jest.setSystemTime(Date.parse('2026-10-10T23:30:00Z')); // this browser alone reads 00:30 on the 11th
+    const { h, fetch } = await loadBackground({ storage: { settings: CASA_SETTINGS, schedule: casaSchedule() }, fetchRoutes: [casaAnswer] });
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    expect(aladhanCalls(fetch)).toHaveLength(0);
+    expect(h.store.schedule.date).toBe('2026-10-10');
+    jest.setSystemTime(Date.parse('2026-10-11T00:05:00Z'));
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    expect(aladhanCalls(fetch)).toHaveLength(1);
+    expect(aladhanCalls(fetch)[0]).toContain('/timingsByCity/11-10-2026?');
+    expect(h.store.schedule).toMatchObject({ date: '2026-10-11', tz: 'Africa/Casablanca' });
+    expect(h.store.schedule.prayers[0].ts).toBe(utc('05:23', '2026-10-11'));
+  });
+
+  it("Refresh at 23:30 asks for Casablanca's today, the 10th", async () => {
+    jest.setSystemTime(Date.parse('2026-10-10T23:30:00Z'));
+    const { h, fetch } = await loadBackground({ storage: { settings: CASA_SETTINGS, schedule: casaSchedule() }, fetchRoutes: [casaAnswer] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch)).toEqual([expect.stringContaining('/timingsByCity/10-10-2026?')]);
+    expect(h.store.schedule.date).toBe('2026-10-10');
+  });
+
+  it('an update replaces the schedule an older version stored an hour early', async () => {
+    // What 2.1.1 stored under this browser's +01: every ts an hour early, no offsets.
+    const early = {
+      ...casaSchedule(),
+      prayers: casaSchedule().prayers.map(({ offsetMin, ...p }) => ({ ...p, ts: p.ts - 3600e3 })),
+      sunrise: { time: '06:31 AM', ts: utc('06:31') - 3600e3 },
+      fetchedAt: NOW - 3600e3,
+    };
+    const { h, fetch } = await loadBackground({
+      storage: { settings: CASA_SETTINGS, schedule: early, nextPrayer: { name: 'Dhuhr', time: '12:17 PM', ts: utc('11:17') }, paused: { active: false }, installedAt: 1, onboardingCompleted: true },
+      fetchRoutes: [casaAnswer],
+    });
+    await h.fireInstalled({ reason: 'update', previousVersion: '2.1.1' });
+    await flush();
+    expect(aladhanCalls(fetch)).toEqual([expect.stringContaining('/timingsByCity/10-10-2026?')]);
+    expect(h.store.schedule.prayers.find((p) => p.name === 'Dhuhr')).toEqual({ name: 'Dhuhr', time: '12:17 PM', ts: utc('12:17'), offsetMin: 0 });
+    expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('12:17'));
+  });
+
+  it.each([
+    ['Vancouver', 'America/Vancouver', '-07:00', 'British Columbia', { Fajr: '06:32', Sunrise: '08:02', Dhuhr: '12:56', Asr: '15:25', Maghrib: '17:49', Isha: '19:19' }, '19:56'],
+    ['Edmonton', 'America/Edmonton', '-06:00', 'Alberta', { Fajr: '06:56', Sunrise: '08:36', Dhuhr: '13:18', Asr: '15:33', Maghrib: '17:59', Isha: '19:38' }, '19:18'],
+  ])('%s keeps its permanent offset after 2026-11-01', async (city, zone, isoOffset, state, timings, dhuhrUtc) => {
+    jest.setSystemTime(Date.parse('2026-11-02T18:00:00Z')); // late morning there
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS }, fetchRoutes: [answer(timings, zone, isoOffset)] });
+    const settings = { city, state, country: 'Canada' };
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings })).toEqual({ ok: true });
+    expect(h.store.schedule).toMatchObject({ date: '2026-11-02', tz: zone });
+    // An hour earlier than this browser's falling-back rules would arm it.
+    expect(h.store.nextPrayer).toMatchObject({ name: 'Dhuhr', ts: utc(dhuhrUtc, '2026-11-02') });
+    expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc(dhuhrUtc, '2026-11-02'));
+  });
+
+  it("a dev test fire is labelled with Casablanca's time", async () => {
+    const { h } = await loadBackground({ storage: { settings: CASA_SETTINGS, schedule: casaSchedule() } });
+    expect(await h.sendRuntimeMessage({ type: 'TEST_ADHAN', seconds: 30 })).toEqual({ ok: true });
+    expect(h.store.nextPrayer).toMatchObject({ time: '10:58 AM', ts: NOW + 30e3, test: true });
+  });
+
+  it('an answer without offsets is still read in the zone through Intl, as before', async () => {
+    const plain = ['api.aladhan.com', (url) => aladhanPayload({ timings: CASA, meta: { timezone: 'Africa/Casablanca' }, data: requestedDay(url), plain: true })];
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS }, fetchRoutes: [plain] });
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CASA_SETTINGS })).toEqual({ ok: true });
+    const dhuhr = h.store.schedule.prayers.find((p) => p.name === 'Dhuhr');
+    expect(dhuhr).toEqual({ name: 'Dhuhr', time: '12:17 PM', ts: zonedToEpoch(2026, 10, 10, 12, 17, 'Africa/Casablanca') });
+    expect(dhuhr.offsetMin).toBeUndefined();
   });
 });

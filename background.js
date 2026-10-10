@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
+import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, parseAladhanIso, epochAtOffset, locationYmd, locationTime12h, isNewDay, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
@@ -11,8 +11,9 @@ import { playChime } from './lib/audio.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
 // settings (defaults method=2 ISNA, school=0 Standard — unchanged from before);
-// we additionally get Sunrise + the location's IANA timezone (data.meta.timezone)
-// for the in-popup clock.
+// we additionally get Sunrise + the location's IANA timezone (data.meta.timezone).
+// Times are asked for in iso8601 form so each carries its UTC offset: the browser's
+// own tz data can be out of date (see "the location's UTC offset" in lib/schedule.js).
 const ALADHAN_BASE = 'https://api.aladhan.com/v1/timingsByCity';
 
 // Aladhan's optional date path segment is DD-MM-YYYY.
@@ -25,6 +26,12 @@ function ddmmyyyy(d = new Date()) {
 function ymdToAladhan(s) {
   const [y, m, d] = String(s).split('-');
   return `${d}-${m}-${y}`;
+}
+
+// Aladhan's 'DD-MM-YYYY' -> 'YYYY-MM-DD'.
+function ymdFromAladhan(s) {
+  const [d, m, y] = String(s).split('-');
+  return `${y}-${m}-${d}`;
 }
 
 const DEFAULT_SETTINGS = {
@@ -143,17 +150,19 @@ function noonOf(day, zone) {
 // Fetch + parse one day's timings for `settings` into the stored schedule shape
 // ({date, prayers, sunrise, tz, fetchedAt}) without writing anything, so callers
 // can check the answer is still wanted before committing it. Throws unless each of
-// the five prayers (and Sunrise, when present) is a strict 24h 'H:MM' time (see
-// parseAladhanTime). `day` ('YYYY-MM-DD') pins the requested date — the answer must
-// then be for that date, and is stored as that day's times; omitted, it is this
-// machine's local date, stored under the location's today. `tz`, when given, is
-// the timezone the answer must carry.
+// the five prayers (and Sunrise, when present) is an iso8601 time carrying its UTC
+// offset (see parseAladhanIso) or — all of them, from an answer without offsets —
+// a strict 24h 'H:MM' time (see parseAladhanTime). `day` ('YYYY-MM-DD') pins the
+// requested date — the answer must then be for that date, and is stored as that
+// day's times; omitted, it is this machine's local date, stored under the
+// location's today. `tz`, when given, is the timezone the answer must carry.
 async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
   const date = day ? ymdToAladhan(day) : ddmmyyyy(new Date());
   let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(
     settings.country
   )}&method=${settings.method}&school=${settings.school}`;
   if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
+  url += '&iso8601=true';
   const init = { cache: 'no-store' };
   const signal = timeoutMs ? timeoutSignal(timeoutMs) : undefined;
   if (signal) init.signal = signal;
@@ -163,24 +172,53 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
   const data = json && json.data;
   if (!data || !data.timings) throw new Error('Aladhan: malformed response');
   const tmg = data.timings;
-  // Anchor every prayer's epoch to the LOCATION's timezone (data.meta.timezone),
-  // so "next prayer" / countdown / firing are correct even when the chosen city is
-  // in a different timezone than this machine.
+  // The LOCATION's timezone (data.meta.timezone): the answer's identity, and the
+  // zone its times are read in, even when the chosen city is in a different
+  // timezone than this machine.
   const zone = (data.meta && data.meta.timezone) || null;
   if (day) {
     const answered = data.date && data.date.gregorian && data.date.gregorian.date;
     if (answered !== date) throw new Error(`Aladhan: answer is for ${answered}, expected ${date}`);
   }
   if (tz !== undefined && zone !== tz) throw new Error(`Aladhan: timezone ${zone}, expected ${tz}`);
-  const base = day ? noonOf(day, zone) : new Date();
-  // Aladhan returns 24h "HH:mm"; convert to the "hh:mm a" the app already parses
-  // and displays, so scheduling/firing is byte-identical to before.
-  const five = {};
-  for (const name of PRAYER_ORDER) {
-    const hm = parseAladhanTime(tmg[name]);
+  // Each time as 24h 'HH:MM' plus the UTC offset it carries (null in an answer
+  // without offsets). Displayed as the "hh:mm a" the app has always shown.
+  const names = tmg.Sunrise != null ? [...PRAYER_ORDER, 'Sunrise'] : PRAYER_ORDER;
+  const read = {};
+  for (const name of names) {
+    const iso = parseAladhanIso(tmg[name]);
+    const hm = iso ? iso.hm : parseAladhanTime(tmg[name]);
     if (!hm) throw new Error(`Aladhan: unreadable ${name} time`);
-    five[name] = hhmmTo12h(hm);
+    read[name] = { hm, offsetMin: iso ? iso.offsetMin : null };
   }
+  const withOffset = names.filter((name) => read[name].offsetMin !== null).length;
+  if (withOffset && withOffset !== names.length) throw new Error('Aladhan: mixed time formats');
+  if (withOffset) {
+    // Each instant from the UTC offset Aladhan's tz data gives that time — never
+    // from this browser's, which can be out of date (Morocco's +00 since
+    // 2026-09-20 read as +01 put every prayer an hour early). Stored on the day
+    // asked for; when that was this machine's date, under the location's today,
+    // read from these offsets.
+    const asked = day || ymdFromAladhan(date);
+    const timed = (d, name) => ({
+      time: hhmmTo12h(read[name].hm),
+      ts: epochAtOffset(d, read[name].hm, read[name].offsetMin),
+      offsetMin: read[name].offsetMin,
+    });
+    const build = (d) => ({
+      prayers: PRAYER_ORDER.map((name) => ({ name, ...timed(d, name) })),
+      sunrise: read.Sunrise ? timed(d, 'Sunrise') : null,
+    });
+    let times = build(asked);
+    const stored = day || locationYmd({ tz: zone, ...times });
+    if (stored !== asked) times = build(stored);
+    return { date: stored, ...times, tz: zone, fetchedAt: Date.now() };
+  }
+  // An answer without offsets: anchor every prayer's epoch to the location's
+  // timezone through this browser's tz data, as before iso8601 was asked for.
+  const base = day ? noonOf(day, zone) : new Date();
+  const five = {};
+  for (const name of PRAYER_ORDER) five[name] = hhmmTo12h(read[name].hm);
   const prayers = buildPrayers(five, base, zone);
   // An unreadable time would be stored with ts:null and break "next prayer".
   if (prayers.length !== PRAYER_ORDER.length || !prayers.every((p) => Number.isFinite(p.ts))) {
@@ -189,10 +227,8 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
   // Sunrise is informational only (no pause/notification), shown greyed in the
   // popup. It is optional, but when present it must parse like the prayers.
   let sunrise = null;
-  if (tmg.Sunrise != null) {
-    const hm = parseAladhanTime(tmg.Sunrise);
-    if (!hm) throw new Error('Aladhan: unreadable Sunrise time');
-    const time = hhmmTo12h(hm);
+  if (read.Sunrise) {
+    const time = hhmmTo12h(read.Sunrise.hm);
     sunrise = { time, ts: parseTimeToday(time, base, zone) };
     if (!Number.isFinite(sunrise.ts)) throw new Error('Aladhan: unreadable Sunrise time');
   }
@@ -215,23 +251,23 @@ async function storedScheduleState(extra = {}) {
 }
 
 // The day's fetch: the rollover to a new day, Refresh, an update, a settings save.
-// With `tz` — the stored schedule's timezone, whenever the stored schedule may be
-// for the same location — it asks for THAT zone's today, the date the answer is
+// With `prev` — the stored schedule, whenever it may be for the same location —
+// it asks for THAT location's today (see locationYmd), the date the answer is
 // stored under (this machine can be in another timezone, so its own date can be a
 // day off); the answer must then be for that date. The stored schedule can be for
 // an earlier location (a settings save whose fetch failed), so an answer in another
 // timezone is accepted when that zone's today is the date asked for; when it is
 // not, the request is made again for that zone's today, and that answer must match
-// both. Without `tz` (first install, a new city) it asks for this machine's date,
-// as it always has.
-async function fetchAndStoreSchedule({ tz } = {}) {
+// both. Without a stored schedule with a timezone (first install, a new city) it
+// asks for this machine's date, as it always has.
+async function fetchAndStoreSchedule({ prev } = {}) {
   const settings = await getSettings();
   let schedule;
-  if (tz) {
-    const day = ymdInTz(tz);
+  if (prev && prev.tz) {
+    const day = locationYmd(prev);
     schedule = await fetchSchedule(settings, { day });
-    const zoneDay = ymdInTz(schedule.tz);
-    if (schedule.tz !== tz && zoneDay !== day) {
+    const zoneDay = locationYmd(schedule);
+    if (schedule.tz !== prev.tz && zoneDay !== day) {
       schedule = await fetchSchedule(settings, { day: zoneDay, tz: schedule.tz });
     }
   } else {
@@ -342,10 +378,10 @@ let rolloverInFlight = null;
 async function refreshNext({ background = false, retry = false } = {}) {
   const data = await chrome.storage.local.get(['settings', 'schedule', 'nextPrayer', 'paused', 'revalidateAttemptAt']);
   const schedule = data.schedule || null;
-  // Rolled over to a new day *in the location's timezone* → refetch the new day.
-  if (!schedule || schedule.date !== ymdInTz(schedule.tz)) {
+  // Rolled over to a new day *at the location* (see isNewDay) → refetch the new day.
+  if (!schedule || isNewDay(schedule)) {
     if (!rolloverInFlight) {
-      const run = fetchAndStoreSchedule({ tz: (schedule && schedule.tz) || undefined });
+      const run = fetchAndStoreSchedule({ prev: schedule || undefined });
       const done = () => {
         if (rolloverInFlight === run) rolloverInFlight = null;
       };
@@ -702,10 +738,10 @@ async function toggleFocus() {
 // 30s minimum because chrome.alarms clamps shorter delays, which made the
 // notification appear to "not fire".
 async function testAdhan(seconds = 30) {
-  const { nextPrayer } = await getState();
+  const { nextPrayer, schedule } = await getState();
   const ts = Date.now() + seconds * 1000;
   const name = (nextPrayer && nextPrayer.name) || 'Test';
-  const time = new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const time = locationTime12h(schedule, ts);
   await chrome.storage.local.set({ nextPrayer: { name, time, ts, test: true } });
   chrome.alarms.create(ALARM_PRAYER, { when: ts });
 }
@@ -738,7 +774,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
   try {
     // An update keeps the location: ask for its today (see fetchAndStoreSchedule).
-    await fetchAndStoreSchedule({ tz: (stored.schedule && stored.schedule.tz) || undefined });
+    await fetchAndStoreSchedule({ prev: stored.schedule || undefined });
   } catch (e) {
     console.warn('Adhan: initial schedule fetch failed', e);
   }
@@ -896,8 +932,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'TEST_PAUSE_DEMO': {
         const prayer = msg.prayer || 'Maghrib';
         const seconds = Math.min(60, Math.max(5, msg.seconds || 10));
-        const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const { schedule } = await chrome.storage.local.get('schedule');
         const since = Date.now();
+        const time = locationTime12h(schedule || null, since);
         await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: true, since, isDemo: true });
         const s = await getSettings();
         if (s.adhanChime !== false) {
@@ -937,7 +974,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           try {
             // A new city may be in another timezone: ask for this machine's date, as
             // before. A calculation change keeps the location's timezone.
-            await fetchAndStoreSchedule({ tz: (!locationChanged && schedule && schedule.tz) || undefined });
+            await fetchAndStoreSchedule({ prev: (!locationChanged && schedule) || undefined });
           } catch (e) {
             await armAlarms();
             sendResponse({ ok: false, error: String(e.message || e) });
@@ -951,7 +988,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'REFRESH':
         try {
           const { schedule } = await chrome.storage.local.get('schedule');
-          await fetchAndStoreSchedule({ tz: (schedule && schedule.tz) || undefined });
+          await fetchAndStoreSchedule({ prev: schedule || undefined });
           await armAlarms();
           sendResponse({ ok: true });
         } catch (e) {

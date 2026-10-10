@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeChrome } from './helpers/chrome-mock.js';
 import { makeFetch } from './helpers/fetch-mock.js';
+import { simulateStaleTzData } from './helpers/stale-icu.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BODY = readFileSync(join(ROOT, 'popup.html'), 'utf8').match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -899,3 +900,51 @@ describe('detect location and clock keyboard shortcuts', () => {
   });
 });
 
+
+describe("the clock reads the location's time from Aladhan's offsets (Morocco +00)", () => {
+  // Morocco is on +00 since 2026-09-20, but a browser shipping older tz data still
+  // reads Africa/Casablanca as +01: the clock ran an hour ahead of the prayer
+  // times. simulateStaleTzData makes Intl answer like such a browser.
+  const utc = (h, m, d = 10) => Date.UTC(2026, 9, d, h, m);
+  const CASA = [['Fajr', '05:23 AM', 5, 23], ['Dhuhr', '12:17 PM', 12, 17], ['Asr', '03:35 PM', 15, 35], ['Maghrib', '06:03 PM', 18, 3], ['Isha', '07:11 PM', 19, 11]];
+  function casaState() {
+    const base = defaultState();
+    return {
+      ...base,
+      settings: { ...base.settings, city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.62 },
+      schedule: {
+        date: '2026-10-10',
+        tz: 'Africa/Casablanca',
+        fetchedAt: utc(9, 15),
+        sunrise: { time: '06:31 AM', ts: utc(6, 31), offsetMin: 0 },
+        prayers: CASA.map(([name, time, h, m]) => ({ name, time, ts: utc(h, m), offsetMin: 0 })),
+      },
+      nextPrayer: { name: 'Dhuhr', time: '12:17 PM', ts: utc(12, 17) },
+    };
+  }
+  let restore;
+  beforeEach(() => {
+    restore = simulateStaleTzData();
+    jest.setSystemTime(Date.UTC(2026, 9, 10, 10, 58, 5)); // the report: 10:58, Saturday 10/10/2026
+  });
+  afterEach(() => restore());
+
+  it('shows 10:58 at 10:58 UTC, matching the prayer times (this browser alone reads 11:58)', async () => {
+    await load({ state: casaState() });
+    expect($('clockDigital').textContent).toMatch(/^10:58:05\sAM$/);
+    expect($('handHour').getAttribute('transform')).toBe('rotate(329.00 100 100)'); // 10:58
+    expect($('handMin').getAttribute('transform')).toBe('rotate(348.50 100 100)');
+    expect($('headDate').textContent).toBe('Sat, Oct 10');
+    expect($('updated').textContent).toMatch(/09:15/);
+    expect($('nextTime').textContent).toBe('12:17 PM');
+    expect($('nextCountdown').textContent).toBe('in 1h 18m');
+  });
+
+  it('the digital clock and the date too, up to midnight (this browser alone reads Sun, Oct 11)', async () => {
+    jest.setSystemTime(Date.UTC(2026, 9, 10, 23, 30));
+    await load({ state: casaState(), initialStorage: { clockStyle: 'digital' } });
+    expect($('clock').classList.contains('is-digital')).toBe(true);
+    expect($('clockDigital').textContent).toBe('11:30PM'); // "11:30" + the AM/PM badge
+    expect($('headDate').textContent).toBe('Sat, Oct 10');
+  });
+});

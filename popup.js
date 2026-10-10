@@ -1,10 +1,10 @@
 // Adhan Focus — popup UI logic.
 // A fixed-frame popup with three tabbed views (Home / Tracker / Settings) that
 // swap in place (the popup never resizes), an SVG analog clock that ticks in the
-// selected location's timezone, an Appearance control (System / Light / Dark), a
-// prayer-log Tracker (check-offs + streaks + a month heatmap), and on-device
-// Hijri dates. Pure helpers live in ./lib.
-import { formatCountdown, ymd, PRAYER_ORDER } from './lib/schedule.js';
+// selected location's time (see clockParts), an Appearance control (System /
+// Light / Dark), a prayer-log Tracker (check-offs + streaks + a month heatmap),
+// and on-device Hijri dates. Pure helpers live in ./lib.
+import { formatCountdown, ymd, PRAYER_ORDER, locationClock } from './lib/schedule.js';
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { emptyUsage, recent, activeDays } from './lib/usage.js';
 import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
@@ -327,34 +327,24 @@ function buildClockFace() {
   el.replaceChildren(svg, digital);
 }
 
-function clockParts(tz) {
-  const opts = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
-  if (tz) opts.timeZone = tz;
-  let parts;
-  try {
-    parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(new Date());
-  } catch (_) {
-    parts = new Intl.DateTimeFormat('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
-  }
-  const g = (type) => Number((parts.find((p) => p.type === type) || {}).value || 0);
-  return { h: g('hour') % 12, m: g('minute'), s: g('second') };
+// The location's wall clock comes from locationClock (Aladhan's UTC offsets when
+// this browser's tz data disagrees with them, e.g. Morocco's +00 read as +01), as
+// a Date whose UTC fields read it — so it is formatted in 'UTC', never in the zone.
+function clockParts(schedule) {
+  const d = locationClock(schedule);
+  return { h: d.getUTCHours() % 12, m: d.getUTCMinutes(), s: d.getUTCSeconds() };
 }
-function fmtDigital(tz, withSeconds) {
-  const opts = { hour: 'numeric', minute: '2-digit', hour12: true };
+function fmtDigital(schedule, withSeconds) {
+  const opts = { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' };
   if (withSeconds) opts.second = '2-digit';
-  if (tz) opts.timeZone = tz;
-  try {
-    return new Date().toLocaleTimeString('en-US', opts);
-  } catch (_) {
-    return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  }
+  return locationClock(schedule).toLocaleTimeString('en-US', opts);
 }
 
 function updateClock() {
-  const tz = st && st.schedule && st.schedule.tz;
+  const schedule = (st && st.schedule) || null;
   const digital = $('clock') && $('clock').classList.contains('is-digital');
 
-  const { h, m, s } = clockParts(tz);
+  const { h, m, s } = clockParts(schedule);
   const setHand = (id, deg) => {
     const el = $(id);
     if (el) el.setAttribute('transform', `rotate(${deg.toFixed(2)} 100 100)`);
@@ -366,7 +356,7 @@ function updateClock() {
   const dig = $('clockDigital');
   if (dig) {
     if (digital) {
-      const str = fmtDigital(tz, false);
+      const str = fmtDigital(schedule, false);
       const mt = str.match(/^(.*?)\s*([AP]M)$/i);
       if (mt) {
         dig.textContent = mt[1];
@@ -378,7 +368,7 @@ function updateClock() {
         dig.textContent = str;
       }
     } else {
-      dig.textContent = fmtDigital(tz, true);
+      dig.textContent = fmtDigital(schedule, true);
     }
   }
 }
@@ -481,13 +471,12 @@ function renderAll() {
   $('leadSeconds').value = String(settings.leadSeconds || 30);
   $('locLabel').textContent = place ? place.label : '—';
 
-  // Header date (Gregorian) in the location's timezone. The Hijri date lives in
-  // the Tracker (not the header).
+  // Header date (Gregorian) at the location (see clockParts). The Hijri date lives
+  // in the Tracker (not the header).
   try {
-    const tz = schedule && schedule.tz;
     $('headDate').textContent = new Intl.DateTimeFormat(localeFor(), {
-      weekday: 'short', day: 'numeric', month: 'short', timeZone: tz || undefined,
-    }).format(new Date());
+      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+    }).format(locationClock(schedule || null));
   } catch (_) {}
 
   if (paused && paused.active) {
@@ -511,7 +500,9 @@ function renderAll() {
 
   $('updated').textContent =
     schedule && schedule.fetchedAt
-      ? t('updated', { time: new Date(schedule.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
+      ? t('updated', {
+          time: locationClock(schedule, schedule.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }),
+        })
       : '';
 }
 
