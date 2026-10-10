@@ -1004,9 +1004,25 @@ describe('per-prayer minute adjustments (±3)', () => {
     await load({ state: adjustedState() });
     const marks = [...document.querySelectorAll('#list .row')].filter((r) => r.querySelector('.adj'));
     expect(marks.map((r) => [r.querySelector('.pname').textContent, r.querySelector('.adj').textContent, r.querySelector('.adj').title])).toEqual([
-      ['Dhuhr', '+2', 'Adjusted by +2 min'],
-      ['Maghrib', '−1', 'Adjusted by −1 min'],
+      ['Dhuhr', '+2', 'Adjusted by \u2066+2\u2069 min'],
+      ['Maghrib', '−1', 'Adjusted by \u2066−1\u2069 min'],
     ]);
     expect(document.querySelector('#list .row.p-dhuhr .ptime').textContent).toBe('01:07 PM+2');
+  });
+
+  it("the mark's tooltip is translated, and keeps the sign first in Arabic", async () => {
+    await load({ state: adjustedState(), initialStorage: { lang: 'ar' } });
+    const title = document.querySelector('#list .row.p-dhuhr .adj').title;
+    expect(title).toBe(cat('ar').adjusted_by.replace('{min}', '\u2066+2\u2069')); // isolated: "+2", not "2+"
+  });
+
+  it('the five selects form one group named by its heading and described by its help text', async () => {
+    await load({ state: adjustedState() });
+    const group = $('adjustRow');
+    expect(group.getAttribute('role')).toBe('group');
+    expect($(group.getAttribute('aria-labelledby')).textContent).toBe(EN.adjust_times);
+    expect($(group.getAttribute('aria-describedby')).textContent).toBe(EN.adjust_times_desc);
+    // Each select is named by the prayer its <label> wraps.
+    expect($('adjust-Maghrib').closest('label').textContent).toContain(EN.prayer_Maghrib);
   });
 });

@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, parseAladhanIso, epochAtOffset, locationYmd, locationTime12h, isNewDay, dayBeforeMark, prayerAdjustments, shiftHm, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
+import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, parseAladhanIso, epochAtOffset, locationYmd, locationTime12h, isNewDay, dayBeforeMark, prayerAdjustments, shiftHm, keepCrossingPrayers, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
@@ -199,10 +199,13 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
   const withOffset = names.filter((name) => read[name].offsetMin !== null).length;
   if (withOffset && withOffset !== names.length) throw new Error('Aladhan: mixed time formats');
   // The user's minute adjustments (see prayerAdjustments), applied to a prayer's
-  // time and instant alike. Sunrise is never adjusted.
+  // time and instant alike — never across the day's midnight, where the day
+  // rollover takes over (an Isha at 23:58 moves to 23:59 at most). Sunrise is
+  // never adjusted.
   const adjust = prayerAdjustments(settings.adjustMinutes);
   const tune = (p) => {
-    const min = adjust[p.name];
+    const [h, m] = read[p.name].hm.split(':').map(Number);
+    const min = Math.max(-(h * 60 + m), Math.min(1439 - (h * 60 + m), adjust[p.name]));
     return min ? { ...p, time: hhmmTo12h(shiftHm(read[p.name].hm, min)), ts: p.ts + min * 60000, adjustMin: min } : p;
   };
   if (withOffset) {
@@ -290,6 +293,9 @@ async function fetchAndStoreSchedule({ prev } = {}) {
     if (!sameRequest(await getSettings(), settings)) return storedScheduleState({ superseded: true });
     const dayBefore = dayBeforeMark(prev, schedule);
     if (dayBefore) schedule = { ...schedule, dayBefore };
+    // A re-fetch of the same day (e.g. a saved time adjustment) never fires a
+    // prayer twice or skips one (see keepCrossingPrayers).
+    schedule = keepCrossingPrayers(prev, schedule, Date.now());
     const nextPrayer = computeNext(schedule.prayers, Date.now());
     await chrome.storage.local.set({ schedule, nextPrayer, scheduleRefetch: false });
     return { schedule, nextPrayer };

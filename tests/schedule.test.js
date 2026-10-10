@@ -27,6 +27,7 @@ import {
   parseAladhanTime,
   prayerAdjustments,
   shiftHm,
+  keepCrossingPrayers,
   ADJUST_LIMIT_MIN,
   sameTimings,
   revalidationCrossesNow,
@@ -600,5 +601,43 @@ describe('per-prayer minute adjustments', () => {
     expect(shiftHm('23:59', 3)).toBe('00:02');
     expect(shiftHm('00:01', -3)).toBe('23:58');
     expect(shiftHm('19:11', 0)).toBe('19:11');
+  });
+});
+
+describe('keepCrossingPrayers (a same-day re-fetch, e.g. a saved adjustment)', () => {
+  const at = (hm) => Date.parse(`2026-10-10T${hm}:00Z`);
+  const day = (dhuhr, extra = {}) => ({
+    date: '2026-10-10',
+    tz: 'Africa/Casablanca',
+    prayers: [
+      { name: 'Fajr', time: '05:23 AM', ts: at('05:23'), offsetMin: 0 },
+      { name: 'Dhuhr', time: dhuhr.time, ts: at(dhuhr.hm), offsetMin: 0, ...(dhuhr.adjustMin ? { adjustMin: dhuhr.adjustMin } : {}) },
+      { name: 'Asr', time: '03:35 PM', ts: at('15:35'), offsetMin: 0 },
+      { name: 'Maghrib', time: '06:03 PM', ts: at('18:03'), offsetMin: 0 },
+      { name: 'Isha', time: '07:11 PM', ts: at('19:11'), offsetMin: 0 },
+    ],
+    ...extra,
+  });
+  const stored = day({ time: '12:17 PM', hm: '12:17' });
+  const plus3 = day({ time: '12:20 PM', hm: '12:20', adjustMin: 3 });
+  const minus3 = day({ time: '12:14 PM', hm: '12:14', adjustMin: -3 });
+
+  it('keeps a prayer that already came today from coming again', () => {
+    const kept = keepCrossingPrayers(stored, plus3, at('12:18'));
+    expect(kept.prayers[1]).toBe(stored.prayers[1]);
+    expect(computeNext(kept.prayers, at('12:18')).name).toBe('Asr');
+  });
+  it('keeps a prayer still to come from being skipped', () => {
+    const kept = keepCrossingPrayers(stored, minus3, at('12:16'));
+    expect(kept.prayers[1]).toBe(stored.prayers[1]);
+    expect(computeNext(kept.prayers, at('12:16'))).toMatchObject({ name: 'Dhuhr', ts: at('12:17') });
+  });
+  it('takes the new times when nothing crosses now, or for another day, zone or an older version\'s day', () => {
+    expect(keepCrossingPrayers(stored, plus3, at('09:00'))).toBe(plus3);
+    expect(keepCrossingPrayers({ ...stored, date: '2026-10-09' }, plus3, at('12:18'))).toBe(plus3);
+    expect(keepCrossingPrayers({ ...stored, tz: 'Europe/Paris' }, plus3, at('12:18'))).toBe(plus3);
+    const older = { ...stored, prayers: stored.prayers.map(({ offsetMin, ...p }) => p) };
+    expect(keepCrossingPrayers(older, plus3, at('12:18'))).toBe(plus3);
+    expect(keepCrossingPrayers(null, plus3, at('12:18'))).toBe(plus3);
   });
 });

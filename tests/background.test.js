@@ -2328,6 +2328,46 @@ describe('per-prayer minute adjustments (±3, Settings)', () => {
     expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('18:02'));
   });
 
+  it('never moves a prayer across the day\'s midnight, where the next day takes over', async () => {
+    const late = ['api.aladhan.com', (url) => aladhanPayload({ timings: { ...CASA, Fajr: '00:01', Isha: '23:58' }, meta: { timezone: 'Africa/Casablanca' }, data: requestedDay(url), isoOffset: '+00:00' })];
+    const { h } = await loadBackground({ storage: { settings: { ...CASA_SETTINGS, adjustMinutes: { Fajr: -3, Isha: 3 } } }, fetchRoutes: [late] });
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    expect(timeOf(h, 'Isha')).toMatchObject({ time: '11:59 PM', ts: utc('23:59'), adjustMin: 1 });
+    expect(timeOf(h, 'Fajr')).toMatchObject({ time: '12:00 AM', ts: utc('00:00'), adjustMin: -1 });
+  });
+
+  it('saved just after a prayer, a later time does not bring it again today', async () => {
+    const { h } = await loadBackground({ storage: { settings: CASA_SETTINGS }, fetchRoutes: [casa()] });
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    jest.setSystemTime(utc('12:18')); // Dhuhr (12:17) has just come
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { adjustMinutes: { Dhuhr: 3 } } })).toEqual({ ok: true });
+    expect(timeOf(h, 'Dhuhr')).toEqual({ name: 'Dhuhr', time: '12:17 PM', ts: utc('12:17'), offsetMin: 0 }); // today's, kept
+    expect(h.store.nextPrayer).toMatchObject({ name: 'Asr', ts: utc('15:35') });
+    expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('15:35'));
+  });
+
+  it('saved just before a prayer, an earlier time does not skip it today', async () => {
+    const { h } = await loadBackground({ storage: { settings: CASA_SETTINGS }, fetchRoutes: [casa()] });
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    jest.setSystemTime(utc('12:16')); // Dhuhr (12:17) is a minute away; -3 would put it at 12:14
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { adjustMinutes: { Dhuhr: -3 } } })).toEqual({ ok: true });
+    expect(h.store.nextPrayer).toMatchObject({ name: 'Dhuhr', ts: utc('12:17') });
+    expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('12:17'));
+  });
+
+  it("applies them to the location's own day when this machine's date is another (Kiritimati, +14)", async () => {
+    jest.setSystemTime(Date.parse('2026-10-10T12:00:00Z')); // 02:00 on the 11th there
+    const kiri = ['api.aladhan.com', (url) => aladhanPayload({ timings: CASA, meta: { timezone: 'Pacific/Kiritimati' }, data: requestedDay(url), isoOffset: '+14:00' })];
+    const { h } = await loadBackground({ storage: { settings: { ...ADJUSTED, city: 'Kiritimati', state: '', country: 'Kiribati' } }, fetchRoutes: [kiri] });
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    expect(h.store.schedule.date).toBe('2026-10-11');
+    expect(timeOf(h, 'Dhuhr')).toMatchObject({ time: '12:19 PM', ts: Date.parse('2026-10-10T22:19:00Z'), adjustMin: 2 });
+  });
+
   it('an answer fetched with the old adjustments is not stored once they change', async () => {
     let release;
     const gate = new Promise((r) => (release = r));

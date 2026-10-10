@@ -782,8 +782,8 @@ body {
 
 /* Per-prayer minute adjustment: five compact selects in a row. */
 .set-desc { font-size: 11px; line-height: 1.4; color: var(--muted); margin-top: -4px; }
-.adjust-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.adjust-cell { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; font-size: 10.5px; font-weight: 650; color: var(--muted); text-align: center; }
+.adjust-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.adjust-cell { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; font-size: 10px; font-weight: 650; color: var(--muted); text-align: center; }
 .adjust-cell > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .set-row .adjust-grid select {
   width: 100%; height: 30px; padding: 4px 2px; border-radius: 8px; background-image: none;

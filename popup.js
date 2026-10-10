@@ -594,7 +594,8 @@ function renderList() {
       const adj = document.createElement('span');
       adj.className = 'adj';
       adj.textContent = signedMin(adjustMin);
-      adj.title = t('adjusted_by', { min: signedMin(adjustMin) });
+      // Isolated left-to-right, so an Arabic or Urdu sentence keeps "+2", not "2+".
+      adj.title = t('adjusted_by', { min: `\u2066${signedMin(adjustMin)}\u2069` });
       pt.appendChild(adj);
     }
     if (tomorrow) {
