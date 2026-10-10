@@ -14,6 +14,7 @@ import {
   locationYmd,
   locationTime12h,
   isNewDay,
+  dayBeforeMark,
   ROLLOVER_BACK_SLACK_MS,
   tzOffsetMs,
   ymd,
@@ -89,6 +90,23 @@ describe('epochAtOffset', () => {
   });
 });
 
+describe('dayBeforeMark', () => {
+  const oct10 = isoSchedule('2026-10-10', 'Africa/Casablanca', CASA_10_10, 0);
+  const oct11 = { ...oct10, date: '2026-10-11' };
+  it("is the day before's last time, with its offset", () => {
+    expect(dayBeforeMark(oct10, oct11)).toEqual({ ts: at('2026-10-10T19:11:00Z'), offsetMin: 0 });
+  });
+  it('is carried over by the same day (a Refresh) and dropped otherwise', () => {
+    const mark = { ts: at('2026-10-09T19:12:00Z'), offsetMin: 0 };
+    expect(dayBeforeMark({ ...oct10, dayBefore: mark }, oct10)).toEqual(mark);
+    expect(dayBeforeMark(oct10, oct10)).toBeNull();
+    expect(dayBeforeMark(oct10, { ...oct10, date: '2026-10-12' })).toBeNull(); // not the day before
+    expect(dayBeforeMark(oct10, { ...oct11, tz: 'Europe/Paris' })).toBeNull(); // another place
+    expect(dayBeforeMark({ ...oct10, prayers: oct10.prayers.map(({ offsetMin, ...p }) => p), sunrise: null }, oct11)).toBeNull(); // no offsets
+    expect(dayBeforeMark(null, oct11)).toBeNull();
+  });
+});
+
 describe("with this browser's tz data out of date", () => {
   let restore;
   beforeAll(() => {
@@ -140,6 +158,18 @@ describe("with this browser's tz data out of date", () => {
     expect(isNewDay(sep20, at('2026-09-20T00:00:00Z') - ROLLOVER_BACK_SLACK_MS)).toBe(false);
   });
 
+  it("out-of-date data that switches in the night onto the day's offset is not taken for current", () => {
+    // Vancouver 2027-03-14: the old rules spring forward at 10:00Z (02:00 PST), onto
+    // the -07 Aladhan has all year — so they agree with every one of the day's times.
+    const mar14 = isoSchedule('2027-03-14', 'America/Vancouver', { Fajr: '06:12', Sunrise: '07:24', Dhuhr: '13:23', Asr: '16:39', Maghrib: '19:17', Isha: '20:30' }, -420);
+    const now = at('2027-03-14T07:30:00Z'); // 00:30 on the 14th, really
+    expect(locationTime12h(mar14, now)).toBe('11:30 PM'); // the day's own times alone can't tell
+    // The 13th's Isha (-07, read as -08 by the old rules) gives it away.
+    const withDayBefore = { ...mar14, dayBefore: { ts: epochAtOffset('2027-03-13', '20:29', -420), offsetMin: -420 } };
+    expect(locationTime12h(withDayBefore, now)).toBe('12:30 AM');
+    expect(locationYmd(withDayBefore, now)).toBe('2027-03-14');
+  });
+
   it('a schedule without offsets (older version) still reads the zone through Intl', () => {
     const legacy = { date: '2026-10-10', tz: 'Africa/Casablanca', prayers: [{ name: 'Fajr', time: '05:23 AM', ts: 0 }], sunrise: null };
     expect(locationOffsetMs(legacy, at('2026-10-10T10:58:00Z'))).toBe(H);
@@ -156,6 +186,13 @@ describe("with this browser's tz data up to date", () => {
     expect(locationYmd(la, now)).toBe('2026-11-01'); // the day's own offsets alone would read Oct 31, 23:30
     expect(isNewDay(la, now)).toBe(false);
     expect(locationTime12h(la, at('2026-11-01T19:52:00Z'))).toBe('11:52 AM'); // Dhuhr, after the switch
+  });
+
+  it("the day before's offset still lets a real DST switch in the night through", () => {
+    const la = isoSchedule('2026-11-01', 'America/Los_Angeles', LA_01_11, -480);
+    const withDayBefore = { ...la, dayBefore: { ts: epochAtOffset('2026-10-31', '18:24', -420), offsetMin: -420 } };
+    expect(locationTime12h(withDayBefore, at('2026-11-01T07:30:00Z'))).toBe('12:30 AM'); // PDT
+    expect(locationTime12h(withDayBefore, at('2026-11-01T09:30:00Z'))).toBe('01:30 AM'); // PST, after the switch
   });
 
   it('reads the same as ymdInTz for an ordinary day', () => {

@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { makeChrome, flush } from './helpers/chrome-mock.js';
 import { makeFetch, aladhanPayload } from './helpers/fetch-mock.js';
 import { simulateStaleTzData } from './helpers/stale-icu.js';
-import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, parseTimeToday, hhmmTo12h, PRAYER_ORDER, DAY_MS } from '../lib/schedule.js';
+import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, parseTimeToday, hhmmTo12h, epochAtOffset, tzOffsetMs, PRAYER_ORDER, DAY_MS } from '../lib/schedule.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -1965,14 +1965,16 @@ describe('day-start fetch date: the location\'s, not this machine\'s', () => {
     expect(warnSpy).toHaveBeenCalledWith('Adhan: tick failed', expect.any(Error));
   });
 
-  it('a new city asks for this machine\'s date, as before, and takes its timezone', async () => {
+  it('a new city asks for this machine\'s date, then for the city\'s own today, and takes its timezone', async () => {
     const other = scheduleFor(OTHER, MACHINE_DAY);
     const { h, fetch } = await loadBackground({ storage: { settings: { ...DEFAULTS, ...CITY[OTHER] }, schedule: other }, fetchRoutes: [answerIn(LOC)] });
     const res = await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CITY[LOC] });
     expect(res).toEqual({ ok: true });
-    expect(aladhanCalls(fetch)).toHaveLength(1);
+    expect(aladhanCalls(fetch)).toHaveLength(2);
     expect(aladhanCalls(fetch)[0]).toContain(`/timingsByCity/${aladhanDay(MACHINE_DAY)}?city=${encodeURIComponent(CITY[LOC].city)}`);
-    expect(h.store.schedule.tz).toBe(LOC);
+    expect(aladhanCalls(fetch)[1]).toContain(`/timingsByCity/${aladhanDay(LOC_DAY)}?city=${encodeURIComponent(CITY[LOC].city)}`);
+    expect(h.store.schedule).toMatchObject({ tz: LOC, date: LOC_DAY });
+    expect(h.store.schedule.prayers[0].ts).toBe(fajrOn(LOC_DAY, LOC)); // that day's own times
   });
 
   // The save to LOC failed, so the stored schedule is still OTHER's: the rollover
@@ -2070,18 +2072,24 @@ describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz
     fetchedAt: NOW,
   });
 
+  // Intl stays real under the fake clock: faking it would swap in a copy of the
+  // native Intl taken before the stub, and the runner's own tz data would answer.
+  const DO_NOT_FAKE = ['Intl', 'nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance'];
   let restore;
   beforeEach(() => {
     restore = simulateStaleTzData();
-    jest.useFakeTimers({
-      now: NOW,
-      doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance'],
-    });
+    jest.useFakeTimers({ now: NOW, doNotFake: DO_NOT_FAKE });
+    expect(tzOffsetMs(new Date(NOW), 'Africa/Casablanca')).toBe(3600e3); // the out-of-date reading is in force
   });
   afterEach(() => {
     jest.useRealTimers();
     restore();
   });
+  // A failing Aladhan until `up()`.
+  function flaky(route) {
+    let ok = false;
+    return { route: [route[0], (url) => (ok ? route[1](url) : { status: 503 })], up: () => (ok = true) };
+  }
 
   it('Casablanca: each prayer is armed at its +00 time', async () => {
     const { h, fetch } = await loadBackground({ storage: { settings: DEFAULTS }, fetchRoutes: [casaAnswer] });
@@ -2108,6 +2116,22 @@ describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz
     expect(aladhanCalls(fetch)[0]).toContain('/timingsByCity/11-10-2026?');
     expect(h.store.schedule).toMatchObject({ date: '2026-10-11', tz: 'Africa/Casablanca' });
     expect(h.store.schedule.prayers[0].ts).toBe(utc('05:23', '2026-10-11'));
+    // The 10th's Isha stays with it: Aladhan's offset for the night before Fajr.
+    expect(h.store.schedule.dayBefore).toEqual({ ts: utc('19:11'), offsetMin: 0 });
+  });
+
+  it('a pre-prayer re-check that moves a time keeps the day before\'s offset', async () => {
+    jest.setSystemTime(utc('14:52')); // Asr (15:35) - 43 min
+    const schedule = { ...casaSchedule(), fetchedAt: utc('06:00'), dayBefore: { ts: utc('19:11', '2026-10-09'), offsetMin: 0 } };
+    const { h } = await loadBackground({
+      storage: { settings: CASA_SETTINGS, schedule, nextPrayer: { name: 'Asr', time: '03:35 PM', ts: utc('15:35') }, paused: { active: false } },
+      fetchRoutes: [answer({ ...CASA, Asr: '15:36' }, 'Africa/Casablanca', '+00:00')],
+    });
+    await h.fireAlarm(ALARM_REVALIDATE);
+    await flush();
+    expect(h.store.schedule.prayers[2]).toEqual({ name: 'Asr', time: '03:36 PM', ts: utc('15:36'), offsetMin: 0 });
+    expect(h.store.schedule.dayBefore).toEqual(schedule.dayBefore);
+    expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('15:36'));
   });
 
   it("Refresh at 23:30 asks for Casablanca's today, the 10th", async () => {
@@ -2137,6 +2161,54 @@ describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz
     expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('12:17'));
   });
 
+  it('...and when the update cannot reach Aladhan, the next tick fetches the day again', async () => {
+    const early = { ...casaSchedule(), prayers: casaSchedule().prayers.map(({ offsetMin, ...p }) => ({ ...p, ts: p.ts - 3600e3 })), sunrise: null };
+    const aladhan = flaky(casaAnswer);
+    const { h, fetch } = await loadBackground({
+      storage: { settings: CASA_SETTINGS, schedule: early, paused: { active: false }, installedAt: 1, onboardingCompleted: true },
+      fetchRoutes: [aladhan.route],
+    });
+    await h.fireInstalled({ reason: 'update', previousVersion: '2.1.1' });
+    await flush();
+    expect(h.store.schedule).toEqual(early);
+    expect(h.store.scheduleRefetch).toBe(true);
+    aladhan.up();
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    expect(aladhanCalls(fetch)).toHaveLength(2);
+    expect(h.store.schedule).toEqual({ ...casaSchedule(), fetchedAt: NOW });
+    expect(h.store.scheduleRefetch).toBe(false);
+    expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc('12:17'));
+    // Settled: the next tick does not fetch again.
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    expect(aladhanCalls(fetch)).toHaveLength(2);
+  });
+
+  it('a new city whose fetch failed is fetched on the next tick, not the next day', async () => {
+    let down = false;
+    const route = [
+      'api.aladhan.com',
+      (url) => (down ? { status: 503 } : url.includes('city=Casablanca') ? casaAnswer[1](url) : aladhanPayload({ data: requestedDay(url) })),
+    ];
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS }, fetchRoutes: [route] });
+    await h.fireInstalled({ reason: 'install' });
+    await flush();
+    expect(h.store.schedule.tz).toBe('America/Los_Angeles');
+    // Onboarding picks Casablanca while Aladhan is down…
+    down = true;
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CASA_SETTINGS })).toMatchObject({ ok: false });
+    expect(h.store.settings).toMatchObject({ city: 'Casablanca' });
+    expect(h.store.schedule.tz).toBe('America/Los_Angeles');
+    // …and it is back for the next tick.
+    down = false;
+    await h.fireAlarm(ALARM_TICK);
+    await flush();
+    expect(h.store.schedule).toMatchObject({ tz: 'Africa/Casablanca', date: '2026-10-10' });
+    expect(h.store.nextPrayer).toMatchObject({ name: 'Dhuhr', ts: utc('12:17') });
+    expect(h.store.scheduleRefetch).toBe(false);
+  });
+
   it.each([
     ['Vancouver', 'America/Vancouver', '-07:00', 'British Columbia', { Fajr: '06:32', Sunrise: '08:02', Dhuhr: '12:56', Asr: '15:25', Maghrib: '17:49', Isha: '19:19' }, '19:56'],
     ['Edmonton', 'America/Edmonton', '-06:00', 'Alberta', { Fajr: '06:56', Sunrise: '08:36', Dhuhr: '13:18', Asr: '15:33', Maghrib: '17:59', Isha: '19:38' }, '19:18'],
@@ -2151,10 +2223,27 @@ describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz
     expect(h.alarms.get(ALARM_PRAYER).when).toBe(utc(dhuhrUtc, '2026-11-02'));
   });
 
-  it("a dev test fire is labelled with Casablanca's time", async () => {
-    const { h } = await loadBackground({ storage: { settings: CASA_SETTINGS, schedule: casaSchedule() } });
+  // Kathmandu (+05:45): its time reads differently from this machine's on any CI runner.
+  const ktm = () => ({
+    ...casaSchedule(),
+    tz: 'Asia/Kathmandu',
+    prayers: casaSchedule().prayers.map((p) => ({ ...p, ts: epochAtOffset('2026-10-10', p.time.slice(0, 5), 345), offsetMin: 345 })),
+    sunrise: null,
+  });
+
+  it("a dev test fire is labelled with the location's time", async () => {
+    const { h } = await loadBackground({ storage: { settings: DEFAULTS, schedule: ktm() } });
     expect(await h.sendRuntimeMessage({ type: 'TEST_ADHAN', seconds: 30 })).toEqual({ ok: true });
-    expect(h.store.nextPrayer).toMatchObject({ time: '10:58 AM', ts: NOW + 30e3, test: true });
+    expect(h.store.nextPrayer).toMatchObject({ time: '04:43 PM', ts: NOW + 30e3, test: true }); // 10:58:30Z + 5:45
+  });
+
+  it("the onboarding pause demo is labelled with the location's time", async () => {
+    jest.useFakeTimers({ now: NOW, doNotFake: ['Intl', 'nextTick', 'setImmediate', 'clearImmediate', 'queueMicrotask'] });
+    const { h } = await loadBackground({ storage: { settings: { ...DEFAULTS, adhanChime: false }, schedule: ktm() } });
+    expect(await h.sendRuntimeMessage({ type: 'TEST_PAUSE_DEMO', prayer: 'Asr', seconds: 5 })).toEqual({ ok: true });
+    const shown = h.broadcasts.map((b) => b.message).filter((m) => m.type === 'PRAYER_NOW');
+    expect(shown.map((m) => m.time)).toEqual(['04:43 PM', '04:43 PM']); // 10:58Z + 5:45, to both tabs
+    jest.clearAllTimers();
   });
 
   it('an answer without offsets is still read in the zone through Intl, as before', async () => {

@@ -3,7 +3,7 @@
 // pause at prayer time, and arms auto-resume. The per-second T-15 countdown and
 // the actual pausing/resuming of <video>/<audio> happen in content.js.
 
-import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, parseAladhanIso, epochAtOffset, locationYmd, locationTime12h, isNewDay, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
+import { ymd, ymdInTz, zonedToEpoch, computeNext, buildPrayers, isStaleFire, isPrematureFire, parseTimeToday, hhmmTo12h, PRAYER_ORDER, formatBadgeCountdown, formatCountdown, formatTooltipCountdown, PRAYER_BADGE_COLORS, PRAYER_BADGE_TEXT_COLORS, isRevalidationDue, revalidationAlarmAt, parseAladhanTime, parseAladhanIso, epochAtOffset, locationYmd, locationTime12h, isNewDay, dayBeforeMark, sameTimings, revalidationCrossesNow, revalidationRetryAt, REVALIDATE_MIN_GAP_MS, REVALIDATE_AT_MS, REVALIDATE_WINDOW_END_MS } from './lib/schedule.js';
 import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
@@ -154,8 +154,10 @@ function noonOf(day, zone) {
 // offset (see parseAladhanIso) or — all of them, from an answer without offsets —
 // a strict 24h 'H:MM' time (see parseAladhanTime). `day` ('YYYY-MM-DD') pins the
 // requested date — the answer must then be for that date, and is stored as that
-// day's times; omitted, it is this machine's local date, stored under the
-// location's today. `tz`, when given, is the timezone the answer must carry.
+// day's times; omitted, it is this machine's local date, and when the location's
+// today (read from the answer's offsets) is another date, that date is asked for
+// in turn (an answer without offsets is stored under the location's today as it
+// is). `tz`, when given, is the timezone the answer must carry.
 async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
   const date = day ? ymdToAladhan(day) : ddmmyyyy(new Date());
   let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(
@@ -196,23 +198,20 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
   if (withOffset) {
     // Each instant from the UTC offset Aladhan's tz data gives that time — never
     // from this browser's, which can be out of date (Morocco's +00 since
-    // 2026-09-20 read as +01 put every prayer an hour early). Stored on the day
-    // asked for; when that was this machine's date, under the location's today,
-    // read from these offsets.
+    // 2026-09-20 read as +01 put every prayer an hour early).
     const asked = day || ymdFromAladhan(date);
-    const timed = (d, name) => ({
+    const timed = (name) => ({
       time: hhmmTo12h(read[name].hm),
-      ts: epochAtOffset(d, read[name].hm, read[name].offsetMin),
+      ts: epochAtOffset(asked, read[name].hm, read[name].offsetMin),
       offsetMin: read[name].offsetMin,
     });
-    const build = (d) => ({
-      prayers: PRAYER_ORDER.map((name) => ({ name, ...timed(d, name) })),
-      sunrise: read.Sunrise ? timed(d, 'Sunrise') : null,
-    });
-    let times = build(asked);
-    const stored = day || locationYmd({ tz: zone, ...times });
-    if (stored !== asked) times = build(stored);
-    return { date: stored, ...times, tz: zone, fetchedAt: Date.now() };
+    const prayers = PRAYER_ORDER.map((name) => ({ name, ...timed(name) }));
+    const sunrise = read.Sunrise ? timed('Sunrise') : null;
+    // This machine's date was asked for, and it is another day at the location:
+    // ask for that day's own times (its offsets can differ, e.g. across a DST night).
+    const today = day || locationYmd({ tz: zone, prayers, sunrise });
+    if (today !== asked) return fetchSchedule(settings, { day: today, tz: zone, timeoutMs });
+    return { date: asked, prayers, sunrise, tz: zone, fetchedAt: Date.now() };
   }
   // An answer without offsets: anchor every prayer's epoch to the location's
   // timezone through this browser's tz data, as before iso8601 was asked for.
@@ -259,7 +258,9 @@ async function storedScheduleState(extra = {}) {
 // timezone is accepted when that zone's today is the date asked for; when it is
 // not, the request is made again for that zone's today, and that answer must match
 // both. Without a stored schedule with a timezone (first install, a new city) it
-// asks for this machine's date, as it always has.
+// asks for this machine's date first (see fetchSchedule). The new schedule keeps
+// `prev`'s last time of the day before (see dayBeforeMark), and a committed answer
+// settles a day fetch still owed (`scheduleRefetch`).
 async function fetchAndStoreSchedule({ prev } = {}) {
   const settings = await getSettings();
   let schedule;
@@ -277,8 +278,10 @@ async function fetchAndStoreSchedule({ prev } = {}) {
     // The location/calculation changed while this was in flight: the answer is for
     // the old settings, and whoever changed them fetches for the new ones.
     if (!sameRequest(await getSettings(), settings)) return storedScheduleState({ superseded: true });
+    const dayBefore = dayBeforeMark(prev, schedule);
+    if (dayBefore) schedule = { ...schedule, dayBefore };
     const nextPrayer = computeNext(schedule.prayers, Date.now());
-    await chrome.storage.local.set({ schedule, nextPrayer });
+    await chrome.storage.local.set({ schedule, nextPrayer, scheduleRefetch: false });
     return { schedule, nextPrayer };
   });
 }
@@ -330,9 +333,10 @@ async function revalidateSchedule(old, pausedAtStart, pendingTs) {
       console.warn(`Adhan: revalidated times would move ${crossing.join(', ')} across now; keeping current times`);
       return storedScheduleState({ changed: false, held: true });
     }
-    const nextPrayer = computeNext(fresh.prayers, now);
-    await chrome.storage.local.set({ schedule: fresh, nextPrayer });
-    return { schedule: fresh, nextPrayer, changed: true };
+    const stored = old.dayBefore ? { ...fresh, dayBefore: old.dayBefore } : fresh;
+    const nextPrayer = computeNext(stored.prayers, now);
+    await chrome.storage.local.set({ schedule: stored, nextPrayer });
+    return { schedule: stored, nextPrayer, changed: true };
   });
 }
 
@@ -376,10 +380,11 @@ let rolloverInFlight = null;
 // carries it as `revalidation` (a promise that never rejects). `retry` marks the
 // call made by the retry alarm, which does not arm another retry.
 async function refreshNext({ background = false, retry = false } = {}) {
-  const data = await chrome.storage.local.get(['settings', 'schedule', 'nextPrayer', 'paused', 'revalidateAttemptAt']);
+  const data = await chrome.storage.local.get(['settings', 'schedule', 'nextPrayer', 'paused', 'revalidateAttemptAt', 'scheduleRefetch']);
   const schedule = data.schedule || null;
-  // Rolled over to a new day *at the location* (see isNewDay) → refetch the new day.
-  if (!schedule || isNewDay(schedule)) {
+  // Rolled over to a new day *at the location* (see isNewDay), or a day fetch is
+  // still owed (an update's or a settings save's failed) → fetch the day.
+  if (!schedule || isNewDay(schedule) || data.scheduleRefetch) {
     if (!rolloverInFlight) {
       const run = fetchAndStoreSchedule({ prev: schedule || undefined });
       const done = () => {
@@ -777,6 +782,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     await fetchAndStoreSchedule({ prev: stored.schedule || undefined });
   } catch (e) {
     console.warn('Adhan: initial schedule fetch failed', e);
+    // The stored times may be an older version's (read through out-of-date tz
+    // data): fetch the day again on the next tick, startup or popup open.
+    if (stored.schedule) await chrome.storage.local.set({ scheduleRefetch: true });
   }
   await armAlarms();
   // Don't blindly clear an in-progress pause: a reload/update mid-Adhan should
@@ -976,6 +984,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             // before. A calculation change keeps the location's timezone.
             await fetchAndStoreSchedule({ prev: (!locationChanged && schedule) || undefined });
           } catch (e) {
+            // The stored times are for the previous settings: fetch the day again
+            // on the next tick, startup or popup open.
+            await chrome.storage.local.set({ scheduleRefetch: true });
             await armAlarms();
             sendResponse({ ok: false, error: String(e.message || e) });
             return;

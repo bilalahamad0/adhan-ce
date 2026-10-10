@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import { makeChrome } from './helpers/chrome-mock.js';
 import { makeFetch } from './helpers/fetch-mock.js';
 import { simulateStaleTzData } from './helpers/stale-icu.js';
+import { tzOffsetMs } from '../lib/schedule.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BODY = readFileSync(join(ROOT, 'popup.html'), 'utf8').match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -926,6 +927,7 @@ describe("the clock reads the location's time from Aladhan's offsets (Morocco +0
   beforeEach(() => {
     restore = simulateStaleTzData();
     jest.setSystemTime(Date.UTC(2026, 9, 10, 10, 58, 5)); // the report: 10:58, Saturday 10/10/2026
+    expect(tzOffsetMs(new Date(), 'Africa/Casablanca')).toBe(3600e3); // the out-of-date reading is in force
   });
   afterEach(() => restore());
 
@@ -935,7 +937,9 @@ describe("the clock reads the location's time from Aladhan's offsets (Morocco +0
     expect($('handHour').getAttribute('transform')).toBe('rotate(329.00 100 100)'); // 10:58
     expect($('handMin').getAttribute('transform')).toBe('rotate(348.50 100 100)');
     expect($('headDate').textContent).toBe('Sat, Oct 10');
-    expect($('updated').textContent).toMatch(/09:15/);
+    // The machine's locale picks the digits ('09:15' / '٠٩:١٥'): compare with the same formatting.
+    const hm = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    expect($('updated').textContent).toContain(hm(utc(9, 15)));
     expect($('nextTime').textContent).toBe('12:17 PM');
     expect($('nextCountdown').textContent).toBe('in 1h 18m');
   });
@@ -946,5 +950,19 @@ describe("the clock reads the location's time from Aladhan's offsets (Morocco +0
     expect($('clock').classList.contains('is-digital')).toBe(true);
     expect($('clockDigital').textContent).toBe('11:30PM'); // "11:30" + the AM/PM badge
     expect($('headDate').textContent).toBe('Sat, Oct 10');
+  });
+
+  it("reads the location's time, not this machine's, wherever this machine is (Kathmandu, +05:45)", async () => {
+    const state = casaState();
+    state.schedule = {
+      ...state.schedule,
+      tz: 'Asia/Kathmandu',
+      prayers: state.schedule.prayers.map((p) => ({ ...p, offsetMin: 345 })),
+      sunrise: { ...state.schedule.sunrise, offsetMin: 345 },
+    };
+    await load({ state });
+    expect($('clockDigital').textContent).toMatch(/^4:43:05\sPM$/); // 10:58:05Z + 5:45
+    const hm = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    expect($('updated').textContent).toContain(hm(utc(9, 15) + 345 * 60e3)); // fetched 09:15Z = 15:00 there
   });
 });

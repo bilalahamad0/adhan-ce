@@ -24,10 +24,12 @@ const settle = async () => {
   for (let i = 0; i < 25; i++) await Promise.resolve();
 };
 
-async function load({ send } = {}) {
+async function load({ send, uiLang } = {}) {
   document.body.innerHTML = BODY;
+  document.documentElement.lang = 'en';
+  document.documentElement.dir = '';
   window.HTMLCanvasElement.prototype.getContext = () => null; // no confetti under jsdom
-  chrome = makeChrome({ initialStorage: { settings: INSTALLED }, handleSendMessage: send || (() => ({ ok: true })) });
+  chrome = makeChrome({ initialStorage: { settings: INSTALLED }, uiLang, handleSendMessage: send || (() => ({ ok: true })) });
   globalThis.chrome = chrome;
   globalThis.fetch = makeFetch([
     ['locales/', (url) => cat(url.match(/locales\/(\w+)\.json/)[1])],
@@ -122,5 +124,16 @@ describe('onboarding page', () => {
     document.querySelector('.lang-chip[data-lang="fr"]').click();
     await settle();
     expect(document.getElementById('skipWelcomeBtn').textContent).toBe(cat('fr').skip_setup);
+    expect(document.documentElement.lang).toBe('fr');
+  });
+
+  it('opens right to left in an Arabic browser', async () => {
+    await load({ uiLang: 'ar' });
+    expect(document.getElementById('skipWelcomeBtn').textContent).toBe(cat('ar').skip_setup);
+    expect(document.documentElement.dir).toBe('rtl');
+    expect(document.documentElement.lang).toBe('ar');
+    document.querySelector('.lang-chip[data-lang="en"]').click();
+    await settle();
+    expect(document.documentElement.dir).toBe('ltr');
   });
 });

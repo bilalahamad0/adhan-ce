@@ -1,6 +1,6 @@
 // Adhan Focus — Welcome & Onboarding Controller
 import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
-import { initI18n, setLang, isRTLLang, t as translate } from './lib/i18n.js';
+import { initI18n, setLang, applyDir, t as translate } from './lib/i18n.js';
 
 let t = (k) => k;
 let currentStep = 1;
@@ -38,6 +38,7 @@ async function init() {
     // initI18n resolves to the active language code; lookups go through i18n's t.
     activeLang = await initI18n();
     t = translate;
+    applyDir(document); // <html lang/dir>: Arabic and Urdu read right to left
     applyTranslations();
   } catch (err) {
     console.warn('Welcome i18n init error:', err);
@@ -88,7 +89,7 @@ function wireLanguageChips(currentLang) {
       updateActive(lang);
       await setLang(lang);
       t = translate;
-      document.documentElement.dir = isRTLLang(lang) ? 'rtl' : 'ltr';
+      applyDir(document);
       applyTranslations();
     });
   });
@@ -100,7 +101,7 @@ function wireLanguageChips(currentLang) {
       updateActive(lang);
       await setLang(lang);
       t = translate;
-      document.documentElement.dir = isRTLLang(lang) ? 'rtl' : 'ltr';
+      applyDir(document);
       applyTranslations();
     });
   }
