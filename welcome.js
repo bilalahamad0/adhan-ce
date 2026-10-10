@@ -1,11 +1,14 @@
 // Adhan Focus — Welcome & Onboarding Controller
 import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
-import { initI18n, setLang, isRTLLang } from './lib/i18n.js';
+import { initI18n, setLang, applyDir, t as translate } from './lib/i18n.js';
 
 let t = (k) => k;
 let currentStep = 1;
 let selectedPlace = null;
 let simTimer = null;
+// Until onboarding is done, the stored city is the install default (Sunnyvale), not
+// the user's: the location field starts empty and no default-city preview is shown.
+let onboarded = false;
 
 // Initial state cache
 let state = {
@@ -35,9 +38,10 @@ let state = {
 async function init() {
   let activeLang = 'en';
   try {
-    const { lang: initialLang, t: tFn } = await initI18n();
-    t = tFn;
-    activeLang = initialLang;
+    // initI18n resolves to the active language code; lookups go through i18n's t.
+    activeLang = await initI18n();
+    t = translate;
+    applyDir(document); // <html lang/dir>: Arabic and Urdu read right to left
     applyTranslations();
   } catch (err) {
     console.warn('Welcome i18n init error:', err);
@@ -46,12 +50,13 @@ async function init() {
   // Load existing settings if available
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     try {
-      const stored = await chrome.storage.local.get(['settings', 'schedule']);
+      const stored = await chrome.storage.local.get(['settings', 'schedule', 'onboardingCompleted']);
+      onboarded = stored.onboardingCompleted === true;
       if (stored.settings) {
         state.settings = { ...state.settings, ...stored.settings };
         if (stored.settings.lang) activeLang = stored.settings.lang;
       }
-      if (stored.schedule && stored.schedule.prayers) {
+      if (onboarded && stored.schedule && stored.schedule.prayers) {
         updatePrayerPreview(stored.schedule.prayers, state.settings.city, state.settings.country);
       }
     } catch (_) {}
@@ -86,9 +91,9 @@ function wireLanguageChips(currentLang) {
       if (!lang) return;
       state.settings.lang = lang;
       updateActive(lang);
-      const res = await setLang(lang);
-      t = res.t;
-      document.documentElement.dir = isRTLLang(lang) ? 'rtl' : 'ltr';
+      await setLang(lang);
+      t = translate;
+      applyDir(document);
       applyTranslations();
     });
   });
@@ -98,9 +103,9 @@ function wireLanguageChips(currentLang) {
       const lang = e.target.value;
       state.settings.lang = lang;
       updateActive(lang);
-      const res = await setLang(lang);
-      t = res.t;
-      document.documentElement.dir = isRTLLang(lang) ? 'rtl' : 'ltr';
+      await setLang(lang);
+      t = translate;
+      applyDir(document);
       applyTranslations();
     });
   }
@@ -126,7 +131,7 @@ function syncInputsFromSettings() {
   const fullscreenToggle = document.getElementById('welcomeFullscreen');
   const strictToggle = document.getElementById('welcomeStrict');
 
-  if (cityInput && s.city) cityInput.value = s.city;
+  if (cityInput && s.city && onboarded) cityInput.value = s.city;
   if (chimeToggle) chimeToggle.checked = s.adhanChime !== false;
   if (fullscreenToggle) fullscreenToggle.checked = s.focusMode !== false;
   if (strictToggle) strictToggle.checked = s.strictFocus === true;
@@ -203,7 +208,8 @@ function wireLocationSearch() {
     places.slice(0, 5).forEach((p) => {
       const item = document.createElement('div');
       item.className = 'suggest-item';
-      const label = [p.name, p.admin1, p.country].filter(Boolean).join(', ');
+      // searchPlaces' places are {city, state, country, lat, lon, label}.
+      const label = p.label || [p.city, p.state, p.country].filter(Boolean).join(', ');
       item.textContent = label;
       item.addEventListener('click', () => {
         selectPlace(p, label);
@@ -218,14 +224,14 @@ function wireLocationSearch() {
     input.value = label;
     suggest.hidden = true;
 
-    state.settings.city = place.name;
-    state.settings.state = place.admin1 || '';
+    state.settings.city = place.city;
+    state.settings.state = place.state || '';
     state.settings.country = place.country || '';
-    state.settings.lat = place.latitude;
-    state.settings.lon = place.longitude;
+    state.settings.lat = place.lat;
+    state.settings.lon = place.lon;
 
     // Fetch and preview real prayer times for this location
-    await fetchPreviewTimings(place.latitude, place.longitude, place.name, place.country);
+    await fetchPreviewTimings(place.lat, place.lon, place.city, place.country);
   }
 }
 
@@ -499,18 +505,23 @@ async function finishOnboarding() {
 
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     try {
-      await chrome.storage.local.set({
-        settings: state.settings,
-        onboardingCompleted: true,
-      });
+      await chrome.storage.local.set({ onboardingCompleted: true });
 
-      // Dispatch save to background to recalculate schedule & alarms
-      if (chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'SAVE_SETTINGS',
-          settings: state.settings,
-        }).catch(() => {});
-      }
+      // Hand the settings to the background, which stores them and — the location
+      // or calculation having changed — fetches that place's schedule and re-arms
+      // the alarms. Writing them to storage first left it nothing to compare
+      // against, so it kept the schedule fetched at install for the default city.
+      // Only when it can't be reached are they stored here.
+      const settings = state.settings;
+      (async () => {
+        let res;
+        try {
+          if (chrome.runtime && chrome.runtime.sendMessage) {
+            res = await chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings });
+          }
+        } catch (_) {}
+        if (!res) await chrome.storage.local.set({ settings });
+      })().catch(() => {});
     } catch (_) {}
   }
 

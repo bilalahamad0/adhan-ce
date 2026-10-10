@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeChrome } from './helpers/chrome-mock.js';
 import { makeFetch } from './helpers/fetch-mock.js';
+import { simulateStaleTzData } from './helpers/stale-icu.js';
+import { tzOffsetMs } from '../lib/schedule.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BODY = readFileSync(join(ROOT, 'popup.html'), 'utf8').match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -899,3 +901,160 @@ describe('detect location and clock keyboard shortcuts', () => {
   });
 });
 
+
+describe("the clock reads the location's time from Aladhan's offsets (Morocco +00)", () => {
+  // Morocco is on +00 since 2026-09-20, but a browser shipping older tz data still
+  // reads Africa/Casablanca as +01: the clock ran an hour ahead of the prayer
+  // times. simulateStaleTzData makes Intl answer like such a browser.
+  const utc = (h, m, d = 10) => Date.UTC(2026, 9, d, h, m);
+  const CASA = [['Fajr', '05:23 AM', 5, 23], ['Dhuhr', '12:17 PM', 12, 17], ['Asr', '03:35 PM', 15, 35], ['Maghrib', '06:03 PM', 18, 3], ['Isha', '07:11 PM', 19, 11]];
+  function casaState() {
+    const base = defaultState();
+    return {
+      ...base,
+      settings: { ...base.settings, city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.62 },
+      schedule: {
+        date: '2026-10-10',
+        tz: 'Africa/Casablanca',
+        fetchedAt: utc(9, 15),
+        sunrise: { time: '06:31 AM', ts: utc(6, 31), offsetMin: 0 },
+        prayers: CASA.map(([name, time, h, m]) => ({ name, time, ts: utc(h, m), offsetMin: 0 })),
+      },
+      nextPrayer: { name: 'Dhuhr', time: '12:17 PM', ts: utc(12, 17) },
+    };
+  }
+  let restore;
+  beforeEach(() => {
+    restore = simulateStaleTzData();
+    jest.setSystemTime(Date.UTC(2026, 9, 10, 10, 58, 5)); // the report: 10:58, Saturday 10/10/2026
+    expect(tzOffsetMs(new Date(), 'Africa/Casablanca')).toBe(3600e3); // the out-of-date reading is in force
+  });
+  afterEach(() => restore());
+
+  it('shows 10:58 at 10:58 UTC, matching the prayer times (this browser alone reads 11:58)', async () => {
+    await load({ state: casaState() });
+    expect($('clockDigital').textContent).toMatch(/^10:58:05\sAM$/);
+    expect($('handHour').getAttribute('transform')).toBe('rotate(329.00 100 100)'); // 10:58
+    expect($('handMin').getAttribute('transform')).toBe('rotate(348.50 100 100)');
+    expect($('headDate').textContent).toBe('Sat, Oct 10');
+    // The machine's locale picks the digits ('09:15' / '٠٩:١٥'): compare with the same formatting.
+    const hm = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    expect($('updated').textContent).toContain(hm(utc(9, 15)));
+    expect($('nextTime').textContent).toBe('12:17 PM');
+    expect($('nextCountdown').textContent).toBe('in 1h 18m');
+  });
+
+  it('the digital clock and the date too, up to midnight (this browser alone reads Sun, Oct 11)', async () => {
+    jest.setSystemTime(Date.UTC(2026, 9, 10, 23, 30));
+    await load({ state: casaState(), initialStorage: { clockStyle: 'digital' } });
+    expect($('clock').classList.contains('is-digital')).toBe(true);
+    expect($('clockDigital').textContent).toBe('11:30PM'); // "11:30" + the AM/PM badge
+    expect($('headDate').textContent).toBe('Sat, Oct 10');
+  });
+
+  it("reads the location's time, not this machine's, wherever this machine is (Kathmandu, +05:45)", async () => {
+    const state = casaState();
+    state.schedule = {
+      ...state.schedule,
+      tz: 'Asia/Kathmandu',
+      prayers: state.schedule.prayers.map((p) => ({ ...p, offsetMin: 345 })),
+      sunrise: { ...state.schedule.sunrise, offsetMin: 345 },
+    };
+    await load({ state });
+    expect($('clockDigital').textContent).toMatch(/^4:43:05\sPM$/); // 10:58:05Z + 5:45
+    const hm = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    expect($('updated').textContent).toContain(hm(utc(9, 15) + 345 * 60e3)); // fetched 09:15Z = 15:00 there
+  });
+});
+
+describe('per-prayer minute adjustments (±5)', () => {
+  function adjustedState() {
+    const base = defaultState();
+    return {
+      ...base,
+      settings: { ...base.settings, adjustMinutes: { Fajr: 0, Dhuhr: 2, Asr: 0, Maghrib: -1, Isha: 0 } },
+      schedule: {
+        ...base.schedule,
+        prayers: base.schedule.prayers.map((p) =>
+          p.name === 'Dhuhr' ? { ...p, time: '01:07 PM', adjustMin: 2 } : p.name === 'Maghrib' ? { ...p, time: '08:16 PM', adjustMin: -1 } : p
+        ),
+      },
+    };
+  }
+
+  const NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  const values = () => NAMES.map((n) => $('adjust-' + n).value);
+  const choose = (id, value) => {
+    $(id).value = value;
+    $(id).dispatchEvent(new Event('change'));
+  };
+
+  it('Settings shows each prayer\'s adjustment, from −5 to +5', async () => {
+    await load({ state: adjustedState() });
+    expect(values()).toEqual(['0', '2', '0', '-1', '0']);
+    expect([...$('adjust-Fajr').options].map((o) => o.textContent)).toEqual(['−5', '−4', '−3', '−2', '−1', '0', '+1', '+2', '+3', '+4', '+5']);
+    expect($('adjustRow').querySelector('.set-label').textContent).toBe(EN.adjust_times);
+  });
+
+  it('"All prayers" sets the five at once, and shows "—" once they differ', async () => {
+    await load({ state: adjustedState() });
+    expect($('adjust-all').value).toBe(''); // they differ: "—"
+    expect($('adjust-all').selectedOptions[0].textContent).toBe('—');
+    expect($('adjust-all').closest('label').textContent).toContain(EN.adjust_all);
+    choose('adjust-all', '4');
+    expect(values()).toEqual(['4', '4', '4', '4', '4']);
+    choose('adjust-Asr', '-1'); // one tuned on its own
+    expect($('adjust-all').value).toBe('');
+    choose('adjust-Asr', '4'); // back in step
+    expect($('adjust-all').value).toBe('4');
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings.adjustMinutes).toEqual({ Fajr: 4, Dhuhr: 4, Asr: 4, Maghrib: 4, Isha: 4 });
+  });
+
+  it('"All prayers" shows the common value when the saved ones agree', async () => {
+    const state = adjustedState();
+    state.settings.adjustMinutes = { Fajr: -2, Dhuhr: -2, Asr: -2, Maghrib: -2, Isha: -2 };
+    await load({ state });
+    expect($('adjust-all').value).toBe('-2');
+    await load(); // none saved yet: all 0
+    expect($('adjust-all').value).toBe('0');
+  });
+
+  it('Save sends them with the other settings', async () => {
+    await load({ state: adjustedState() });
+    $('adjust-Fajr').value = '3';
+    $('adjust-Maghrib').value = '0';
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings.adjustMinutes).toEqual({ Fajr: 3, Dhuhr: 2, Asr: 0, Maghrib: 0, Isha: 0 });
+  });
+
+  it('marks an adjusted time in the list', async () => {
+    await load({ state: adjustedState() });
+    const marks = [...document.querySelectorAll('#list .row')].filter((r) => r.querySelector('.adj'));
+    expect(marks.map((r) => [r.querySelector('.pname').textContent, r.querySelector('.adj').textContent, r.querySelector('.adj').title])).toEqual([
+      ['Dhuhr', '+2', 'Adjusted by \u2066+2\u2069 min'],
+      ['Maghrib', '−1', 'Adjusted by \u2066−1\u2069 min'],
+    ]);
+    expect(document.querySelector('#list .row.p-dhuhr .ptime').textContent).toBe('01:07 PM+2');
+  });
+
+  it("the mark's tooltip is translated, and keeps the sign first in Arabic", async () => {
+    await load({ state: adjustedState(), initialStorage: { lang: 'ar' } });
+    const title = document.querySelector('#list .row.p-dhuhr .adj').title;
+    expect(title).toBe(cat('ar').adjusted_by.replace('{min}', '\u2066+2\u2069')); // isolated: "+2", not "2+"
+  });
+
+  it('the five selects form one group named by its heading and described by its help text', async () => {
+    await load({ state: adjustedState() });
+    const group = $('adjustRow');
+    expect(group.getAttribute('role')).toBe('group');
+    expect($(group.getAttribute('aria-labelledby')).textContent).toBe(EN.adjust_times);
+    expect($(group.getAttribute('aria-describedby')).textContent).toBe(EN.adjust_times_desc);
+    // Each select is named by the prayer its <label> wraps.
+    expect($('adjust-Maghrib').closest('label').textContent).toContain(EN.prayer_Maghrib);
+  });
+});

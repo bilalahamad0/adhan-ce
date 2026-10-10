@@ -113,8 +113,10 @@ export async function stageExtension(stageDir, { manifestName, stripServiceWorke
     if (manifestName) mf.name = manifestName;
     if (stripServiceWorker && mf.background) {
       delete mf.background.service_worker;
-      delete mf.background.type;
       mf.background.scripts = ['background.js'];
+      // background.js and lib/*.js are ES modules: as a classic script Gecko stops
+      // at the first `import` and the extension never runs (2.1.0–2.1.1).
+      mf.background.type = 'module';
     }
     if (stripBackgroundScripts && mf.background) delete mf.background.scripts;
     if (stripGecko) delete mf.browser_specific_settings;

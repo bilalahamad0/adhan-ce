@@ -293,6 +293,20 @@
                 </select>
               </label>
 
+              <!-- Per-prayer minute adjustment (±5) -->
+              <div class="set-row col" id="adjustRow" role="group" aria-labelledby="adjustTitle" aria-describedby="adjustDesc">
+                <span class="set-label" id="adjustTitle" data-i18n="adjust_times">Adjust prayer times (min)</span>
+                <span class="set-desc" id="adjustDesc" data-i18n="adjust_times_desc">Move each Adhan up to 5 minutes earlier or later to match your local mosque.</span>
+                <label class="adjust-all"><span data-i18n="adjust_all">All prayers</span><select id="adjust-all"></select></label>
+                <div class="adjust-grid">
+                  <label class="adjust-cell"><span data-i18n="prayer_Fajr">Fajr</span><select id="adjust-Fajr"></select></label>
+                  <label class="adjust-cell"><span data-i18n="prayer_Dhuhr">Dhuhr</span><select id="adjust-Dhuhr"></select></label>
+                  <label class="adjust-cell"><span data-i18n="prayer_Asr">Asr</span><select id="adjust-Asr"></select></label>
+                  <label class="adjust-cell"><span data-i18n="prayer_Maghrib">Maghrib</span><select id="adjust-Maghrib"></select></label>
+                  <label class="adjust-cell"><span data-i18n="prayer_Isha">Isha</span><select id="adjust-Isha"></select></label>
+                </div>
+              </div>
+
               <!-- Hijri adjustment -->
               <label class="set-row">
                 <span class="set-label" data-i18n="hijri_adjust">Hijri adjustment</span>

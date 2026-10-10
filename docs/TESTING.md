@@ -20,12 +20,14 @@ npm run pack                # runs the tests, then zips a clean build only if th
 | Suite | File | Covers |
 | :--- | :--- | :--- |
 | Unit | `tests/schedule.test.js` | `lib/schedule.js` — time parsing (AM/PM, midnight/noon, bad input), next-prayer selection incl. tomorrow-Fajr rollover, stale-fire guard, countdown formatting. |
+| Unit | `tests/location-time.test.js` | `lib/schedule.js` location time — Aladhan's iso8601 times and their UTC offsets, the location's clock / date / day rollover with the browser's tz data out of date (Morocco +00 since 2026-09-20, British Columbia / Alberta after 2026-11-01; simulated by `tests/helpers/stale-icu.js`) and up to date (a DST switch in the night). |
 | Unit | `tests/geocode.test.js` | `lib/geocode.js` — parsing Open-Meteo results (region/no-region, empty payloads) and the `searchPlaces` fetch wrapper (mocked). |
 | Unit | `tests/i18n.test.js` | `lib/i18n.js` pure helpers + locale-catalog integrity (every language has the English key set and the same `{placeholders}`). |
 | Unit | `tests/i18n.runtime.test.js` | `lib/i18n.js` runtime — catalog fetch/cache/merge, `initI18n` language resolution, `setLang` persistence (chrome + fetch mocked). |
 | Integration | `tests/background.test.js` | The MV3 service worker driven through its own listeners: install/seed/fetch, prayer fire, **stale (slept-through) fire**, fallback-pause idempotency, auto-resume + reconcile-after-reload, broadcast inject-then-retry, alarm arming, notification/command handlers, the full message router, and the dev-only test-Adhan gate. |
 | Integration | `tests/content.test.js` | The content script in jsdom: cross-tab pause/resume, the in-window vs. stale per-tab fallback, client-side auto-resume, countdown + full-screen focus overlays (Trusted-Types-safe build), scroll lock, and single-instance teardown on reload/takeover. |
-| Integration | `tests/popup.test.js` | The popup in jsdom: render from `GET_STATE`, location autocomplete + save validation, action buttons, language/RTL switching, and the dev-row/version build gate. |
+| Integration | `tests/popup.test.js` | The popup in jsdom: render from `GET_STATE`, location autocomplete + save validation, action buttons, language/RTL switching, the dev-row/version build gate, and the location clock/date with out-of-date tz data. |
+| Integration | `tests/welcome.test.js` | The onboarding page in jsdom: a searched or detected place is saved through the worker (so it fetches that place's schedule), translations and language switching. |
 | Platform | `tests/platform.test.js` | Cross-OS robustness: the macOS vs. default keyboard shortcut, DST-day scheduling (spring-forward/fall-back), date rollover, and OS-independent formatting. |
 | Qualification | `tests/manifest.test.js` | MV3, semver version, ≤132-char description, module SW exists, icons exist + are real PNGs, popup/content files exist, permission set has no scope creep, host permissions, command defined, no leftover `index.html`, popup links resolve, popup is an ES module. |
 
@@ -44,6 +46,8 @@ Load unpacked from `chrome://extensions` (Developer mode) and verify:
 - [ ] Location search returns real places ("City, Region, Country"); picking one resolves region + country and reloads the schedule.
 - [ ] Save is blocked unless a real geocoded place is selected (free-typed text is rejected).
 - [ ] Countdown in the popup ticks down each second.
+- [ ] Settings → **Adjust prayer times**: **All prayers** to +5 sets all five boxes (and shows "—" once one is changed on its own); set Dhuhr to +2 and Save — the list shows Dhuhr 2 minutes later with a `+2` mark, and the countdown/auto-pause follow it; set it back to 0 and the mark goes.
+- [ ] Pick **Casablanca, Morocco**: the popup clock reads GMT+0 (the real time in Morocco, not an hour ahead), the times match aladhan.com, and the next prayer fires at its listed time.
 
 ### Heads-up + pause flow (use **Run test Adhan (30s)** in dev)
 - [ ] Bottom-right heads-up notification appears within the lead window and counts down. **No Resume button on it.**

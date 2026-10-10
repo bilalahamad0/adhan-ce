@@ -1,10 +1,10 @@
 // Adhan Focus — popup UI logic.
 // A fixed-frame popup with three tabbed views (Home / Tracker / Settings) that
 // swap in place (the popup never resizes), an SVG analog clock that ticks in the
-// selected location's timezone, an Appearance control (System / Light / Dark), a
-// prayer-log Tracker (check-offs + streaks + a month heatmap), and on-device
-// Hijri dates. Pure helpers live in ./lib.
-import { formatCountdown, ymd, PRAYER_ORDER } from './lib/schedule.js';
+// selected location's time (see clockParts), an Appearance control (System /
+// Light / Dark), a prayer-log Tracker (check-offs + streaks + a month heatmap),
+// and on-device Hijri dates. Pure helpers live in ./lib.
+import { formatCountdown, ymd, PRAYER_ORDER, locationClock, prayerAdjustments, ADJUST_LIMIT_MIN } from './lib/schedule.js';
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { emptyUsage, recent, activeDays } from './lib/usage.js';
 import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
@@ -56,6 +56,48 @@ function populateMethods() {
     opt.textContent = m.name;
     sel.appendChild(opt);
   }
+}
+
+// Signed minutes as shown: "+2", "−1", "0".
+const signedMin = (n) => (n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0');
+
+// The per-prayer minute adjustment selects: -ADJUST_LIMIT_MIN … +ADJUST_LIMIT_MIN,
+// plus "All prayers", which sets the five at once. It shows their value while they
+// agree and "—" once they differ: each prayer keeps a single number, the one applied.
+const ADJUST_MIXED = '';
+function addAdjustOptions(sel) {
+  for (let n = -ADJUST_LIMIT_MIN; n <= ADJUST_LIMIT_MIN; n++) {
+    const opt = document.createElement('option');
+    opt.value = String(n);
+    opt.textContent = signedMin(n);
+    sel.appendChild(opt);
+  }
+}
+function syncAdjustAll() {
+  const all = $('adjust-all');
+  if (!all) return;
+  const values = PRAYER_ORDER.map((name) => $('adjust-' + name) && $('adjust-' + name).value);
+  all.value = values.every((v) => v === values[0]) ? values[0] : ADJUST_MIXED;
+}
+function populateAdjustments() {
+  for (const name of PRAYER_ORDER) {
+    const sel = $('adjust-' + name);
+    if (!sel || sel.options.length) continue;
+    addAdjustOptions(sel);
+    sel.addEventListener('change', syncAdjustAll);
+  }
+  const all = $('adjust-all');
+  if (!all || all.options.length) return;
+  const mixed = document.createElement('option');
+  mixed.value = ADJUST_MIXED;
+  mixed.textContent = '\u2014';
+  mixed.disabled = true; // shown when the five differ; not a choice
+  all.appendChild(mixed);
+  addAdjustOptions(all);
+  all.addEventListener('change', () => {
+    if (all.value === ADJUST_MIXED) return;
+    for (const name of PRAYER_ORDER) if ($('adjust-' + name)) $('adjust-' + name).value = all.value;
+  });
 }
 
 // ───────────────────────────── appearance / theme ─────────────────────────
@@ -327,34 +369,24 @@ function buildClockFace() {
   el.replaceChildren(svg, digital);
 }
 
-function clockParts(tz) {
-  const opts = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
-  if (tz) opts.timeZone = tz;
-  let parts;
-  try {
-    parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(new Date());
-  } catch (_) {
-    parts = new Intl.DateTimeFormat('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
-  }
-  const g = (type) => Number((parts.find((p) => p.type === type) || {}).value || 0);
-  return { h: g('hour') % 12, m: g('minute'), s: g('second') };
+// The location's wall clock comes from locationClock (Aladhan's UTC offsets when
+// this browser's tz data disagrees with them, e.g. Morocco's +00 read as +01), as
+// a Date whose UTC fields read it — so it is formatted in 'UTC', never in the zone.
+function clockParts(schedule) {
+  const d = locationClock(schedule);
+  return { h: d.getUTCHours() % 12, m: d.getUTCMinutes(), s: d.getUTCSeconds() };
 }
-function fmtDigital(tz, withSeconds) {
-  const opts = { hour: 'numeric', minute: '2-digit', hour12: true };
+function fmtDigital(schedule, withSeconds) {
+  const opts = { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' };
   if (withSeconds) opts.second = '2-digit';
-  if (tz) opts.timeZone = tz;
-  try {
-    return new Date().toLocaleTimeString('en-US', opts);
-  } catch (_) {
-    return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  }
+  return locationClock(schedule).toLocaleTimeString('en-US', opts);
 }
 
 function updateClock() {
-  const tz = st && st.schedule && st.schedule.tz;
+  const schedule = (st && st.schedule) || null;
   const digital = $('clock') && $('clock').classList.contains('is-digital');
 
-  const { h, m, s } = clockParts(tz);
+  const { h, m, s } = clockParts(schedule);
   const setHand = (id, deg) => {
     const el = $(id);
     if (el) el.setAttribute('transform', `rotate(${deg.toFixed(2)} 100 100)`);
@@ -366,7 +398,7 @@ function updateClock() {
   const dig = $('clockDigital');
   if (dig) {
     if (digital) {
-      const str = fmtDigital(tz, false);
+      const str = fmtDigital(schedule, false);
       const mt = str.match(/^(.*?)\s*([AP]M)$/i);
       if (mt) {
         dig.textContent = mt[1];
@@ -378,7 +410,7 @@ function updateClock() {
         dig.textContent = str;
       }
     } else {
-      dig.textContent = fmtDigital(tz, true);
+      dig.textContent = fmtDigital(schedule, true);
     }
   }
 }
@@ -463,6 +495,9 @@ function renderAll() {
   $('method').value = String(settings.method != null ? settings.method : 2);
   $('school').value = String(settings.school != null ? settings.school : 0);
   $('hijriOffset').value = String(settings.hijriOffset || 0);
+  const adjust = prayerAdjustments(settings.adjustMinutes);
+  for (const name of PRAYER_ORDER) if ($('adjust-' + name)) $('adjust-' + name).value = String(adjust[name]);
+  syncAdjustAll();
   $('badgeCountdown').checked = settings.badgeCountdown !== false;
   if ($('badgeMode')) $('badgeMode').value = settings.badgeMode === 'manual' ? 'manual' : 'auto';
   if ($('badgeManualHours')) $('badgeManualHours').value = String(settings.badgeManualHours || 2);
@@ -481,13 +516,12 @@ function renderAll() {
   $('leadSeconds').value = String(settings.leadSeconds || 30);
   $('locLabel').textContent = place ? place.label : '—';
 
-  // Header date (Gregorian) in the location's timezone. The Hijri date lives in
-  // the Tracker (not the header).
+  // Header date (Gregorian) at the location (see clockParts). The Hijri date lives
+  // in the Tracker (not the header).
   try {
-    const tz = schedule && schedule.tz;
     $('headDate').textContent = new Intl.DateTimeFormat(localeFor(), {
-      weekday: 'short', day: 'numeric', month: 'short', timeZone: tz || undefined,
-    }).format(new Date());
+      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+    }).format(locationClock(schedule || null));
   } catch (_) {}
 
   if (paused && paused.active) {
@@ -511,7 +545,9 @@ function renderAll() {
 
   $('updated').textContent =
     schedule && schedule.fetchedAt
-      ? t('updated', { time: new Date(schedule.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
+      ? t('updated', {
+          time: locationClock(schedule, schedule.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }),
+        })
       : '';
 }
 
@@ -568,7 +604,7 @@ function renderList() {
   const now = Date.now();
   const nextName = st.nextPrayer && st.nextPrayer.name;
 
-  const makeRow = (cls, icon, name, time, { tomorrow = false, prayer = null } = {}) => {
+  const makeRow = (cls, icon, name, time, { tomorrow = false, prayer = null, adjustMin = 0 } = {}) => {
     const row = document.createElement('div');
     row.className = 'row' + (cls ? ' ' + cls : '');
     row.appendChild(icon);
@@ -579,6 +615,15 @@ function renderList() {
     const pt = document.createElement('span');
     pt.className = 'ptime';
     pt.textContent = time;
+    if (adjustMin) {
+      // Moved by the user's adjustment (Settings): say so, as aladhan.com shows the time unmoved.
+      const adj = document.createElement('span');
+      adj.className = 'adj';
+      adj.textContent = signedMin(adjustMin);
+      // Isolated left-to-right, so an Arabic or Urdu sentence keeps "+2", not "2+".
+      adj.title = t('adjusted_by', { min: `\u2066${signedMin(adjustMin)}\u2069` });
+      pt.appendChild(adj);
+    }
     if (tomorrow) {
       const em = document.createElement('span');
       em.className = 'em';
@@ -607,7 +652,7 @@ function renderList() {
     const past = p.ts < now;
     const isNext = p.name === nextName;
     const cls = [past ? 'past' : '', isNext ? 'next' : '', 'p-' + p.name.toLowerCase()].filter(Boolean).join(' ');
-    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name });
+    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name, adjustMin: p.adjustMin });
     if (p.name === 'Fajr' && sched.sunrise) {
       makeRow('sunrise', ico(ICO_SUN), t('sunrise'), sched.sunrise.time, {});
     }
@@ -845,6 +890,7 @@ $('save').addEventListener('click', async () => {
     method: Number.isFinite(method) ? method : 2,
     school: parseInt($('school').value, 10) === 1 ? 1 : 0,
     hijriOffset: parseInt($('hijriOffset').value, 10) || 0,
+    adjustMinutes: Object.fromEntries(PRAYER_ORDER.map((name) => [name, parseInt($('adjust-' + name).value, 10) || 0])),
     badgeCountdown: $('badgeCountdown').checked,
     badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
     badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
@@ -1127,6 +1173,7 @@ async function start() {
   applyStaticI18n(document);
   $('lang').value = getLang();
   populateMethods();
+  populateAdjustments();
 
   // Reveal all views to the router (CSS .is-active controls visibility now).
   document.querySelectorAll('.view[hidden]').forEach((v) => v.removeAttribute('hidden'));
