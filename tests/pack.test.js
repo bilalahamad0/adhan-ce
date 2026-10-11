@@ -204,6 +204,8 @@ describe('per-target background entry point', () => {
       const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
       expect(ff.background.service_worker).toBeUndefined();
       expect(ff.background.scripts).toEqual(['background.js']); // Gecko still has an entry point
+      // ...loaded as the ES module it is: a classic script dies at the first `import`.
+      expect(ff.background.type).toBe('module');
       expect(cr.background.service_worker).toBe('background.js'); // Chrome untouched
       expect(cr.background.scripts).toBeUndefined();
     } finally {

@@ -23,6 +23,7 @@ and resolves locations via the free
 ## Features
 
 - **Next-prayer popup** — all five daily prayers with the next one highlighted and a live countdown.
+- **Per-prayer adjustment** — move any Adhan up to 5 minutes earlier or later (Settings → Adjust prayer times; **All prayers** sets the five at once) to match your local mosque; the time shown, the countdown, the notification and the auto-pause all follow, and an adjusted time is marked (e.g. `+2`) in the list.
 - **Prayer tracking** — check each prayer off as you pray (enabled only once its time has passed); a monthly calendar shows your history as a heat-map with a streak, navigable month to month. Stored on-device (`prayerLog`).
 - **In-page heads-up countdown** — a card pinned to the bottom-right of whatever tab you're looking at, appearing before the prayer (default **30s**, configurable 15/30/60). No Resume button here, so it never competes with the focus screen.
 - **Auto-pause across tabs** — at the exact prayer time, every playing `<video>`/`<audio>` (including same-/cross-origin iframes) is paused.
@@ -84,7 +85,7 @@ See [docs/TESTING.md](docs/TESTING.md) for the full pre-publish QA checklist.
 
 ### Notes & assumptions
 
-- Prayer times come back as `"hh:mm a"` strings and are parsed in the **browser's local timezone**, which is correct when your machine's timezone matches the chosen location.
+- Prayer times are requested from Aladhan with `iso8601=true`, so each one carries the location's UTC offset (e.g. `2026-10-10T12:17:00+00:00`), and its exact moment comes from that offset — never from the browser's own tz database, which can lag the real rules by months (Morocco moved to permanent GMT+0 on 2026-09-20; British Columbia and Alberta stop falling back from 2026-11-01). The popup clock and "today" follow the browser's tz data only while it agrees with Aladhan's offsets. Times show as `"hh:mm a"`, in the chosen location's time, whatever your machine's timezone.
 - `chrome.alarms` isn't second-accurate when the service worker is asleep, so `content.js` self-triggers the pause when its own countdown hits zero. Both paths are idempotent.
 - Restricted pages (`chrome://`, the Web Store, the PDF viewer) can't host content scripts, so media there isn't paused — a Chrome platform limitation.
 

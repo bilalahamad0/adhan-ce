@@ -350,7 +350,9 @@ body {
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  background: var(--glass-bg-strong);
+  /* Opaque (the glass tint at full alpha): see-through, the preview card's text
+     showed between the suggestions, like extra options. */
+  background: #122a2e;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   max-height: 180px;

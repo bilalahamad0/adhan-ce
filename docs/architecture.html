@@ -314,10 +314,11 @@
         <h3><span class="ic">💾</span> Storage schema <span style="font-size:11px;color:var(--muted);font-weight:500">chrome.storage.local</span></h3>
         <pre class="code"><span class="cm">// settings — user config, merged over DEFAULT_SETTINGS</span>
 { <span class="key">enabled</span>, <span class="key">country</span>, <span class="key">state</span>, <span class="key">city</span>, <span class="key">lat</span>, <span class="key">lon</span>,
-  <span class="key">autoResumeMinutes</span>:5, <span class="key">leadSeconds</span>:30, <span class="key">focusMode</span>:true }
+  <span class="key">autoResumeMinutes</span>:5, <span class="key">leadSeconds</span>:30, <span class="key">focusMode</span>:true,
+  <span class="key">adjustMinutes</span>:{Fajr:0,…,Isha:0} <span class="cm">// ±5 min per prayer</span> }
 
-<span class="cm">// schedule — today's prayers (parsed to local-tz timestamps)</span>
-{ <span class="key">date</span>:<span class="str">"YYYY-MM-DD"</span>, <span class="key">prayers</span>:[{name,time,ts}…], <span class="key">fetchedAt</span> }
+<span class="cm">// schedule — today's prayers (ts from each time's UTC offset)</span>
+{ <span class="key">date</span>:<span class="str">"YYYY-MM-DD"</span>, <span class="key">prayers</span>:[{name,time,ts,offsetMin}…], <span class="key">sunrise</span>, <span class="key">tz</span>, <span class="key">dayBefore</span>, <span class="key">fetchedAt</span> }
 
 <span class="cm">// nextPrayer — the one alarm is armed for  (test:true on dev fires)</span>
 { <span class="key">name</span>, <span class="key">time</span>, <span class="key">ts</span> }
@@ -423,7 +424,7 @@
   const INFO = {
     user:{tag:"actor",t:"You — the user",h:"Everything starts here. You open the toolbar popup to set a location and preferences, hit <b>Resume</b> during an Adhan, or press <code>Ctrl/⌘+Shift+Y</code> to toggle the prayer-focus screen."},
     popup:{tag:"UI · popup.js",t:"🪟 Popup UI",h:"The toolbar surface: next-prayer card with a live countdown, the full prayer list, a <b>Resume</b> button, and settings. Its location box queries <b>Open-Meteo directly</b> for real, geocoded places. Talks to the worker over <code>chrome.runtime</code> messages.",l:["GET_STATE → render","SAVE_SETTINGS → save + refetch","RESUME_NOW / FOCUS_NOW","TEST_ADHAN (dev only)"]},
-    adhanApi:{tag:"external",t:"🌐 AlAdhan API",h:"The public AlAdhan prayer-times API (<code>api.aladhan.com</code>). The worker fetches <code>/v1/timingsByCity?city&country&state&method&school</code> and reads back the day's timings (24h <code>\"HH:mm\"</code>), the location's IANA timezone, and Sunrise."},
+    adhanApi:{tag:"external",t:"🌐 AlAdhan API",h:"The public AlAdhan prayer-times API (<code>api.aladhan.com</code>). The worker fetches <code>/v1/timingsByCity?city&country&state&method&school&iso8601=true</code> and reads back the day's timings (<code>\"YYYY-MM-DDTHH:mm:ss±HH:MM\"</code>, each with the location's UTC offset), the location's IANA timezone, and Sunrise."},
     openMeteo:{tag:"external",t:"📍 Open-Meteo",h:"Free, keyless geocoding. As you type a city, the popup resolves it to real places with region (admin1), country and coordinates — so you can't save a location that isn't a real place.",l:["lib/geocode.js · searchPlaces()","parseGeoResults() → {city,state,country,lat,lon}"]},
     background:{tag:"core hub",t:"⚙️ Background Service Worker",h:"The brain (MV3 module worker, <code>background.js</code>). It fetches &amp; parses the schedule, arms <code>chrome.alarms</code>, and at prayer time records the central <code>paused</code> state, posts the notification, and <b>broadcasts the pause to every tab</b>. It also arms auto-resume and advances to the next prayer.",l:["fetchAndStoreSchedule / refreshNext","armAlarms · handlePrayerFire","broadcast() → all tabs","handleAutoResume · reconcilePaused"]},
     storage:{tag:"chrome API",t:"💾 chrome.storage.local",h:"The single source of truth shared by worker, popup and all content scripts. Four keys: <code>settings</code>, <code>schedule</code>, <code>nextPrayer</code>, <code>paused</code>. Content scripts subscribe to <code>onChanged</code> so a pause/resume in one place instantly syncs everywhere."},
@@ -444,7 +445,7 @@
      text:"On Save, the popup sends SAVE_SETTINGS to the background worker. The worker calls the adhan-api service for today's five prayer times for that location.",
      packets:[{e:"e_popup_bg",d:"fwd",l:"SAVE_SETTINGS",c:C.msg},{e:"e_bg_api",d:"fwd",l:"GET prayerTimes",c:C.api},{e:"e_bg_api",d:"rev",l:"5 prayer times",c:C.api}]},
     {phase:P1,title:"Persist &amp; arm the alarm",scene:"idle",nodes:["background","storage","alarms"],
-     text:"The worker parses each “hh:mm a” into a local-timezone timestamp, stores the schedule and the next prayer, then arms a chrome.alarms timer for the exact moment of the next Adhan — plus a 15-minute self-healing tick.",
+     text:"The worker turns each time into an exact timestamp using the UTC offset Aladhan sent with it (not the browser's own, possibly out-of-date, tz data), stores the schedule and the next prayer, then arms a chrome.alarms timer for the exact moment of the next Adhan — plus a 15-minute self-healing tick.",
      packets:[{e:"e_bg_storage",d:"fwd",l:"schedule + nextPrayer",c:C.store},{e:"e_bg_alarms",d:"fwd",l:"arm PRAYER @ next.ts",c:C.alarm},{e:"e_bg_alarms",d:"fwd",l:"TICK every 15m",c:C.alarm,delay:700}]},
 
     {phase:P2,title:"Heads-up countdown (T-30s)",scene:"countdown",nodes:["storage","tab1","tab2","tab3"],
