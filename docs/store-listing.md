@@ -63,7 +63,7 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ━━━━━━━━━━━━━━━━━━━━━━━━
 • No ads. No subscriptions. No account. No sign-in. Ever.
 • Zero analytics. Zero tracking. Zero data harvesting.
-• Everything stays on your device — the only thing that ever leaves is the city name needed to look up prayer times.
+• Your settings, prayer log and usage counts are stored on your device. The only things sent out are the place you choose (with your calculation method) and the place-search text you type, used to look up prayer times and find places. Only if you click "Detect location" is a request also sent to an IP-based location service, which sees your IP address.
 • Open source and built on the latest, most secure Manifest V3.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -71,7 +71,7 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Whatever has your attention, Adhan Focus quietly keeps watch and hands the moment back to you when it's time to stand before your Lord — then returns you to exactly where you were. Lightweight, distraction-free, and respectful of both your time and your privacy.
 
-Prayer times are powered by the trusted Aladhan service; city search by Open-Meteo.
+Prayer times are powered by the trusted Aladhan service; city search by Open-Meteo; the optional "Detect location" button uses BigDataCloud (falling back to ipapi.co).
 
 Made with care for the Ummah. We read every review and reply to feedback — tell us what would make your salah easier. 🤲
 ```
@@ -110,7 +110,7 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 
 | Permission | Justification to paste |
 |---|---|
-| `storage` | Saves your chosen location and preferences (lead time, auto-resume delay, focus mode) on your device via chrome.storage.local. No data leaves your device. |
+| `storage` | Saves your chosen location and preferences (lead time, auto-resume delay, focus mode) on your device via chrome.storage.local. The storage permission itself sends nothing anywhere. |
 | `alarms` | Schedules a reliable background timer so the countdown and the Adhan trigger fire at the exact prayer time even when the popup is closed. |
 | `notifications` | Shows a desktop notification when it's time to pray. |
 | `scripting` | Injects the content script that pauses media and renders the in-page heads-up countdown / focus screen on the page you're viewing. |
@@ -118,8 +118,8 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 | `host_permissions` (prayer-times API host) | Fetches the daily prayer-time schedule for your chosen city. |
 
 **Data-usage disclosures (check these honestly):**
-- ❌ Does NOT collect personally identifiable info, health, financial, authentication, personal communications, location (GPS), web history, or user activity.
-- ✅ The only network calls send the **city name / search text** to the prayer-times and geocoding services. Disclose this as "Website content → location query, to provide the core feature."
+- ❌ Does NOT collect personally identifiable info, health, financial, authentication, personal communications, web history, user activity, or website content.
+- ✅ Declare **Location** only, using the text in `docs/cws-privacy-disclosure.md` (do NOT declare "Website content"). Network calls send only: the chosen city/region/country with the calculation method and Asr school (and, on the post-install welcome page, the place's coordinates) to `api.aladhan.com`; typed search text to `geocoding-api.open-meteo.com`; and, only on "Detect location", a request with no extension data to `api.bigdatacloud.net` / `ipapi.co` (which see the IP address).
 - ✅ Certify: not sold to third parties; not used for unrelated purposes; not used for creditworthiness.
 - Link your privacy policy: `https://adhan.bilalahamad.com/privacy-policy.html`
 

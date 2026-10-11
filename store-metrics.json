@@ -96,7 +96,7 @@
     }
   },
   "telematics": {
-    "privacyPolicy": "Zero-remote-telemetry design. No user identifiable data, browsing history, or analytics ever leave the client.",
+    "privacyPolicy": "Zero-remote-telemetry design: no analytics, usage counters or browsing history leave the client. Only the chosen location and calculation settings go to api.aladhan.com (prayer times) and typed search text to geocoding-api.open-meteo.com; the optional Detect location button calls an IP-location service (api.bigdatacloud.net, fallback ipapi.co). No identifiers are attached.",
     "inAppCounters": {
       "storageType": "chrome.storage.local",
       "module": "lib/usage.js",

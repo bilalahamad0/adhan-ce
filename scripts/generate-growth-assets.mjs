@@ -144,8 +144,8 @@ async function main() {
     { src: 'screenshot-2.png', out: 'ph-gallery-2-autopause-1270x760.png', label: '2. Auto-Pause Background Tabs' },
     { src: 'screenshot-3.png', out: 'ph-gallery-3-focusmode-1270x760.png', label: '3. Fullscreen Prayer Focus' },
     { src: 'screenshot-4.png', out: 'ph-gallery-4-settings-1270x760.png', label: '4. Precision Adhan Audio & Config' },
-    { src: 'screenshot-5.png', out: 'ph-gallery-5-privacy-1270x760.png', label: '5. 100% Offline Zero-Telemetry' },
-    { src: 'screenshot-6.png', out: 'ph-gallery-6-multibrowser-1270x760.png', label: '6. Multi-Browser Ecosystem' },
+    { src: 'screenshot-5.png', out: 'ph-gallery-5-privacy-1270x760.png', label: '5. Six Languages & RTL' },
+    { src: 'screenshot-6.png', out: 'ph-gallery-6-multibrowser-1270x760.png', label: '6. Privacy: No Tracking, No Ads' },
   ];
 
   console.log('\n▶ Resampling Product Hunt Gallery Slides (1270x760)...');

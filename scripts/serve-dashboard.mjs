@@ -414,7 +414,7 @@ function getDashboardHtml() {
               <span>Upload Next Version ↗</span>
             </a>
             <a href="https://addons.opera.com/extensions/details/adhan-focus-muslim-prayer-times-auto-pause/" target="_blank" class="w-full text-center px-3 py-1.5 text-[11px] text-slate-500 hover:text-slate-300 transition flex items-center justify-center gap-1">
-              <span>Public Store Listing ↗</span>
+              <span>Public Listing (live once published) ↗</span>
             </a>
           </div>
         </div>

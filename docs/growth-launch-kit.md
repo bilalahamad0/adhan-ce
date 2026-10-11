@@ -40,12 +40,12 @@ Visual assets generated at: `docs/growth/` (or via `npm run growth:assets`).
 | `ph-gallery-2-autopause-1270x760.png` | 1270×760 | Multi-tab auto-pause feature showcase |
 | `ph-gallery-3-focusmode-1270x760.png` | 1270×760 | Fullscreen prayer focus overlay |
 | `ph-gallery-4-settings-1270x760.png` | 1270×760 | Precision calculation & custom chime settings |
-| `ph-gallery-5-privacy-1270x760.png` | 1270×760 | Zero telemetry / 100% offline privacy comparison |
-| `ph-gallery-6-multibrowser-1270x760.png` | 1270×760 | Chrome, Firefox (Desktop & Android), Edge, Opera |
+| `ph-gallery-5-privacy-1270x760.png` | 1270×760 | Six languages, with right-to-left support for Arabic and Urdu |
+| `ph-gallery-6-multibrowser-1270x760.png` | 1270×760 | Privacy card: no tracking, no ads, no account |
 
 ### Short Description (Punchy)
 ```markdown
-Adhan Focus automatically pauses background audio and video across every browser tab the moment the Adhan begins, guiding you to prayer on time without disruptions. 100% offline, zero tracking, open source. Available for Chrome, Firefox, and Edge.
+Adhan Focus automatically pauses background audio and video across every browser tab the moment the Adhan begins, guiding you to prayer on time without disruptions. No tracking, no analytics, open source. Available for Chrome, Firefox, and Edge.
 ```
 
 ### Full Description
@@ -58,7 +58,7 @@ Adhan Focus solves that by turning your browser into a prayer-conscious environm
 • ⏸️ Intelligent Multi-Tab Auto-Pause: Detects playing video/audio across all browser tabs and pauses them the second Adhan starts. Resume anytime with one click or let them resume after prayer.
 • 🕋 Accurate Calculation Methods: Supports ISNA, Muslim World League, Umm Al-Qura, Egyptian Authority, Karachi, Dubai, Qatar, and custom calculation angles.
 • 📱 Multi-Browser & Mobile Support: Certified for Google Chrome, Mozilla Firefox (Desktop & Android Mobile), and Microsoft Edge.
-• 🔒 100% Privacy-First & Offline: No accounts, no data brokers, no analytics, no remote servers. Your location and prayer times never leave your device.
+• 🔒 Privacy-First: No accounts, no analytics, no ads, no server of our own. Settings are stored on your device. Only the location you choose (with your calculation method) and the text you type in location search are sent, to look up prayer times and places. If you click "Detect location", an IP-based lookup service is also contacted.
 • ⚡ Ultra-Lightweight: Native Manifest V3, zero runtime dependencies, near-zero RAM/CPU footprint.
 
 Free and open-source forever (MIT License).
@@ -75,7 +75,7 @@ Existing desktop apps were bloated, required invasive accounts, or worse — sol
 I wanted something lightweight, respectful, and uncompromisingly private:
 1. It runs directly inside your browser where you spend your day.
 2. The moment Salah begins, it pauses media playing across your tabs and gently alerts you.
-3. Everything operates completely offline. No tracking, no user IDs, no servers.
+3. No tracking, no user IDs, no server of our own. The only network calls look up prayer times and places for your location, plus an optional IP-based "Detect location" lookup.
 
 Adhan Focus is 100% free and open source (MIT). It is live today on Chrome, Firefox (Desktop & Android), and Edge!
 
@@ -114,13 +114,12 @@ AlternativeTo is the #1 organic SEO directory for software alternatives. Getting
   - `Mozilla Firefox`
   - `Firefox for Android`
   - `Microsoft Edge`
-  - `Opera`
   - `Linux` (via browser)
   - `macOS` (via browser)
   - `Windows` (via browser)
 
 ### Feature Tags
-`Prayer Times` · `Adhan Notifications` · `Auto-pause Media` · `Tab Management` · `Open Source` · `Privacy Focused` · `No Ads` · `Offline Capable` · `Lightweight` · `Multi-platform` · `Islamic Tools`
+`Prayer Times` · `Adhan Notifications` · `Auto-pause Media` · `Tab Management` · `Open Source` · `Privacy Focused` · `No Ads` · `Lightweight` · `Multi-platform` · `Islamic Tools`
 
 ### Short Overview
 ```markdown
@@ -132,7 +131,7 @@ AlternativeTo allows you to specify which software Adhan Focus is an alternative
 
 #### 1. Muslim Pro (Top Target)
 - **Why Adhan Focus is the best alternative:**
-  - *Privacy Scandal Proof:* Muslim Pro was widely criticized for harvesting and selling user location telemetry. Adhan Focus is 100% offline with zero data transmission.
+  - *Privacy Scandal Proof:* Muslim Pro was widely criticized for harvesting and selling user location telemetry. Adhan Focus has no analytics or tracking and sells no data. Its only network calls fetch prayer times and places for your location, plus an optional IP-based "Detect location" lookup.
   - *No Subscriptions or Ads:* 100% free and open-source forever.
   - *Browser-Native:* No need to keep a heavy phone app or electron client open.
 
@@ -166,12 +165,12 @@ I built Adhan Focus to solve a recurring personal distraction: I’d be deep in 
 Existing software in this niche frequently suffers from intrusive ads, mandatory account creation, or aggressive telemetry. 
 
 Adhan Focus is built as a lightweight, privacy-first Manifest V3 WebExtension:
-• It calculates prayer times locally using astronomical algorithms (standard methods like ISNA, MWL, etc.).
+• It fetches prayer times for your chosen location from the public AlAdhan API (standard methods like ISNA, MWL, etc.).
 • The moment Salah begins, it sounds a chime and queries tabs via chrome.scripting to pause playing HTML5 video/audio elements.
 • When prayer ends, media can resume with one click or after a configurable delay.
-• Zero remote telemetry, zero analytics, zero external network calls after initial city geocoding.
+• Zero telemetry, zero analytics. Network calls are limited to the AlAdhan prayer-times API (fetched daily, on settings changes or Refresh, and re-checked shortly before each prayer), Open-Meteo place search while you type, and an optional IP-based location lookup.
 
-The project is MIT-licensed, written in vanilla JavaScript (no framework runtime overhead), and supports Chrome, Firefox (desktop & Android), Edge, and Opera.
+The project is MIT-licensed, written in vanilla JavaScript (no framework runtime overhead), and supports Chrome, Firefox (desktop & Android), and Edge.
 
 I’d welcome your feedback on code architecture, API design, or battery efficiency!
 
@@ -193,7 +192,7 @@ What it does:
 1. Shows all 5 prayer times with a live countdown in your toolbar.
 2. The moment the Adhan arrives, it automatically pauses any playing video or audio across all your open tabs (YouTube, Spotify, courses, etc.) and plays a gentle chime.
 3. Has an optional full-screen "Focus Mode" that nudges you to step away and pray.
-4. Privacy: 100% offline. No accounts, no ads, no trackers. Your location never leaves your machine.
+4. Privacy: No accounts, no ads, no trackers. Settings stay on your machine. Only the location you choose and your search text are sent, to look up prayer times and places, plus an IP lookup if you click "Detect location".
 
 It's free and open-source (MIT License) and works on Chrome, Firefox (Desktop & Android), and Edge.
 
