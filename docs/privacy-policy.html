@@ -73,7 +73,7 @@
         <div class="logo">🕌</div>
         <h1>Privacy Policy — Adhan Focus</h1>
         <p>Live prayer-time countdown with automatic cross-tab media pausing.</p>
-        <div class="updated">Last updated: October 7, 2026</div>
+        <div class="updated">Last updated: October 11, 2026</div>
       </div>
     </header>
 
@@ -82,15 +82,16 @@
         Adhan Focus is built to be privacy-friendly. It does <strong>not</strong> use analytics or
         trackers, does <strong>not</strong> require an account, and does <strong>not</strong> sell or share
         your data. Your settings stay on your own device. The only information sent off your device is the
-        location you choose (a city name) and the text you type into the location search — used solely to
-        look up prayer times and resolve places.
+        location you choose (a city name), the text you type into the location search and — only if you click
+        "Detect my location" — a request to an IP-based location service (which sees your IP address, as any
+        website does). It is used solely to look up prayer times and resolve places.
       </p>
 
       <h2>Who this applies to</h2>
       <p>
         This policy covers the <strong>Adhan Focus</strong> browser extension ("the extension"), listed as
         "Adhan Focus: Muslim Prayer Times &amp; Auto-Pause" on the Chrome Web Store, Firefox Add-ons, and Microsoft Edge
-        Add-ons. It is a standalone extension, and this single policy applies identically to the Chrome, Firefox and Microsoft Edge builds.
+        Add-ons, and packaged for Opera Add-ons. It is a standalone extension, and this single policy applies identically to the Chrome, Firefox, Microsoft Edge and Opera builds.
       </p>
 
       <h2>Information the extension uses</h2>
@@ -109,6 +110,11 @@
             <td>Location search text you type</td>
             <td>To find and resolve real places while you set your location.</td>
             <td>Sent to the Open-Meteo geocoding API as you type (see below); not otherwise stored.</td>
+          </tr>
+          <tr>
+            <td>Your approximate location, only if you click "Detect my location"</td>
+            <td>To fill in your city without typing it.</td>
+            <td>The request carries no data from the extension; the IP-location service (see below) sees your IP address and returns an approximate city and coordinates, which are stored locally as your chosen location.</td>
           </tr>
           <tr>
             <td>Your preferences (enable toggle, heads-up lead time, auto-resume delay, focus-mode toggle)</td>
@@ -133,7 +139,7 @@
       </p>
 
       <h2>Third-party services</h2>
-      <p>To do its job, the extension makes requests to two external services:</p>
+      <p>To do its job, the extension makes requests to the external services below. The first two are used for its core features; the last is used only if you click "Detect my location":</p>
       <ul>
         <li>
           <strong>Prayer-times API</strong> (<code>api.aladhan.com</code>, the public
@@ -148,6 +154,12 @@
           <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener">Open-Meteo terms &amp; privacy</a>)
           — receives the <em>text you type</em> in the location search to return matching places and their
           coordinates.
+        </li>
+        <li>
+          <strong>IP-based location services (optional)</strong>
+          (<code>api.bigdatacloud.net</code>, and <code>ipapi.co</code> if the first does not answer) — contacted
+          <em>only when you click "Detect my location"</em>. The extension sends no data of its own in this
+          request; the service sees your IP address and returns an approximate city and coordinates.
         </li>
       </ul>
       <p>
@@ -179,7 +191,7 @@
           <tr><td><code>alarms</code></td><td>Trigger the countdown and pause exactly at prayer time.</td></tr>
           <tr><td><code>notifications</code></td><td>Show the desktop notification when it's time to pray.</td></tr>
           <tr><td><code>scripting</code></td><td>Insert the pause/countdown logic into pages that are already open when you install or update.</td></tr>
-          <tr><td><code>tabs</code></td><td>Send the pause/resume signal to your open tabs.</td></tr>
+          <tr><td><code>offscreen</code></td><td>Play the prayer chime from a hidden background audio page. It loads no external content.</td></tr>
           <tr><td>Access to websites (<code>http://*/*</code>, <code>https://*/*</code>)</td><td>Required so media can be paused in <em>any</em> tab at prayer time — the extension's core feature.</td></tr>
         </tbody>
       </table>

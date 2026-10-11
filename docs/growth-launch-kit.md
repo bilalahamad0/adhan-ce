@@ -1,6 +1,8 @@
 # Adhan Focus: Product Hunt & AlternativeTo Growth Launch Kit
 
-> **Objective:** Solve the "0 reviews / cold start" problem by driving high-intent organic users from **Product Hunt** and **AlternativeTo** directly to the live browser stores (Chrome, Firefox Desktop & Android, Edge, and Opera).
+> **Objective:** Solve the "0 reviews / cold start" problem by driving high-intent organic users from **Product Hunt** and **AlternativeTo** directly to the live browser stores (Chrome, Firefox Desktop & Android, and Edge).
+>
+> **Opera:** still awaiting Opera moderation (package 306857); no public listing exists yet. Add Opera back to the copy below once its listing is live.
 
 ---
 
@@ -43,7 +45,7 @@ Visual assets generated at: `docs/growth/` (or via `npm run growth:assets`).
 
 ### Short Description (Punchy)
 ```markdown
-Adhan Focus automatically pauses background audio and video across every browser tab the moment the Adhan begins, guiding you to prayer on time without disruptions. 100% offline, zero tracking, open source. Available for Chrome, Firefox, Edge, and Opera.
+Adhan Focus automatically pauses background audio and video across every browser tab the moment the Adhan begins, guiding you to prayer on time without disruptions. 100% offline, zero tracking, open source. Available for Chrome, Firefox, and Edge.
 ```
 
 ### Full Description
@@ -55,7 +57,7 @@ Adhan Focus solves that by turning your browser into a prayer-conscious environm
 ✨ KEY FEATURES:
 • ⏸️ Intelligent Multi-Tab Auto-Pause: Detects playing video/audio across all browser tabs and pauses them the second Adhan starts. Resume anytime with one click or let them resume after prayer.
 • 🕋 Accurate Calculation Methods: Supports ISNA, Muslim World League, Umm Al-Qura, Egyptian Authority, Karachi, Dubai, Qatar, and custom calculation angles.
-• 📱 Multi-Browser & Mobile Support: Certified for Google Chrome, Mozilla Firefox (Desktop & Android Mobile), Microsoft Edge, and Opera Add-ons.
+• 📱 Multi-Browser & Mobile Support: Certified for Google Chrome, Mozilla Firefox (Desktop & Android Mobile), and Microsoft Edge.
 • 🔒 100% Privacy-First & Offline: No accounts, no data brokers, no analytics, no remote servers. Your location and prayer times never leave your device.
 • ⚡ Ultra-Lightweight: Native Manifest V3, zero runtime dependencies, near-zero RAM/CPU footprint.
 
@@ -75,7 +77,7 @@ I wanted something lightweight, respectful, and uncompromisingly private:
 2. The moment Salah begins, it pauses media playing across your tabs and gently alerts you.
 3. Everything operates completely offline. No tracking, no user IDs, no servers.
 
-Adhan Focus is 100% free and open source (MIT). It is live today on Chrome, Firefox (Desktop & Android), Edge, and Opera!
+Adhan Focus is 100% free and open source (MIT). It is live today on Chrome, Firefox (Desktop & Android), and Edge!
 
 I'd love your thoughts, feedback, and ideas on what features to build next. If it helps you pray on time, that is the best reward! 🤲
 ```
@@ -193,7 +195,7 @@ What it does:
 3. Has an optional full-screen "Focus Mode" that nudges you to step away and pray.
 4. Privacy: 100% offline. No accounts, no ads, no trackers. Your location never leaves your machine.
 
-It's free and open-source (MIT License) and works on Chrome, Firefox (Desktop & Android), Edge, and Opera.
+It's free and open-source (MIT License) and works on Chrome, Firefox (Desktop & Android), and Edge.
 
 You can try it here:
 • Chrome Web Store: https://chromewebstore.google.com/detail/adhan-focus-muslim-prayer/jfjknglldcdminelckmmfdbnlikiogia

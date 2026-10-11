@@ -74,7 +74,7 @@
     "opera": {
       "platform": "Opera Add-ons",
       "metrics": {
-        "status": "active",
+        "status": "in_moderation",
         "packageId": "306857",
         "addonId": "ihapdbcdjejganglngampmdkeehonimn",
         "slug": "adhan-focus-muslim-prayer-times-auto-pause",
@@ -89,8 +89,8 @@
         "developerPortalUrl": "https://addons.opera.com/developer/package/306857/?tab=general",
         "statsUrl": "https://addons.opera.com/developer/package/306857/?tab=stats",
         "versionsUrl": "https://addons.opera.com/developer/package/306857/?tab=versions",
-        "measurementType": "Opera Add-ons Public Catalog & Installs",
-        "note": "Live on Opera Add-ons"
+        "measurementType": "Opera Developer Portal Stats (Package 306857)",
+        "note": "Submitted & In Moderation (Package 306857). Track stats at: https://addons.opera.com/developer/package/306857/?tab=stats"
       },
       "notes": "Chromium MV3 package built via npm run pack:opera. Ready for moderation upload via https://addons.opera.com/developer/."
     }
