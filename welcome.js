@@ -231,16 +231,19 @@ function wireLocationSearch() {
     state.settings.lon = place.lon;
 
     // Fetch and preview real prayer times for this location
-    await fetchPreviewTimings(place.lat, place.lon, place.city, place.country);
+    await fetchPreviewTimings(place);
   }
 }
 
-// Geolocation ("Detect My Location") via IP lookup
+// "Detect location": an approximate place from the IP address (lib/geocode.js),
+// looked up only on this click. When none comes back, say so and point to search.
 function wireGeolocation() {
   const detectBtn = document.getElementById('detectLocBtn');
   const detectText = document.getElementById('detectText');
+  const detectMsg = document.getElementById('detectMsg');
   const input = document.getElementById('welcomeCity');
   if (!detectBtn) return;
+  let msgTimer = null;
 
   detectBtn.addEventListener('click', async () => {
     detectText.textContent = t('detecting_location') || 'Detecting…';
@@ -248,6 +251,11 @@ function wireGeolocation() {
 
     try {
       const place = await detectLocationByIp();
+      clearTimeout(msgTimer);
+      if (detectMsg) {
+        detectMsg.textContent = place ? '' : t('detect_location_failed');
+        if (!place) msgTimer = setTimeout(() => (detectMsg.textContent = ''), 5000);
+      }
       if (place) {
         state.settings.city = place.city;
         state.settings.state = place.state;
@@ -257,7 +265,7 @@ function wireGeolocation() {
         selectedPlace = place;
 
         if (input) input.value = place.label;
-        await fetchPreviewTimings(place.lat, place.lon, place.city, place.country);
+        await fetchPreviewTimings(place);
       }
     } catch (_) {
     } finally {
@@ -267,32 +275,38 @@ function wireGeolocation() {
   });
 }
 
-// Fetch preview timings for selected location
-async function fetchPreviewTimings(lat, lon, city, country) {
+// Preview today's times for the chosen place, asked for the way the worker asks
+// for the real schedule (background.js fetchSchedule: city, region and country
+// with the method and Asr school), so the place's coordinates never leave the
+// device. The card switches to the new place at once, blank until its times
+// arrive: a lookup AlAdhan can't answer leaves it blank rather than showing the
+// previous place's times, and an answer that lands after a newer choice is dropped.
+let previewSeq = 0;
+async function fetchPreviewTimings(place) {
+  const seq = ++previewSeq;
+  updatePrayerPreview(PREVIEW_PRAYERS.map((name) => ({ name, time: '--:--' })), place.city, place.country);
   try {
     const today = new Date();
     const d = String(today.getDate()).padStart(2, '0');
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const y = today.getFullYear();
-    const url = `https://api.aladhan.com/v1/timings/${d}-${m}-${y}?latitude=${lat}&longitude=${lon}&method=${state.settings.method || 2}`;
+    let url = `https://api.aladhan.com/v1/timingsByCity/${d}-${m}-${y}?city=${encodeURIComponent(place.city)}&country=${encodeURIComponent(
+      place.country || ''
+    )}&method=${state.settings.method ?? 2}&school=${state.settings.school ?? 0}`;
+    if (place.state) url += `&state=${encodeURIComponent(place.state)}`;
     const res = await fetch(url);
-    if (!res.ok) return;
+    if (seq !== previewSeq || !res.ok) return;
     const json = await res.json();
-    if (!json.data || !json.data.timings) return;
+    if (seq !== previewSeq || !json.data || !json.data.timings) return;
 
     const tms = json.data.timings;
-    const prayers = [
-      { name: 'Fajr', time: formatTo12(tms.Fajr) },
-      { name: 'Dhuhr', time: formatTo12(tms.Dhuhr) },
-      { name: 'Asr', time: formatTo12(tms.Asr) },
-      { name: 'Maghrib', time: formatTo12(tms.Maghrib) },
-      { name: 'Isha', time: formatTo12(tms.Isha) },
-    ];
-    updatePrayerPreview(prayers, city, country);
+    updatePrayerPreview(PREVIEW_PRAYERS.map((name) => ({ name, time: formatTo12(tms[name]) })), place.city, place.country);
   } catch (err) {
     console.warn('Preview fetch error:', err);
   }
 }
+
+const PREVIEW_PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
 function formatTo12(timeStr) {
   if (!timeStr) return '--:--';

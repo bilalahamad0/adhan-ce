@@ -95,43 +95,24 @@ describe('detectLocationByIp', () => {
     });
   });
 
-  it('falls back to ipapi.co if primary service fails', async () => {
-    global.fetch = async (url) => {
-      if (url.includes('bigdatacloud')) {
-        return { ok: false };
-      }
-      if (url.includes('ipapi.co')) {
-        return {
-          ok: true,
-          json: async () => ({
-            latitude: 51.5,
-            longitude: -0.12,
-            city: 'London',
-            region: 'England',
-            country_name: 'United Kingdom',
-          }),
-        };
-      }
-      return { ok: false };
-    };
-
-    const place = await detectLocationByIp();
-    expect(place).toEqual({
-      city: 'London',
-      state: 'England',
-      country: 'United Kingdom',
-      lat: 51.5,
-      lon: -0.12,
-      label: 'London, England, United Kingdom',
-    });
-  });
-
-  it('returns null safely without throwing if all services fail', async () => {
-    global.fetch = async () => {
+  // No second service: ipapi.co's free tier is not licensed for production use and
+  // bars keeping its answers past 24 hours (the detected place is saved). A failed
+  // or empty BigDataCloud answer must end in null, after that one request.
+  it.each([
+    ['cannot be reached', () => {
       throw new Error('Network offline');
+    }],
+    ['answers with an error', () => ({ ok: false })],
+    ['answers without a city', () => ({ ok: true, json: async () => ({ latitude: 51.5, longitude: -0.12, city: '', locality: '' }) })],
+    ['answers without coordinates', () => ({ ok: true, json: async () => ({ city: 'London', countryName: 'United Kingdom' }) })],
+  ])('returns null, asking no other service, when BigDataCloud %s', async (_, answer) => {
+    const calls = [];
+    global.fetch = async (url) => {
+      calls.push(String(url));
+      return answer();
     };
 
-    const place = await detectLocationByIp();
-    expect(place).toBeNull();
+    expect(await detectLocationByIp()).toBeNull();
+    expect(calls).toEqual(['https://api.bigdatacloud.net/data/reverse-geocode-client']);
   });
 });

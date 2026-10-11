@@ -76,15 +76,18 @@
 
           <!-- 2. Location Search -->
           <div class="loc-search-box">
-            <span class="step-sublabel" data-i18n="location">Location</span>
+            <label class="step-sublabel" for="welcomeCity" data-i18n="location">Location</label>
             <div class="loc-input-row">
               <input type="text" id="welcomeCity" class="loc-input" placeholder="Search your city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
-              <button type="button" id="detectLocBtn" class="btn-action-sm">
+              <button type="button" id="detectLocBtn" class="btn-action-sm" aria-describedby="detectHint">
                 <span aria-hidden="true">📍</span>
                 <span id="detectText" data-i18n="detect_location">Detect location</span>
               </button>
               <div id="welcomeSuggest" class="suggest-list" hidden></div>
             </div>
+            <p class="loc-note loc-msg" id="detectMsg" role="status" aria-live="polite"></p>
+            <p class="loc-note" id="detectHint" data-i18n="detect_location_hint">“Detect location” estimates your city from your IP address using a third-party service.</p>
+            <p class="loc-note geo-credit"><span data-i18n="geo_credit">Place search by</span> <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a> · <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>)</p>
           </div>
 
           <div class="prayer-preview-card" id="previewCard">
