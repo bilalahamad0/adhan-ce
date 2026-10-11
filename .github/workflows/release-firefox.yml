@@ -20,10 +20,10 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Tag or commit to build (defaults to current branch HEAD). Without `release` there is no release or AMO submission — the XPI is an artifact only.'
+        description: 'Tag, branch or full 40-character commit SHA to build (defaults to the commit the run starts on). Without `release` there is no release or AMO submission — the XPI is an artifact only.'
         required: false
       release:
-        description: 'Release to Firefox/AMO: tag this commit firefox-v<manifest version> and run the same steps as a tag push. Only for a commit on main.'
+        description: 'Release to Firefox/AMO: tag this commit firefox-v<manifest version> and run the same steps as a tag push. For main''s tip: run on main and leave `ref` empty.'
         type: boolean
         default: false
 
@@ -38,8 +38,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.ref }}
-          fetch-depth: 0 # a manual release checks the commit is on main
+          # Empty for a tag push or a run without `ref`: checkout then builds
+          # github.sha, the pushed or dispatched commit, on re-runs too.
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0 # a manual release checks the commit against main
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -51,9 +53,10 @@ jobs:
       # The manual path tags this commit firefox-v<manifest version> itself (later
       # in the job, once tests and the version check pass), for when a tag
       # cannot be pushed from where the release is started. Both paths then run
-      # the same steps. A manual release must build a commit on main, and if the
-      # tag already exists it must point at this commit (a re-run of the same
-      # release), never at another one.
+      # the same steps. A manual release must build main's tip (or a commit on
+      # main with the same workflow files), and if the tag already exists it
+      # must point at this commit (a re-run of the same release), never at
+      # another one.
       - name: Resolve release mode
         id: mode
         env:
@@ -78,10 +81,18 @@ jobs:
             if git fetch --quiet --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG" 2>/dev/null; then
               TAGGED="$(git rev-parse "refs/tags/$TAG^{commit}")"
               if [ "$TAGGED" != "$HEAD_SHA" ]; then
-                echo "::error::Tag $TAG already exists on $TAGGED, not on $HEAD_SHA. Version $VERSION was released from another commit: bump the version first."
+                echo "::error::Tag $TAG already exists on $TAGGED, not on $HEAD_SHA. Bump the version, or, if version $VERSION reached no store, delete the tag and run again."
                 exit 1
               fi
               CREATE=false
+            fi
+            # GitHub refuses a ref created with GITHUB_TOKEN on a commit whose
+            # workflow files differ from main's tip (that needs the workflows
+            # permission), so only main's tip, or a commit with its workflows,
+            # can be tagged here. Fail now rather than after the tests.
+            if [ "$CREATE" = true ] && ! git diff --quiet "$HEAD_SHA" origin/main -- .github/workflows; then
+              echo "::error::The .github/workflows of $HEAD_SHA differ from main's tip, where this job cannot create a tag. Release main's tip (run on main without \`ref\`), or push the tag $TAG yourself."
+              exit 1
             fi
             echo "release=true" >> "$GITHUB_OUTPUT"
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -151,6 +162,21 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+      # Before the AMO step, as Chrome and Edge do: AMO takes a version number
+      # once, so a re-run after a later failure stops at AMO and could never
+      # create the draft. A re-run after an AMO failure updates this draft.
+      - name: Create draft GitHub Release with XPI attached (release only)
+        if: steps.mode.outputs.release == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.ver.outputs.xpi_path }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          tag_name: ${{ steps.mode.outputs.tag }}
+          target_commitish: ${{ steps.mode.outputs.sha }}
+          name: ${{ steps.mode.outputs.tag }}
+
       # Sign + submit the staged tree to AMO (listed channel). web-ext reads the
       # API credentials from WEB_EXT_API_KEY / WEB_EXT_API_SECRET, so they never
       # appear on the command line. The extension ships unminified, so no
@@ -178,15 +204,3 @@ jobs:
             --artifacts-dir web-ext-artifacts \
             --approval-timeout 0
           echo "✓ Submitted to AMO for review."
-
-      - name: Create draft GitHub Release with XPI attached (release only)
-        if: steps.mode.outputs.release == 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          files: ${{ steps.ver.outputs.xpi_path }}
-          draft: true
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          tag_name: ${{ steps.mode.outputs.tag }}
-          target_commitish: ${{ steps.mode.outputs.sha }}
-          name: ${{ steps.mode.outputs.tag }}

@@ -24,13 +24,20 @@ Edge Add-ons.
 > push that carries more than three tags.
 
 > **Releasing without pushing a tag.** Each release workflow can also be run
-> manually (Actions → the workflow → **Run workflow** on `main`, or the
-> workflow-dispatch API) with **`release`** ticked. That run tags the commit
-> `<store>-v<manifest version>` itself, after the tests and version check pass,
-> then runs exactly the steps a tag push runs. It refuses a commit that is not
-> on `main`, or a version whose tag already points at another commit; a re-run
-> of the same release reuses its tag. Use it from somewhere that can start
-> workflows but not push tags.
+> manually (Actions → the workflow → **Run workflow** on `main` with `ref` left
+> empty, or the workflow-dispatch API) with **`release`** ticked. That run tags
+> the commit it started on `<store>-v<manifest version>` itself, after the tests
+> and version check pass, then runs exactly the steps a tag push runs. Use it
+> from somewhere that can start workflows but not push tags.
+>
+> - It releases `main`'s tip. GitHub refuses a tag created by the workflow's own
+>   token on a commit whose `.github/workflows` differ from `main`'s tip, so the
+>   run refuses such a commit up front. Don't merge workflow changes to `main`
+>   until all four runs are past their tag step.
+> - If the tag already exists, it must point at the same commit: a re-run of
+>   the same release reuses it. A tag on another commit stops the run. If that
+>   version reached no store, delete the tag and run again; otherwise bump the
+>   version.
 
 > **Verified CRX uploads is enabled** on the Chrome listing. Every CWS upload
 > must be a `.crx` signed with the project's verified-uploads private key. Plain
