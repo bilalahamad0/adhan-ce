@@ -19,6 +19,18 @@ Edge Add-ons.
 > purpose. This keeps one store's release from ever touching another. All stores
 > share one `manifest.json` version, so you can tag the same commit
 > `chrome-v2.1.0`, `firefox-v2.1.0`, `edge-v2.1.0`, and `opera-v2.1.0`.
+>
+> Push the tags **one per `git push`**: GitHub starts no workflow runs for a
+> push that carries more than three tags.
+
+> **Releasing without pushing a tag.** Each release workflow can also be run
+> manually (Actions → the workflow → **Run workflow** on `main`, or the
+> workflow-dispatch API) with **`release`** ticked. That run tags the commit
+> `<store>-v<manifest version>` itself, after the tests and version check pass,
+> then runs exactly the steps a tag push runs. It refuses a commit that is not
+> on `main`, or a version whose tag already points at another commit; a re-run
+> of the same release reuses its tag. Use it from somewhere that can start
+> workflows but not push tags.
 
 > **Verified CRX uploads is enabled** on the Chrome listing. Every CWS upload
 > must be a `.crx` signed with the project's verified-uploads private key. Plain

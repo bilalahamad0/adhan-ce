@@ -1,8 +1,10 @@
 name: Release (Firefox)
 
 # Builds and AMO-signs the Firefox XPI when a firefox-v*.*.* tag is pushed, and
-# attaches the XPI to a draft GitHub Release. Manual workflow_dispatch runs
-# produce the unsigned XPI as an artifact only (no release, no AMO submission).
+# attaches the XPI to a draft GitHub Release. A manual workflow_dispatch run with
+# `release` ticked does the same without a pushed tag: it tags the commit
+# firefox-v<manifest version> itself. Other manual runs produce the unsigned XPI
+# as an artifact only (no release, no AMO submission).
 #
 # Tag convention (see RELEASING.md): firefox-v* releases to Firefox/AMO;
 # chrome-v* releases to Chrome (release.yml). This workflow contains NO Chrome
@@ -18,11 +20,15 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Tag or commit to build (defaults to current branch HEAD). No release or AMO submission on manual dispatch — the XPI is an artifact only.'
+        description: 'Tag or commit to build (defaults to current branch HEAD). Without `release` there is no release or AMO submission — the XPI is an artifact only.'
         required: false
+      release:
+        description: 'Release to Firefox/AMO: tag this commit firefox-v<manifest version> and run the same steps as a tag push. Only for a commit on main.'
+        type: boolean
+        default: false
 
 permissions:
-  contents: write  # needed for the release step to create draft releases
+  contents: write  # needed for the release step to create draft releases (and a manual release's tag)
 
 jobs:
   release-firefox:
@@ -33,6 +39,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0 # a manual release checks the commit is on main
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -40,17 +47,62 @@ jobs:
           node-version: 20
           cache: npm
 
+      # A release is a firefox-v* tag push, or a manual run with `release` ticked.
+      # The manual path tags this commit firefox-v<manifest version> itself (later
+      # in the job, once tests and the version check pass), for when a tag
+      # cannot be pushed from where the release is started. Both paths then run
+      # the same steps. A manual release must build a commit on main, and if the
+      # tag already exists it must point at this commit (a re-run of the same
+      # release), never at another one.
+      - name: Resolve release mode
+        id: mode
+        env:
+          RELEASE_INPUT: ${{ inputs.release }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./manifest.json').version")"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [[ "$GITHUB_REF" == refs/tags/firefox-v* ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "create_tag=false" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$RELEASE_INPUT" = "true" ]; then
+            TAG="firefox-v$VERSION"
+            git fetch --quiet --no-tags origin main
+            if ! git merge-base --is-ancestor "$HEAD_SHA" origin/main; then
+              echo "::error::A release must build a commit on main; $HEAD_SHA is not on origin/main."
+              exit 1
+            fi
+            CREATE=true
+            if git fetch --quiet --no-tags origin "+refs/tags/$TAG:refs/tags/$TAG" 2>/dev/null; then
+              TAGGED="$(git rev-parse "refs/tags/$TAG^{commit}")"
+              if [ "$TAGGED" != "$HEAD_SHA" ]; then
+                echo "::error::Tag $TAG already exists on $TAGGED, not on $HEAD_SHA. Version $VERSION was released from another commit: bump the version first."
+                exit 1
+              fi
+              CREATE=false
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "create_tag=$CREATE" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
         run: npm ci
 
       - name: Run jest tests with coverage (enforces thresholds)
         run: npm run test:cov
 
-      - name: Verify tag matches manifest/package/lock versions (tag push only)
-        if: startsWith(github.ref, 'refs/tags/firefox-v')
+      - name: Verify tag matches manifest/package/lock versions (release only)
+        if: steps.mode.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.mode.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG_VERSION="${GITHUB_REF_NAME#firefox-v}"
+          TAG_VERSION="${TAG#firefox-v}"
           MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
@@ -64,6 +116,19 @@ jobs:
             exit 1
           fi
           echo "Tag ↔ manifest/package/lock all match: $TAG_VERSION"
+
+      # Manual release only: a tag push already has its tag. Pushed with the
+      # job's GITHUB_TOKEN, which starts no other workflow run, so the tag does
+      # not set off a second release of the same version.
+      - name: Create the release tag (manual release only)
+        if: steps.mode.outputs.create_tag == 'true'
+        env:
+          TAG: ${{ steps.mode.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git tag "$TAG" HEAD
+          git push origin "refs/tags/$TAG"
+          echo "Tagged $(git rev-parse --short HEAD) as $TAG"
 
       - name: Lint + build the Firefox XPI (addons-linter gate)
         id: ver
@@ -96,8 +161,8 @@ jobs:
       # AMO dashboard (to create the listing); web-ext sign then automates every
       # subsequent version. No-ops (job still succeeds) when the secrets are
       # unset — see .github/RELEASE_SETUP.md → "Automating AMO submission".
-      - name: AMO sign + submit for review (tag push only)
-        if: startsWith(github.ref, 'refs/tags/firefox-v')
+      - name: AMO sign + submit for review (release only)
+        if: steps.mode.outputs.release == 'true'
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -114,12 +179,14 @@ jobs:
             --approval-timeout 0
           echo "✓ Submitted to AMO for review."
 
-      - name: Create draft GitHub Release with XPI attached (tag push only)
-        if: startsWith(github.ref, 'refs/tags/firefox-v')
+      - name: Create draft GitHub Release with XPI attached (release only)
+        if: steps.mode.outputs.release == 'true'
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.ver.outputs.xpi_path }}
           draft: true
           generate_release_notes: true
           fail_on_unmatched_files: true
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.mode.outputs.tag }}
+          target_commitish: ${{ steps.mode.outputs.sha }}
+          name: ${{ steps.mode.outputs.tag }}
