@@ -1124,9 +1124,12 @@ function wireOnboarding() {
     try {
       const place = await detectLocationByIp();
       if (place) {
+        showDetectFailed('obDetectMsg', false);
         choosePlace(place);
         if ($('obCurrentLoc')) $('obCurrentLoc').textContent = place.label;
         $('save').click();
+      } else {
+        showDetectFailed('obDetectMsg');
       }
     } catch (_) {
     } finally {
@@ -1134,6 +1137,18 @@ function wireOnboarding() {
       if (btn) btn.disabled = false;
     }
   });
+}
+
+// "Detect location" found no place: say so beside the button that was clicked and
+// point to the search instead (cleared again after a few seconds, or by `show`
+// false once a later try succeeds).
+const detectMsgTimers = new Map();
+function showDetectFailed(id, show = true) {
+  const el = $(id);
+  if (!el) return;
+  clearTimeout(detectMsgTimers.get(id));
+  el.textContent = show ? t('detect_location_failed') : '';
+  if (show) detectMsgTimers.set(id, setTimeout(() => (el.textContent = ''), 5000));
 }
 
 function wireDetectLocation() {
@@ -1146,13 +1161,11 @@ function wireDetectLocation() {
     try {
       const place = await detectLocationByIp();
       if (place) {
+        showDetectFailed('detectMsg', false);
         choosePlace(place);
         $('save').click();
       } else {
-        if ($('saveMsg')) {
-          $('saveMsg').textContent = t('pick_location') || 'Please search for your city';
-          setTimeout(() => ($('saveMsg').textContent = ''), 3000);
-        }
+        showDetectFailed('detectMsg');
       }
     } catch (_) {
     } finally {

@@ -943,6 +943,21 @@ body {
 .ob-current-loc { font-size: 13px; font-weight: 750; color: var(--accent); }
 .ob-btn-detect { font-size: 11px; padding: 4px 10px; border-radius: var(--radius-pill); }
 .ob-tip { font-size: 10.5px; color: var(--faint); margin-top: 8px; }
+.ob-loc-box .ob-tip { margin: 0; text-align: center; color: var(--text); }
+.ob-detect-msg { color: var(--text-strong); font-weight: 650; }
+
+/* Notes under the location search: what Detect location does (shown before it is
+   clicked), its no-result message, and the place-search credit that
+   Open-Meteo's licence asks for next to its data. */
+.field-note { margin: 0; font-size: 11px; line-height: 1.4; color: var(--muted); }
+.field-note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.field-note a:hover { color: var(--accent); }
+.field-msg { color: var(--amber-text); font-size: 11.5px; font-weight: 650; }
+/* An empty status line takes no space but stays in the accessibility tree, so a
+   screen reader announces the message when it appears (display:none would not). */
+.field-msg:empty, .ob-detect-msg:empty {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
 
 .ob-pref-list { display: flex; flex-direction: column; gap: 7px; width: 100%; text-align: start; }
 .ob-pref-row {

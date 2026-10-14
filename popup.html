@@ -264,11 +264,13 @@
 
             <!-- 2. Prayer Calculation & Location Setup (Core Setup) -->
             <div class="set-group glass">
-              <!-- Location -->
-              <label class="set-row col field-stack">
+              <!-- Location. A <div>, not a <label>: a label wrapping the Detect button
+                   would forward any click on it (the heading, a suggestion) to that
+                   button and run the IP lookup unasked. -->
+              <div class="set-row col field-stack">
                 <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
-                  <span class="set-label" data-i18n="location">Location</span>
-                  <button type="button" id="detectLocBtn" class="btn-action-sm">
+                  <label class="set-label" for="city" data-i18n="location">Location</label>
+                  <button type="button" id="detectLocBtn" class="btn-action-sm" aria-describedby="detectHint">
                     <span aria-hidden="true">📍</span> <span id="detectText" data-i18n="detect_location">Detect location</span>
                   </button>
                 </div>
@@ -276,7 +278,10 @@
                   <input type="text" id="city" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
                   <div id="cityResults" class="suggest" hidden></div>
                 </span>
-              </label>
+                <p class="field-note field-msg" id="detectMsg" role="status" aria-live="polite"></p>
+                <p class="field-note" id="detectHint" data-i18n="detect_location_hint">“Detect location” estimates your city from your IP address using a third-party service.</p>
+                <p class="field-note geo-credit"><span data-i18n="geo_credit">Place search by</span> <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo.com</a> · <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>)</p>
+              </div>
 
               <!-- Calculation method -->
               <label class="set-row col">
@@ -414,7 +419,7 @@
               <div class="ob-perks">
                 <div class="ob-perk"><span class="ob-perk-ico" aria-hidden="true">⏸️</span><span>Auto-pauses YouTube, Netflix &amp; music</span></div>
                 <div class="ob-perk"><span class="ob-perk-ico" aria-hidden="true">🔔</span><span>Chime audio &amp; full-screen reminder</span></div>
-                <div class="ob-perk"><span class="ob-perk-ico" aria-hidden="true">🔒</span><span>Privacy-first: stays on your device</span></div>
+                <div class="ob-perk"><span class="ob-perk-ico" aria-hidden="true">🔒</span><span data-i18n="onboarding_perk_privacy">Privacy-first: no account, no tracking</span></div>
               </div>
             </div>
 
@@ -425,11 +430,13 @@
               <p class="ob-sub">Accurate prayer times calculated for your city.</p>
               <div class="ob-loc-box">
                 <div class="ob-current-loc" id="obCurrentLoc">Makkah, Saudi Arabia</div>
-                <button type="button" id="obDetectBtn" class="btn-ghost ob-btn-detect">
+                <button type="button" id="obDetectBtn" class="btn-ghost ob-btn-detect" aria-describedby="obDetectHint">
                   <span aria-hidden="true">📍</span> <span id="obDetectText" data-i18n="detect_location">Detect location</span>
                 </button>
+                <p class="ob-tip" id="obDetectHint" data-i18n="detect_location_hint">“Detect location” estimates your city from your IP address using a third-party service.</p>
+                <p class="ob-tip ob-detect-msg" id="obDetectMsg" role="status" aria-live="polite"></p>
               </div>
-              <p class="ob-tip">You can also search any city anytime in Settings.</p>
+              <p class="ob-tip" data-i18n="onboarding_search_tip">You can also search any city anytime in Settings.</p>
             </div>
 
             <!-- Slide 3: Focus & Sound -->

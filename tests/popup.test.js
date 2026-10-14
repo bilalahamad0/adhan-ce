@@ -527,6 +527,24 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
     expect(results.hidden).toBe(true);
   });
 
+  it('a full click on a suggestion picks it without running the IP lookup', async () => {
+    // The field used to sit in a <label> whose control was the Detect button, so
+    // the click that follows the mousedown was forwarded to it.
+    await load();
+    $('city').value = 'Lon';
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    const item = $('cityResults').children[0];
+    item.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    item.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    item.click();
+    await settle();
+    expect(globalThis.fetch.calls.some((u) => u.includes('bigdatacloud'))).toBe(false);
+    expect($('city').value).toBe('London, England, United Kingdom');
+    expect(chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS')).toHaveLength(0);
+  });
+
   it('does not search for fewer than two characters', async () => {
     await load();
     $('city').value = 'L';
@@ -862,6 +880,15 @@ describe('in-popup onboarding & tutorial', () => {
     $('obPrevBtn').click();
     expect($('obSlide1').classList.contains('is-active')).toBe(true);
   });
+
+  it('onboarding Detect location says so, and saves nothing, when no place is detected', async () => {
+    await load({ initialStorage: { onboardingCompleted: false }, fetchRoutes: [['reverse-geocode-client', { status: 500 }]] });
+    expect($('obDetectMsg').textContent).toBe('');
+    $('obDetectBtn').click();
+    await settle();
+    expect($('obDetectMsg').textContent).toBe(EN.detect_location_failed);
+    expect(chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS')).toHaveLength(0);
+  });
 });
 
 describe('detect location and clock keyboard shortcuts', () => {
@@ -875,17 +902,60 @@ describe('detect location and clock keyboard shortcuts', () => {
     expect($('locLabel').textContent).toContain('Sunnyvale');
   });
 
-  it('shows pick location error if detectLocationByIp returns no place', async () => {
-    await load({
-      fetchRoutes: [
-        ['reverse-geocode-client', { status: 500 }],
-        ['ipapi.co', { status: 500 }],
-      ],
-    });
-    const btn = $('detectLocBtn');
-    btn.click();
+  it('says so beside the button, and asks no other service, when no place is detected', async () => {
+    await load({ fetchRoutes: [['reverse-geocode-client', { status: 500 }]] });
+    const before = globalThis.fetch.calls.length;
+    $('detectLocBtn').click();
     await settle();
-    expect($('saveMsg').textContent).toBe(EN.pick_location || 'Please search for your city');
+    expect($('detectMsg').textContent).toBe(EN.detect_location_failed);
+    expect($('city').value).toBe('Sunnyvale, California, United States');
+    expect(globalThis.fetch.calls.slice(before)).toEqual(['https://api.bigdatacloud.net/data/reverse-geocode-client']);
+    expect(chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS')).toHaveLength(0);
+    jest.advanceTimersByTime(5000);
+    expect($('detectMsg').textContent).toBe('');
+  });
+
+  it.each([
+    ['detectLocBtn', 'detectMsg'],
+    ['obDetectBtn', 'obDetectMsg'],
+  ])('%s clears its no-place message once a later try finds a place', async (btn, msg) => {
+    let found = false;
+    const ip = { latitude: 37.36, longitude: -122.03, city: 'Sunnyvale', principalSubdivision: 'California', countryName: 'United States' };
+    await load({ initialStorage: { onboardingCompleted: false }, fetchRoutes: [['reverse-geocode-client', () => (found ? ip : { status: 500 })]] });
+    $(btn).click();
+    await settle();
+    expect($(msg).textContent).toBe(EN.detect_location_failed);
+    found = true;
+    $(btn).click();
+    await settle();
+    expect($(msg).textContent).toBe('');
+  });
+
+  it('runs the IP lookup only from the button, not from a click on the Location heading', async () => {
+    await load();
+    const heading = document.querySelector('[data-i18n="location"]');
+    expect(heading.closest('label')?.control).not.toBe($('detectLocBtn'));
+    heading.click();
+    await settle();
+    expect(globalThis.fetch.calls.some((u) => u.includes('bigdatacloud'))).toBe(false);
+    expect(chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS')).toHaveLength(0);
+  });
+
+  it.each(['en', 'ar'])('says what Detect location does before it is clicked, and credits the place search (%s)', async (lang) => {
+    const L = cat(lang);
+    await load({ initialStorage: { lang, onboardingCompleted: false } });
+    for (const id of ['detectLocBtn', 'obDetectBtn']) {
+      const hint = document.getElementById($(id).getAttribute('aria-describedby'));
+      expect(hint.textContent).toBe(L.detect_location_hint);
+      expect(hint.closest('[hidden]')).toBeNull();
+    }
+    for (const id of ['detectMsg', 'obDetectMsg']) expect($(id).getAttribute('role')).toBe('status');
+    expect(document.querySelector('.geo-credit [data-i18n="geo_credit"]').textContent).toBe(L.geo_credit);
+    const links = [...document.querySelectorAll('.geo-credit a')];
+    expect(links.map((a) => a.href)).toEqual(['https://open-meteo.com/', 'https://www.geonames.org/', 'https://creativecommons.org/licenses/by/4.0/']);
+    expect(links.every((a) => a.target === '_blank' && a.rel.includes('noopener'))).toBe(true);
+    expect(document.querySelector('.ob-perks').textContent).toContain(L.onboarding_perk_privacy);
+    expect(document.querySelector('.ob-perks').textContent).not.toMatch(/stays on your device/);
   });
 
   it('toggles clock style on Enter or Space keydown', async () => {

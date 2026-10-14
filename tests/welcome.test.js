@@ -142,6 +142,114 @@ describe('onboarding page', () => {
     expect(saves.map((m) => m.settings)).toEqual([expect.objectContaining({ city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco' })]);
   });
 
+  // The preview asks AlAdhan the way the worker will (by city, with the method and
+  // Asr school), so it shows the times the user then gets, and sends no coordinates.
+  it.each([
+    ['a searched place', () => pickCasablanca()],
+    ['a detected place', async () => {
+      document.getElementById('detectLocBtn').click();
+      await settle();
+    }],
+  ])('previews %s by city, without its coordinates', async (_, choose) => {
+    await load();
+    await choose();
+    const asked = globalThis.fetch.calls.filter((u) => u.includes('api.aladhan.com'));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain('/v1/timingsByCity/');
+    expect(asked[0]).toContain('city=Casablanca&country=Morocco&method=2&school=0&state=Casablanca-Settat');
+    expect(asked[0]).not.toMatch(/latitude|longitude/);
+    expect(document.getElementById('ppFajr').textContent).not.toBe('--:--');
+  });
+
+  it('previews with the stored method and Asr school, and no state when the place has none', async () => {
+    await load({ storage: { settings: { ...INSTALLED, method: 0, school: 1 } } });
+    globalThis.fetch = makeFetch([
+      ['reverse-geocode-client', { latitude: 1.29, longitude: 103.85, city: 'Singapore', principalSubdivision: '', countryName: 'Singapore' }],
+      ['api.aladhan.com', aladhanPayload({ meta: { timezone: 'Asia/Singapore' } })],
+    ]);
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    const [asked] = globalThis.fetch.calls.filter((u) => u.includes('api.aladhan.com'));
+    expect(asked).toMatch(/\?city=Singapore&country=Singapore&method=0&school=1$/);
+  });
+
+  it('switches the card to the newly chosen place at once, and drops a late answer for an earlier one', async () => {
+    await load();
+    let release;
+    const gate = new Promise((resolve) => (release = resolve));
+    globalThis.fetch = makeFetch([
+      [
+        'geocoding-api.open-meteo.com',
+        (url) => ({
+          results: [
+            url.includes('name=Rabat')
+              ? { name: 'Rabat', admin1: 'Rabat-Salé-Kénitra', country: 'Morocco', country_code: 'MA', latitude: 34.02, longitude: -6.84 }
+              : { name: 'Casablanca', admin1: 'Casablanca-Settat', country: 'Morocco', country_code: 'MA', latitude: 33.59, longitude: -7.62 },
+          ],
+        }),
+      ],
+      ['city=Casablanca', async () => (await gate, aladhanPayload({ meta: { timezone: 'Africa/Casablanca' } }))],
+      ['city=Rabat', { status: 503 }], // AlAdhan can't resolve the city
+    ]);
+    const pick = async (name) => {
+      const input = document.getElementById('welcomeCity');
+      input.value = name;
+      input.dispatchEvent(new Event('input'));
+      await jest.advanceTimersByTimeAsync(300);
+      await settle();
+      document.querySelector('#welcomeSuggest .suggest-item').click();
+      await settle();
+    };
+    await pick('Casablanca'); // its answer is held back
+    await pick('Rabat'); // its lookup fails
+    const card = () => [document.getElementById('previewCityLabel').textContent, document.getElementById('ppFajr').textContent];
+    expect(card()).toEqual(['Rabat, Morocco', '--:--']);
+    release();
+    await settle();
+    expect(card()).toEqual(['Rabat, Morocco', '--:--']);
+  });
+
+  it('clears the no-place message once a later Detect location finds one', async () => {
+    await load();
+    const working = globalThis.fetch;
+    globalThis.fetch = makeFetch([['reverse-geocode-client', { status: 500 }]]);
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    expect(document.getElementById('detectMsg').textContent).toBe(cat('en').detect_location_failed);
+    globalThis.fetch = working;
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    expect(document.getElementById('detectMsg').textContent).toBe('');
+    expect(document.getElementById('welcomeCity').value).toBe('Casablanca, Casablanca-Settat, Morocco');
+  });
+
+  it('Detect location says so when no place is detected, and asks no other service', async () => {
+    await load();
+    globalThis.fetch = makeFetch([['reverse-geocode-client', { status: 500 }]]);
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    expect(document.getElementById('detectMsg').textContent).toBe(cat('en').detect_location_failed);
+    expect(globalThis.fetch.calls).toEqual(['https://api.bigdatacloud.net/data/reverse-geocode-client']);
+    expect(document.getElementById('welcomeCity').value).toBe('');
+  });
+
+  it.each(['en', 'ar'])('says what Detect location does before it is clicked, and credits the place search (%s)', async (lang) => {
+    await load({ uiLang: lang });
+    const hint = document.getElementById(document.getElementById('detectLocBtn').getAttribute('aria-describedby'));
+    expect(hint.textContent).toBe(cat(lang).detect_location_hint);
+    expect(hint.closest('[hidden]')).toBeNull();
+    expect(document.getElementById('detectMsg').getAttribute('role')).toBe('status');
+    expect(document.querySelector('label[for="welcomeCity"]')).not.toBeNull();
+    expect(document.querySelector('.geo-credit [data-i18n="geo_credit"]').textContent).toBe(cat(lang).geo_credit);
+    const links = [...document.querySelectorAll('.geo-credit a')];
+    expect(links.map((a) => a.href)).toEqual([
+      'https://open-meteo.com/',
+      'https://www.geonames.org/',
+      'https://creativecommons.org/licenses/by/4.0/',
+    ]);
+    expect(links.every((a) => a.target === '_blank' && a.rel.includes('noopener'))).toBe(true);
+  });
+
   it('is translated, and switches language', async () => {
     await load();
     expect(warnSpy).not.toHaveBeenCalled();
