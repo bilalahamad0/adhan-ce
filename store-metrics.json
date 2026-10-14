@@ -74,7 +74,7 @@
     "opera": {
       "platform": "Opera Add-ons",
       "metrics": {
-        "status": "active",
+        "status": "in_moderation",
         "packageId": "306857",
         "addonId": "ihapdbcdjejganglngampmdkeehonimn",
         "slug": "adhan-focus-muslim-prayer-times-auto-pause",
@@ -89,14 +89,14 @@
         "developerPortalUrl": "https://addons.opera.com/developer/package/306857/?tab=general",
         "statsUrl": "https://addons.opera.com/developer/package/306857/?tab=stats",
         "versionsUrl": "https://addons.opera.com/developer/package/306857/?tab=versions",
-        "measurementType": "Opera Add-ons Public Catalog & Installs",
-        "note": "Live on Opera Add-ons"
+        "measurementType": "Opera Developer Portal Stats (Package 306857)",
+        "note": "Submitted & In Moderation (Package 306857). Track stats at: https://addons.opera.com/developer/package/306857/?tab=stats"
       },
       "notes": "Chromium MV3 package built via npm run pack:opera. Ready for moderation upload via https://addons.opera.com/developer/."
     }
   },
   "telematics": {
-    "privacyPolicy": "Zero-remote-telemetry design. No user identifiable data, browsing history, or analytics ever leave the client.",
+    "privacyPolicy": "Zero-remote-telemetry design: no analytics, usage counters or browsing history leave the client. Only the chosen location and calculation settings go to api.aladhan.com (prayer times) and typed search text to geocoding-api.open-meteo.com; the optional Detect location button calls an IP-location service (api.bigdatacloud.net, fallback ipapi.co). No identifiers are attached.",
     "inAppCounters": {
       "storageType": "chrome.storage.local",
       "module": "lib/usage.js",

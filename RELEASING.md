@@ -312,7 +312,7 @@ attaches it to a draft GitHub Release.
 2. Click **Upload an extension** (or select **Adhan Focus** if updating).
 3. Upload `adhan-focus-<version>-opera.zip` (from repo root or GitHub Release).
 4. Fill in / review extension metadata (reuse screenshots from `docs/store/`).
-5. Submit for moderation. Typical review turnaround is 1–3 business days.
+5. Submit for moderation. This listing has **auto-publishing** ticked (General tab): Opera publishes immediately only if its automatic analysis passes the package, otherwise the version waits in manual moderation, which has no published review time (2.1.0, uploaded 2026-09-21, was still pending on 2026-10-11). Watch the package's **Conversation** tab and your email (including spam) for moderator messages, and the **Submitted extensions** page for a rejection reason. A new upload does not replace an earlier pending one; each stays its own row on the Versions tab.
 
 ## Common upload errors
 

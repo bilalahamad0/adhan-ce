@@ -92,7 +92,8 @@ Build notes that might interest HN:
   cross-origin iframes.
 - Stale-fire guard ignores triggers >90s late (e.g. after the laptop sleeps).
 - No analytics, no account; settings live in chrome.storage.local. The only
-  network calls fetch prayer times for a city you pick.
+  network calls look up prayer times and places for the location you choose
+  (plus an optional IP-based "Detect location" lookup).
 
 Free + open source (MIT). Feedback welcome, especially on reliability edge cases.
 
@@ -110,7 +111,7 @@ https://github.com/bilalahamad0/adhan-ce
 Adhan Focus shows Muslim prayer times with a live countdown and automatically
 pauses video & audio in every Chrome tab the moment the Adhan begins — then
 resumes with one click or after a delay. Optional full-screen prayer focus.
-Free, open source, no ads, no tracking. Everything stays on your device.
+Free, open source, no ads, no tracking. Your settings stay on your device.
 ```
 - **Maker's first comment:**
 ```
@@ -129,7 +130,7 @@ Firefox/Edge build are next on my list.
 Asalamu alaikum 🌙 I made a free Chrome extension that automatically pauses
 whatever video or audio you're watching the moment the Adhan starts — so you
 don't miss salah while working or scrolling. It shows all five prayer times with
-a countdown too. No ads, no sign-in, nothing leaves your device.
+a countdown too. No ads, no sign-in, your settings stay on your device.
 
 Free here: https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=facebook
 
@@ -147,7 +148,7 @@ starts. 🧵
 before, and has an optional full-screen "prayer focus" screen. Resume with one
 click or let it auto-resume.
 
-3/ Privacy-first: no ads, no account, no analytics. Everything stays on your
+3/ Privacy-first: no ads, no account, no analytics. Your settings stay on your
 device. Open source, Manifest V3, zero runtime deps.
 
 4/ It's free. If it helps you pray on time, that's the whole reward 🤲
@@ -164,7 +165,7 @@ Asalamu alaikum,
 I built a free, open-source Chrome extension called Adhan Focus. When the Adhan
 starts, it automatically pauses any video or audio playing in the browser and
 shows the prayer times with a countdown — handy for anyone studying or working
-online. No ads, no sign-up, nothing leaves the device.
+online. No ads, no sign-up, your settings stay on your device.
 
 If you think your members would find it useful, I'd be grateful if you shared it:
 https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia

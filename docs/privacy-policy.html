@@ -73,24 +73,29 @@
         <div class="logo">🕌</div>
         <h1>Privacy Policy — Adhan Focus</h1>
         <p>Live prayer-time countdown with automatic cross-tab media pausing.</p>
-        <div class="updated">Last updated: October 7, 2026</div>
+        <div class="updated">Last updated: October 11, 2026</div>
       </div>
     </header>
 
     <div class="wrap">
       <p class="lead">
         Adhan Focus is built to be privacy-friendly. It does <strong>not</strong> use analytics or
-        trackers, does <strong>not</strong> require an account, and does <strong>not</strong> sell or share
-        your data. Your settings stay on your own device. The only information sent off your device is the
-        location you choose (a city name) and the text you type into the location search — used solely to
-        look up prayer times and resolve places.
+        trackers, does <strong>not</strong> require an account, and does <strong>not</strong> sell your data
+        or share it for advertising or marketing. Your settings are stored on your own device. The only information
+        sent off your device is: the location you choose (its city, region and country — and, on the welcome
+        page shown after installation, its coordinates), with your calculation method and Asr school, sent to a
+        prayer-times service; the text you type into
+        the location search, sent to a place-search service; and — only if you click "Detect location" — a
+        request to an IP-based location service (which sees your IP address, as any website does). It is used
+        solely to look up prayer times and resolve places.
       </p>
 
       <h2>Who this applies to</h2>
       <p>
         This policy covers the <strong>Adhan Focus</strong> browser extension ("the extension"), listed as
-        "Adhan Focus: Muslim Prayer Times &amp; Auto-Pause" on the Chrome Web Store, Firefox Add-ons, and Microsoft Edge
-        Add-ons. It is a standalone extension, and this single policy applies identically to the Chrome, Firefox and Microsoft Edge builds.
+        "Adhan Focus: Muslim Prayer Times &amp; Auto-Pause" on the Chrome Web Store and Microsoft Edge Add-ons and
+        under its earlier name, "Adhan Caster: Prayer Times", on Firefox Add-ons, and packaged for Opera Add-ons.
+        It is a standalone extension, and this single policy applies identically to the Chrome, Firefox, Microsoft Edge and Opera builds.
       </p>
 
       <h2>Information the extension uses</h2>
@@ -103,12 +108,17 @@
           <tr>
             <td>Your chosen location (city, region/state, country, and the coordinates of the place you pick)</td>
             <td>To fetch the correct daily prayer times and display them.</td>
-            <td>Stored locally on your device; the city/region/country are sent to the prayer-times API (see below).</td>
+            <td>Stored locally on your device. The city/region/country are sent to the prayer-times API; on the welcome page shown after installation, the place's coordinates are also sent to it, to preview that day's times (see below).</td>
           </tr>
           <tr>
             <td>Location search text you type</td>
             <td>To find and resolve real places while you set your location.</td>
             <td>Sent to the Open-Meteo geocoding API as you type (see below); not otherwise stored.</td>
+          </tr>
+          <tr>
+            <td>Your approximate location, only if you click "Detect location"</td>
+            <td>To fill in your city without typing it.</td>
+            <td>The request carries no data from the extension; the IP-location service (see below) sees your IP address and returns an approximate city and coordinates. These are saved locally as your chosen location and then used like a place you picked.</td>
           </tr>
           <tr>
             <td>Your preferences (enable toggle, heads-up lead time, auto-resume delay, focus-mode toggle)</td>
@@ -119,6 +129,11 @@
             <td>The fetched prayer schedule and current pause state</td>
             <td>To show the countdown and pause/resume media at prayer time.</td>
             <td>Stored locally on your device only.</td>
+          </tr>
+          <tr>
+            <td>Your prayer log (which prayers you marked as prayed, by date)</td>
+            <td>To show your prayer tracker, streaks and monthly calendar.</td>
+            <td>Stored locally on your device only; never transmitted.</td>
           </tr>
           <tr>
             <td>On-device usage counts (e.g. how many times media was auto-paused, prayer alerts shown, and active days)</td>
@@ -133,14 +148,17 @@
       </p>
 
       <h2>Third-party services</h2>
-      <p>To do its job, the extension makes requests to two external services:</p>
+      <p>To do its job, the extension makes requests to the external services below. The first two are used for its core features; the last is used only if you click "Detect location":</p>
       <ul>
         <li>
           <strong>Prayer-times API</strong> (<code>api.aladhan.com</code>, the public
           <a href="https://aladhan.com/prayer-times-api" target="_blank" rel="noopener">AlAdhan API</a>) —
           receives the <em>city, region/state, and country</em> you selected (plus your chosen calculation
-          method and Asr school) in order to return that location's prayer times. No personal identifiers
-          are sent.
+          method and Asr school) in order to return that location's prayer times — once a day, whenever you
+          change your location or calculation settings or press Refresh, and again shortly before each prayer to
+          catch any correction. On the welcome page shown after installation, it also receives the
+          <em>latitude and longitude</em> of the place you pick or detect (plus the
+          calculation method) to preview that day's times. The extension adds no identifiers of its own.
         </li>
         <li>
           <strong>Open-Meteo geocoding API</strong>
@@ -148,6 +166,16 @@
           <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener">Open-Meteo terms &amp; privacy</a>)
           — receives the <em>text you type</em> in the location search to return matching places and their
           coordinates.
+        </li>
+        <li>
+          <strong>IP-based location services (optional)</strong>
+          (<code>api.bigdatacloud.net</code>, see the
+          <a href="https://www.bigdatacloud.com/privacy-and-cookie-policy" target="_blank" rel="noopener">BigDataCloud privacy policy</a>;
+          and, only if that request fails or returns no usable location, <code>ipapi.co</code>, see the
+          <a href="https://ipapi.co/privacy/" target="_blank" rel="noopener">ipapi.co privacy policy</a>) — contacted
+          <em>only when you click "Detect location"</em>. The extension sends no data of its own in this
+          request; the service sees your IP address and returns an approximate city and coordinates. ipapi.co
+          states that it keeps these queries in its web-server logs for a limited time.
         </li>
       </ul>
       <p>
@@ -179,18 +207,18 @@
           <tr><td><code>alarms</code></td><td>Trigger the countdown and pause exactly at prayer time.</td></tr>
           <tr><td><code>notifications</code></td><td>Show the desktop notification when it's time to pray.</td></tr>
           <tr><td><code>scripting</code></td><td>Insert the pause/countdown logic into pages that are already open when you install or update.</td></tr>
-          <tr><td><code>tabs</code></td><td>Send the pause/resume signal to your open tabs.</td></tr>
+          <tr><td><code>offscreen</code></td><td>Chrome, Edge and Opera builds: play the prayer chime from a hidden background audio page. It loads no external content. (The Firefox build does not request this permission.)</td></tr>
           <tr><td>Access to websites (<code>http://*/*</code>, <code>https://*/*</code>)</td><td>Required so media can be paused in <em>any</em> tab at prayer time — the extension's core feature.</td></tr>
         </tbody>
       </table>
 
       <h2>Data retention and deletion</h2>
       <p>
-        All settings and schedule data live on your device. You can clear your saved location and preferences
-        at any time from the extension's settings, or remove everything by uninstalling the extension
-        (Chrome: <code>chrome://extensions</code>; Edge: <code>edge://extensions</code>; Firefox:
-        <code>about:addons</code>). The developer holds
-        no server-side copy of your data.
+        All settings, schedule data and your prayer log live on your device. You can change your saved location
+        and preferences at any time in the extension's settings and un-check any prayer in the tracker, or remove
+        everything by uninstalling the extension (Chrome: <code>chrome://extensions</code>; Edge:
+        <code>edge://extensions</code>; Opera: <code>opera://extensions</code>; Firefox:
+        <code>about:addons</code>). The developer holds no server-side copy of your data.
       </p>
 
       <h2>Children's privacy</h2>

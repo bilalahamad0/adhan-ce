@@ -386,7 +386,7 @@ function getDashboardHtml() {
                 </div>
                 <div class="flex justify-between items-center text-xs">
                   <span class="text-[var(--muted-foreground,#94a3b8)]">Status:</span>
-                  <span id="detailOperaStatus" class="text-amber-400 font-semibold">In Review / Auto-Publish</span>
+                  <span id="detailOperaStatus" class="text-amber-400 font-semibold">In Moderation</span>
                 </div>
                 <div class="flex justify-between items-center text-xs">
                   <span class="text-[var(--muted-foreground,#94a3b8)]">Store ID:</span>
@@ -400,7 +400,7 @@ function getDashboardHtml() {
 
               <div class="text-xs text-[var(--muted-foreground,#94a3b8)] space-y-1">
                 <p><strong class="text-white">Active Users &amp; Telematics:</strong> Monitored via Opera Developer Stats tab.</p>
-                <p><strong class="text-white">Auto-Publish:</strong> Opted in for automated static security analysis.</p>
+                <p><strong class="text-white">Auto-Publish:</strong> Opted in. Publishes at once only if the automatic analysis passes; otherwise manual moderation (check the Conversation tab).</p>
               </div>
             </div>
           </div>
@@ -411,10 +411,10 @@ function getDashboardHtml() {
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
             </a>
             <a href="https://addons.opera.com/developer/package/306857/?tab=versions" target="_blank" class="w-full text-center px-3 py-1.5 text-xs text-[var(--muted-foreground,#94a3b8)] hover:text-white transition flex items-center justify-center gap-1">
-              <span>Upload Next Version / Auto-Publish ↗</span>
+              <span>Upload Next Version ↗</span>
             </a>
             <a href="https://addons.opera.com/extensions/details/adhan-focus-muslim-prayer-times-auto-pause/" target="_blank" class="w-full text-center px-3 py-1.5 text-[11px] text-slate-500 hover:text-slate-300 transition flex items-center justify-center gap-1">
-              <span>Public Store Listing ↗</span>
+              <span>Public Listing (live once published) ↗</span>
             </a>
           </div>
         </div>
@@ -731,7 +731,7 @@ function getDashboardHtml() {
 
       if (data.platforms.opera) {
         if (document.getElementById('detailOperaStatus')) {
-          document.getElementById('detailOperaStatus').textContent = data.platforms.opera.metrics.status === 'active' ? 'Live in Store' : 'In Review / Auto-Publish';
+          document.getElementById('detailOperaStatus').textContent = data.platforms.opera.metrics.status === 'active' ? 'Live in Store' : 'In Moderation';
         }
         if (document.getElementById('detailOperaVersion')) {
           document.getElementById('detailOperaVersion').textContent = 'v' + (data.platforms.opera.metrics.version || '2.1.0');

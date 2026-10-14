@@ -6,8 +6,10 @@ the `permissions` / `host_permissions` in `manifest.json` on every submission.
 
 > **Core claim: no analytics.** This extension contains no analytics, advertising,
 > tracking, or fingerprinting code, and no third-party SDKs. It transmits no
-> telemetry: the only data that ever leaves the device is the user-chosen location /
-> search text sent to the two prayer-time APIs below. (It does keep a few simple
+> telemetry: the only data that ever leaves the device is the user's chosen location (with the
+> calculation method and Asr school) and search text, sent to the prayer-times API (`api.aladhan.com`) and the place-search API
+> (`geocoding-api.open-meteo.com`), plus, only when the user clicks "Detect location", an
+> IP-based location lookup (`api.bigdatacloud.net`, falling back to `ipapi.co`). (It does keep a few simple
 > usage counts — e.g. how many times media was auto-paused — but these live only in
 > `chrome.storage.local`, are shown only to the user in the popup, and are never
 > sent anywhere, so they are not "data collection" under CWS rules.) The GA4
@@ -26,12 +28,12 @@ the `permissions` / `host_permissions` in `manifest.json` on every submission.
 
 | Field in console | Paste this |
 |---|---|
-| `storage` | Persists the user's settings (location, calculation method, heads-up lead time, auto-resume delay, focus mode) and the fetched prayer schedule locally via `chrome.storage.local`. Nothing is sent to a server. |
+| `storage` | Persists the user's settings (location, calculation method, heads-up lead time, auto-resume delay, focus mode) and the fetched prayer schedule locally via `chrome.storage.local`. The storage permission itself sends nothing anywhere. |
 | `alarms` | Fires the countdown and triggers the media-pause precisely at each of the five daily prayer times, even when the popup is closed. |
 | `notifications` | Shows a desktop notification at prayer time so the user knows the Adhan has begun. |
 | `offscreen` | Plays the subtle Adhan chime audio notification from the background service worker using the Chrome MV3 Offscreen API. No DOM or external content is loaded. |
 | `scripting` | Injects the pause/resume logic into tabs that are already open at install/update time (newly opened tabs are covered by the declared content script). |
-| Host access (`http://*/*`, `https://*/*`) | Required so `<video>`/`<audio>` can be paused and resumed in **any** tab the user has open at prayer time — the cross-tab auto-pause that is the extension's single purpose. Page content is never read, stored, or transmitted. Also reaches `api.aladhan.com` (prayer times) and `geocoding-api.open-meteo.com` (place lookup). |
+| Host access (`http://*/*`, `https://*/*`) | Required so `<video>`/`<audio>` can be paused and resumed in **any** tab the user has open at prayer time — the cross-tab auto-pause that is the extension's single purpose. Page content is never read, stored, or transmitted. Also reaches `api.aladhan.com` (prayer times), `geocoding-api.open-meteo.com` (place lookup) and, only when the user clicks "Detect location", `api.bigdatacloud.net` / `ipapi.co` (approximate location from the IP address). |
 | Remote code | **No.** The extension executes no remotely-hosted code; every script ships inside the package. |
 
 ## Data usage — what to declare
@@ -50,19 +52,24 @@ Check **only** the data type that actually leaves the device:
 
 **Location — explanation to paste:**
 
-> The user chooses a location (city / region / country). That city/region/country
-> is sent to the public AlAdhan prayer-times API (`api.aladhan.com`) to retrieve
-> that location's daily prayer times, and the location-search text the user types
-> is sent to the Open-Meteo geocoding API (`geocoding-api.open-meteo.com`) to
-> resolve real places. The chosen location is stored only on the user's device
-> (`chrome.storage.local`). It is never stored on any server we control, never
-> linked to an identity, and never used for any purpose other than fetching prayer
-> times. As with any web request, those third-party APIs automatically receive
-> standard technical metadata (e.g. IP address); the extension attaches no
-> identifier of its own.
+> The user chooses a location (city / region / country) by searching or by clicking
+> "Detect location". That city/region/country is sent to the public AlAdhan
+> prayer-times API (`api.aladhan.com`) for its daily prayer times; on the welcome
+> page shown after install, the chosen place's latitude/longitude is also sent to
+> AlAdhan, to preview that day's times. The location-search text the user types is
+> sent to the Open-Meteo geocoding API (`geocoding-api.open-meteo.com`) to find
+> places. Only if the user clicks "Detect location", the extension requests an
+> approximate city and coordinates from an IP-based location service
+> (`api.bigdatacloud.net`, falling back to `ipapi.co`); the request carries no
+> extension data, and the service sees the user's IP address. The chosen location
+> is stored only on the user's device (`chrome.storage.local`), is never stored on
+> our servers or linked to an identity, and is used only for prayer times. The
+> extension attaches no identifier of its own to any request.
 
-> *Note:* "Location" is the location the user **types/picks**, not device GPS or
-> automatic geolocation. We declare it because the city is transmitted off-device.
+> *Note:* "Location" is the location the user types/picks, or the approximate city
+> returned by the optional IP-based "Detect location" button. The extension never
+> uses device GPS or the browser geolocation API. We declare it because the
+> location is transmitted off-device.
 
 > *On-device usage counts are NOT declared.* The extension keeps a few activity
 > counts (media auto-paused, prayer alerts, active days) in `chrome.storage.local`,
@@ -81,9 +88,10 @@ Check **only** the data type that actually leaves the device:
 > of any kind, and includes no third-party SDKs. It transmits no telemetry. It does
 > not collect browsing history, user activity, page content, cookies, or any
 > personally identifying information — which is why "Web history", "User activity",
-> and "Website content" are left unselected. The only off-device transmission is
-> the user-chosen location / search text sent to the two prayer-time APIs named in
-> the Location explanation. All local state — settings, schedule, prayer log, and a
+> and "Website content" are left unselected. The only off-device transmissions are
+> the user's chosen location and search text, sent to the prayer-times and
+> place-search APIs, and, only on a "Detect location" click, an IP-based location
+> lookup, all named in the Location explanation. All local state — settings, schedule, prayer log, and a
 > few on-device usage counts shown to the user in the popup — is held in
 > `chrome.storage.local` and never transmitted.
 
@@ -93,8 +101,9 @@ Check **only** the data type that actually leaves the device:
 
 `https://adhan.bilalahamad.com/privacy-policy.html` (source: `docs/privacy-policy.html`).
 
-> **Naming:** the manifest/store listing use the full title
-> "Adhan Focus: Muslim Prayer Times & Auto-Pause"; the privacy policy and
-> landing page use the short name "Adhan Focus" and reference the full listing
-> title once. The legacy "Adhan Caster" branding is preserved only in internal IDs
+> **Naming:** the manifest and the Chrome/Edge listings use the full title
+> "Adhan Focus: Muslim Prayer Times & Auto-Pause"; the Firefox (AMO) listing still
+> carries the earlier title "Adhan Caster: Prayer Times", which the privacy policy
+> names. The privacy policy and landing page otherwise use the short name "Adhan
+> Focus". Legacy "Adhan Caster" branding otherwise survives only in internal IDs
 > where required for compatibility (such as Firefox's immutable gecko.id).

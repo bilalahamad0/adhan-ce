@@ -131,9 +131,9 @@ async function main() {
       });
 
       if (res.ok) {
-        console.log('✅ Successfully submitted to Opera Developer Portal!');
-        console.log(`• Status: In moderation / Auto-review`);
-        console.log(`• Track review at: ${OPERA_GENERAL_URL}`);
+        console.log(`✅ Upload request accepted (HTTP ${res.status}). This does not confirm the version was queued.`);
+        console.log(`• Verify the new version and its status on the Versions tab: ${OPERA_VERSIONS_URL}`);
+        console.log(`• Moderator messages: ${OPERA_GENERAL_URL}`);
         return;
       } else {
         console.log(`⚠️ Direct session response: HTTP ${res.status}. Falling back to portal link.`);
@@ -150,7 +150,8 @@ async function main() {
   console.log(`   👉 ${OPERA_VERSIONS_URL}`);
   console.log('\n2. Drag & drop this verified file:');
   console.log(`   📁 ${zipPath}`);
-  console.log('\n3. Click "Submit changes" — auto-publishing is enabled for instant approval!');
+  console.log('\n3. Click "Submit changes". With auto-publishing ticked, Opera publishes immediately only if its automatic analysis passes;');
+  console.log('   otherwise the version waits in manual moderation (no published turnaround). Watch the Conversation tab and your email.');
   console.log('----------------------------------------------------------------');
 
   if (shouldOpen || process.argv.includes('--open')) {

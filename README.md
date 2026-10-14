@@ -10,13 +10,16 @@ media in every Chrome tab** at Adhan time — with an optional full-screen "pray
 focus" screen.
 
 It's a standalone browser extension — published on the Chrome Web Store,
-Firefox Add-ons, Microsoft Edge Add-ons, and Opera Add-ons from this one MV3 codebase. It
+Firefox Add-ons and Microsoft Edge Add-ons (an Opera Add-ons package is awaiting
+moderation) from this one MV3 codebase. It
 fetches prayer times directly from the
 public [AlAdhan API](https://aladhan.com/prayer-times-api) (`api.aladhan.com`)
 and resolves locations via the free
-[Open-Meteo](https://open-meteo.com/) geocoding API.
+[Open-Meteo](https://open-meteo.com/) geocoding API. The optional "Detect location"
+button estimates your city from your IP address via BigDataCloud (falling back to
+ipapi.co); see the [privacy policy](https://adhan.bilalahamad.com/privacy-policy.html).
 
-**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox (Desktop)](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[Firefox for Android](https://addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/)** &nbsp;·&nbsp; **[Edge](https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg)** &nbsp;·&nbsp; **[Opera](https://addons.opera.com/)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
+**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox (Desktop)](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[Firefox for Android](https://addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/)** &nbsp;·&nbsp; **[Edge](https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
 
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 

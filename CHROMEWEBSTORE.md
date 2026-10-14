@@ -35,7 +35,7 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ━━━━━━━━━━━━━━━━━━━━━━━━
 • No ads. No subscriptions. No account. No sign-in. Ever.
 • Zero analytics. Zero tracking. Zero data harvesting.
-• Everything stays on your device — the only thing that ever leaves is the city name needed to look up prayer times.
+• Your settings, prayer log and usage counts are stored on your device. The only things sent out are the place you choose (with your calculation method) and the place-search text you type, used to look up prayer times and find places. Only if you click "Detect location" is a request also sent to an IP-based location service, which sees your IP address.
 • Open source and built on the latest, most secure Manifest V3.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -43,7 +43,7 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Whatever has your attention, Adhan Focus quietly keeps watch and hands the moment back to you when it's time to stand before your Lord — then returns you to exactly where you were. Lightweight, distraction-free, and respectful of both your time and your privacy.
 
-Prayer times are powered by the trusted Aladhan service; city search by Open-Meteo.
+Prayer times are powered by the trusted Aladhan service; city search by Open-Meteo; the optional "Detect location" button uses BigDataCloud (falling back to ipapi.co).
 
 Made with care for the Ummah. We read every review and reply to feedback — tell us what would make your salah easier. 🤲
 
@@ -85,7 +85,7 @@ English
 
 | Permission | Type | Justification |
 |---|---|---|
-| `storage` | permissions | Persists user preferences (location, calculation method, heads-up lead time, auto-resume delay, focus mode) and cached prayer schedule locally via `chrome.storage.local`. No data leaves the device. |
+| `storage` | permissions | Persists user preferences (location, calculation method, heads-up lead time, auto-resume delay, focus mode) and cached prayer schedule locally via `chrome.storage.local`. The storage permission itself sends nothing anywhere. |
 | `alarms` | permissions | Schedules reliable background timers to calculate countdowns, update icon badge indicators, and trigger cross-tab media pause precisely at prayer times even when the popup is closed. |
 | `notifications` | permissions | Shows a desktop notification when prayer time begins so the user is alerted to the Adhan. |
 | `offscreen` | permissions | Plays an audible prayer notification chime (`audio/chime.mp3`) at prayer time via a background audio document, without requiring an active browser tab or user gesture. |
@@ -99,7 +99,7 @@ English
 
 ### Data Collection
 
-**Does the extension collect user data?** Yes (Location query only)
+**Does the extension collect user data?** Yes (location only: the user's chosen place, typed search text, and — only on a "Detect location" click — an approximate location from an IP lookup)
 
 | Data Type | Collected? | Transmitted Off-Device? | Purpose | Shared with Third Parties? |
 |---|---|---|---|---|
@@ -108,7 +108,7 @@ English
 | Financial info | No | No | N/A | No |
 | Authentication info | No | No | N/A | No |
 | Personal communications | No | No | N/A | No |
-| Location | Yes (City/Region) | Yes | Fetches prayer times from Aladhan API and city search from Open-Meteo | No (only sent to Aladhan/Open-Meteo for schedule lookup) |
+| Location | Yes (city/region/country; coordinates on the post-install welcome page; optional IP-based detection) | Yes | Prayer times from AlAdhan; place search from Open-Meteo; optional "Detect location" via BigDataCloud (fallback ipapi.co) | Only to those services, solely to provide the feature; never sold |
 | Web history | No | No | N/A | No |
 | User activity | No | No | Stays local on device (`chrome.storage.local`) | No |
 | Website content | No | No | N/A | No |

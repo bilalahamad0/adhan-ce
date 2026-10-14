@@ -64,8 +64,8 @@ The extension is deliberately small and framework-free. Four moving parts:
 | `popup.*` | Prayer list, live countdown, Resume, the location search, and settings. |
 | `lib/schedule.js`, `lib/geocode.js` | Pure, dependency-free helpers (time parsing, next-prayer selection, formatting, geocoding) — the unit-tested core. |
 
-Prayer times come from [**adhan-api**](https://github.com/bilalahamad0/adhan-api), a
-small companion service I run on Vercel, and locations resolve through the free,
+Prayer times come from the public [AlAdhan API](https://aladhan.com/prayer-times-api)
+(`api.aladhan.com`), and locations resolve through the free,
 keyless [Open-Meteo](https://open-meteo.com/) geocoding API. The extension itself
 carries no API keys and no third-party SDKs.
 
@@ -136,8 +136,9 @@ permission. So the data story is deliberately boring:
 
 - **No analytics, no tracking, no account, no cookies.**
 - Settings and the schedule live only in `chrome.storage.local` on your device.
-- The only data that leaves the browser is the **city you choose** (to fetch prayer
-  times) and the **text you type** into the location search (to resolve places).
+- The only data that leaves the browser is the **place you choose** (to fetch prayer
+  times), the **text you type** into the location search (to resolve places) and —
+  only if you click "Detect location" — an IP-based location lookup.
 - The content script touches a page solely to find `<video>`/`<audio>` elements —
   it never reads or transmits page content.
 
@@ -161,15 +162,15 @@ hand-recorded.
 ## Tech stack
 
 **Vanilla JavaScript (ES modules), Manifest V3, Shadow DOM, Chrome Extension APIs
-(alarms · storage · notifications · scripting · tabs), Jest, Open-Meteo geocoding,
-and a small Vercel-hosted API.** No frameworks, no bundler, no runtime
+(alarms · storage · notifications · scripting · offscreen), Jest, Open-Meteo geocoding,
+and the public AlAdhan API.** No frameworks, no bundler, no runtime
 dependencies.
 
 ## Try it
 
 - **Extension source:** [github.com/bilalahamad0/adhan-ce](https://github.com/bilalahamad0/adhan-ce)
   — clone it, then *Load unpacked* from `chrome://extensions` (Developer mode).
-- **Prayer-times API:** [github.com/bilalahamad0/adhan-api](https://github.com/bilalahamad0/adhan-api)
+- **Prayer-times API:** [AlAdhan API](https://aladhan.com/prayer-times-api)
 - **Chrome Web Store:** in review — link coming on approval.
 
 ## What's next

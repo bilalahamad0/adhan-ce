@@ -224,8 +224,15 @@ export async function fetchOpera() {
   let rating = 0;
 
   try {
-    const html = await fetchHttp(OPERA_STORE_URL);
-    if (html && !html.includes('404') && !html.includes('Page not found') && !html.includes('We can’t find')) {
+    // fetchHttp returns the body of a 404 too, and Opera's 404 is a bare "could not be found" span.
+    let html = null;
+    try {
+      const res = await fetch(OPERA_STORE_URL);
+      if (res.ok) html = await res.text();
+    } catch (_) {
+      html = execSync(`curl -sfL --max-time 10 "${OPERA_STORE_URL}"`, { encoding: 'utf8' });
+    }
+    if (html && !html.includes('could not be found')) {
       isLive = true;
       const userMatch = html.match(/([\d,]+)\s*(?:downloads|users|installs)/i);
       if (userMatch) publicUsers = parseInt(userMatch[1].replace(/,/g, ''), 10) || 0;
@@ -335,7 +342,7 @@ export async function fetchConsolidatedMetrics(options = {}) {
       }
     },
     telematics: {
-      privacyPolicy: 'Zero-remote-telemetry design. No user identifiable data, browsing history, or analytics ever leave the client.',
+      privacyPolicy: 'Zero-remote-telemetry design: no analytics, usage counters or browsing history leave the client. Only the chosen location and calculation settings go to api.aladhan.com (prayer times) and typed search text to geocoding-api.open-meteo.com; the optional Detect location button calls an IP-location service (api.bigdatacloud.net, fallback ipapi.co). No identifiers are attached.',
       inAppCounters: {
         storageType: 'chrome.storage.local',
         module: 'lib/usage.js',
