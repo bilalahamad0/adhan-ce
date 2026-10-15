@@ -24,7 +24,7 @@ const settle = async () => {
   for (let i = 0; i < 25; i++) await Promise.resolve();
 };
 
-async function load({ send, uiLang, storage = {} } = {}) {
+async function load({ send, uiLang, storage = {}, routes = [] } = {}) {
   document.body.innerHTML = BODY;
   document.documentElement.lang = 'en';
   document.documentElement.dir = '';
@@ -32,6 +32,7 @@ async function load({ send, uiLang, storage = {} } = {}) {
   chrome = makeChrome({ initialStorage: { settings: INSTALLED, ...storage }, uiLang, handleSendMessage: send || (() => ({ ok: true })) });
   globalThis.chrome = chrome;
   globalThis.fetch = makeFetch([
+    ...routes,
     ['locales/', (url) => cat(url.match(/locales\/(\w+)\.json/)[1])],
     [
       'geocoding-api.open-meteo.com',
@@ -187,5 +188,73 @@ describe('onboarding page', () => {
     document.querySelector('.lang-chip[data-lang="en"]').click();
     await settle();
     expect(document.documentElement.dir).toBe('ltr');
+  });
+});
+
+// In Arabic the search asks for Arabic names (an Arabic query found nothing in
+// English); the place is still saved under its English names, which Aladhan is
+// asked by, with the label as shown kept for display.
+describe('onboarding search in the page language', () => {
+  const AR_FOUND = {
+    results: [{ id: 2553604, name: 'الدار البيضاء', admin1: 'الدار البيضاء - سطات', country: 'المغرب', country_code: 'MA', latitude: 33.59, longitude: -7.62 }],
+  };
+  const AR_LABEL = 'الدار البيضاء, الدار البيضاء - سطات, المغرب';
+  const CASABLANCA_EN = { id: 2553604, name: 'Casablanca', admin1: 'Casablanca-Settat', country: 'Morocco', country_code: 'MA', latitude: 33.59, longitude: -7.62 };
+  const pickArabic = async () => {
+    const input = document.getElementById('welcomeCity');
+    input.value = 'الدار البيضاء';
+    input.dispatchEvent(new Event('input'));
+    await jest.advanceTimersByTimeAsync(300);
+    await settle();
+    const item = document.querySelector('#welcomeSuggest .suggest-item');
+    expect(item.textContent).toBe(AR_LABEL);
+    item.click();
+    await settle();
+  };
+  const finish = async () => {
+    document.getElementById('finishBtn').click();
+    await settle();
+    return chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').map((m) => m.settings);
+  };
+
+  it('shows Arabic names, and saves the English ones with the label as shown', async () => {
+    await load({ uiLang: 'ar', routes: [['/v1/get?', CASABLANCA_EN], ['language=ar', AR_FOUND]] });
+    expect(document.getElementById('welcomeCity').getAttribute('dir')).toBe('auto');
+    await pickArabic();
+    expect(globalThis.fetch.calls.find((u) => u.includes('/v1/search'))).toContain('&language=ar&');
+    expect(document.getElementById('previewCityLabel').textContent).toBe('الدار البيضاء, المغرب');
+    const [saved] = await finish();
+    expect(saved).toMatchObject({ city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.62 });
+    expect(saved.placeLabel).toEqual({ lang: 'ar', text: AR_LABEL });
+    jest.advanceTimersByTime(400); // the success view
+    expect(document.getElementById('completionCity').textContent).toBe('الدار البيضاء');
+  });
+
+  it('Finish waits for the English names', async () => {
+    let answer;
+    const later = new Promise((resolve) => (answer = resolve));
+    await load({ uiLang: 'ar', routes: [['/v1/get?', () => later], ['language=ar', AR_FOUND]] });
+    await pickArabic();
+    expect(await finish()).toEqual([]);
+    answer(CASABLANCA_EN);
+    await settle();
+    const saves = chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').map((m) => m.settings);
+    expect(saves).toEqual([expect.objectContaining({ city: 'Casablanca', country: 'Morocco' })]);
+  });
+
+  it('keeps the names as found when the English ones cannot be had', async () => {
+    await load({ uiLang: 'ar', routes: [['/v1/get?', { status: 503 }], ['language=ar', AR_FOUND]] });
+    await pickArabic();
+    const [saved] = await finish();
+    expect(saved).toMatchObject({ city: 'الدار البيضاء', country: 'المغرب', placeLabel: null });
+  });
+
+  it('a place detected after the pick drops its label', async () => {
+    await load({ uiLang: 'ar', routes: [['/v1/get?', CASABLANCA_EN], ['language=ar', AR_FOUND]] });
+    await pickArabic();
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    const [saved] = await finish();
+    expect(saved).toMatchObject({ city: 'Casablanca', country: 'Morocco', placeLabel: null });
   });
 });

@@ -1,10 +1,13 @@
 // Adhan Focus — Welcome & Onboarding Controller
-import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
-import { initI18n, setLang, applyDir, t as translate } from './lib/i18n.js';
+import { searchPlaces, placeToSave, detectLocationByIp } from './lib/geocode.js';
+import { initI18n, setLang, applyDir, getLang, t as translate } from './lib/i18n.js';
 
 let t = (k) => k;
 let currentStep = 1;
 let selectedPlace = null;
+// The picked place as the settings store it (see placeToSave), once known: Finish
+// waits for it.
+let placeSaved = Promise.resolve();
 let simTimer = null;
 // Until onboarding is done, the stored city is the install default (Sunnyvale), not
 // the user's: the location field starts empty and no default-city preview is shown.
@@ -185,7 +188,7 @@ function wireLocationSearch() {
 
     debounceTimer = setTimeout(async () => {
       try {
-        const places = await searchPlaces(query);
+        const places = await searchPlaces(query, { lang: getLang() || 'en' });
         renderSuggestions(places);
       } catch (_) {
         suggest.hidden = true;
@@ -229,6 +232,14 @@ function wireLocationSearch() {
     state.settings.country = place.country || '';
     state.settings.lat = place.lat;
     state.settings.lon = place.lon;
+    state.settings.placeLabel = null;
+    // Its English names replace the ones found, unless a later choice came first.
+    // Should they not come (offline), the names as found are kept.
+    placeSaved = placeToSave(place)
+      .then((saved) => {
+        if (selectedPlace === place) Object.assign(state.settings, saved);
+      })
+      .catch(() => {});
 
     // Fetch and preview real prayer times for this location
     await fetchPreviewTimings(place.lat, place.lon, place.city, place.country);
@@ -254,6 +265,7 @@ function wireGeolocation() {
         state.settings.country = place.country;
         state.settings.lat = place.lat;
         state.settings.lon = place.lon;
+        state.settings.placeLabel = null; // nor one an earlier pick left
         selectedPlace = place;
 
         if (input) input.value = place.label;
@@ -517,8 +529,9 @@ async function finishOnboarding() {
       // the alarms. Writing them to storage first left it nothing to compare
       // against, so it kept the schedule fetched at install for the default city.
       // Only when it can't be reached are they stored here.
-      const settings = state.settings;
       (async () => {
+        await placeSaved;
+        const settings = state.settings;
         let res;
         try {
           if (chrome.runtime && chrome.runtime.sendMessage) {
@@ -539,7 +552,8 @@ async function finishOnboarding() {
 
     const successView = document.getElementById('stepSuccessView');
     const citySpan = document.getElementById('completionCity');
-    if (citySpan) citySpan.textContent = state.settings.city || 'your location';
+    // The city as it was shown, in the UI language, rather than as stored.
+    if (citySpan) citySpan.textContent = (selectedPlace && selectedPlace.city) || state.settings.city || 'your location';
     if (successView) {
       successView.hidden = false;
       successView.classList.add('is-active');

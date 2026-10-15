@@ -8,13 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const CSS = readFileSync(join(ROOT, 'popup.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 // Innermost `selector { declarations }` blocks (rules nested in @media included).
-const RULES = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, sel, body]) => ({
-  sel: sel.trim(),
-  decls: Object.fromEntries([...body.matchAll(/([\w-]+)\s*:\s*((?:"[^"]*"|'[^']*'|[^;"'])+)/g)].map(([, p, v]) => [p, v.trim()])),
-}));
-const rule = (sel) => RULES.find((r) => r.sel === sel);
+const rulesOf = (file) =>
+  [...readFileSync(join(ROOT, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, sel, body]) => ({
+    sel: sel.trim(),
+    decls: Object.fromEntries([...body.matchAll(/([\w-]+)\s*:\s*((?:"[^"]*"|'[^']*'|[^;"'])+)/g)].map(([, p, v]) => [p, v.trim()])),
+  }));
+const RULES = rulesOf('popup.css');
+const rule = (sel, rules = RULES) => rules.find((r) => r.sel === sel);
 
 describe('popup.css SVG backgrounds', () => {
   it('gives every SVG data-URI background without its own width an explicit size', () => {
@@ -37,5 +38,31 @@ describe('popup.css SVG backgrounds', () => {
     expect(size).toBeGreaterThan(0);
     expect(ltr + size).toBeLessThanOrEqual(pad);
     expect(rtl + size).toBeLessThanOrEqual(pad);
+  });
+});
+
+// A Latin run in an Arabic or Urdu page is laid out right to left unless told
+// otherwise: a long value was clipped at its start and a time read "AM 09:05".
+describe('Latin text in right-to-left pages', () => {
+  it('lets the method select read left to right while it keeps the RTL chevron side', () => {
+    expect(rule('#method').decls.direction).toBe('ltr');
+    const rtl = rule('[dir="rtl"] #method').decls;
+    expect(rtl['text-align']).toBe('right'); // a short name sits where the other values do
+    // The chevron is drawn at "left 10px" in RTL: the padding there must clear it.
+    const chevron = rule('.set-row select').decls;
+    const at = parseFloat(rule('[dir="rtl"] .set-row select').decls['background-position'].match(/left\s+([\d.]+)px/)[1]);
+    expect(at + parseFloat(chevron['background-size'])).toBeLessThanOrEqual(parseFloat(rtl['padding-left']));
+    expect(parseFloat(rtl['padding-right'])).toBeLessThan(parseFloat(rtl['padding-left']));
+  });
+
+  it("keeps an empty city field's placeholder right to left in Arabic and Urdu", () => {
+    expect(rule('[dir="rtl"] #city:placeholder-shown').decls.direction).toBe('rtl');
+    expect(rule('[dir="rtl"] .loc-input:placeholder-shown', rulesOf('welcome.css')).decls.direction).toBe('rtl');
+  });
+
+  it('keeps the welcome preview times left to right', () => {
+    const time = rule('.pp-time', rulesOf('welcome.css')).decls;
+    expect(time.direction).toBe('ltr');
+    expect(time['unicode-bidi']).toBe('isolate');
   });
 });

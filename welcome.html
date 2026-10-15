@@ -78,7 +78,8 @@
           <div class="loc-search-box">
             <span class="step-sublabel" data-i18n="location">Location</span>
             <div class="loc-input-row">
-              <input type="text" id="welcomeCity" class="loc-input" placeholder="Search your city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
+              <!-- dir="auto": a Latin place shows from its start, not clipped there, in ar/ur. -->
+              <input type="text" id="welcomeCity" class="loc-input" dir="auto" placeholder="Search your city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
               <button type="button" id="detectLocBtn" class="btn-action-sm">
                 <span aria-hidden="true">📍</span>
                 <span id="detectText" data-i18n="detect_location">Detect location</span>

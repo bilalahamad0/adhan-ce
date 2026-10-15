@@ -148,6 +148,73 @@ describe('initial render from GET_STATE', () => {
   });
 });
 
+// A popup left open across a prayer kept its countdown and showed no paused banner
+// until it was reopened: it read the state once.
+describe('live updates while the popup is open', () => {
+  const prayerFires = () =>
+    chrome.__.fireStorageChange({
+      paused: { oldValue: { active: false }, newValue: { active: true, prayer: 'Asr', time: '04:56 PM', since: BASE, focus: false } },
+      nextPrayer: { newValue: { name: 'Maghrib', time: '08:17 PM', ts: BASE + 6 * 3600e3 } },
+    });
+
+  it('shows the paused banner and the next prayer as the prayer fires', async () => {
+    await load();
+    expect($('pausedBanner').hidden).toBe(true);
+    await prayerFires();
+    expect($('pausedBanner').hidden).toBe(false);
+    expect($('pausedText').textContent).toBe('Media paused for Asr');
+    expect($('focusBtn').hidden).toBe(false);
+    expect($('nextName').textContent).toBe('Maghrib');
+    expect($('list').querySelector('.row.next .pname').textContent).toBe('Maghrib');
+    jest.advanceTimersByTime(1000); // the tick counts down to the new next prayer
+    expect($('nextCountdown').textContent).toBe('in 5h 59m');
+  });
+
+  it('hides the banner when the prayer is resumed elsewhere, or its pause is cleared', async () => {
+    const state = defaultState();
+    state.paused = { active: true, prayer: 'Asr', focus: false };
+    await load({ state });
+    expect($('pausedBanner').hidden).toBe(false);
+    await chrome.__.fireStorageChange({ paused: { newValue: { active: false } } });
+    expect($('pausedBanner').hidden).toBe(true);
+    await prayerFires();
+    await chrome.__.fireStorageChange({ paused: { oldValue: { active: true } } }); // removed
+    expect($('pausedBanner').hidden).toBe(true);
+  });
+
+  it('locks Resume and the strict-focus tiles while a strict pause lasts', async () => {
+    const state = defaultState();
+    state.settings.strictFocus = true;
+    await load({ state });
+    await prayerFires();
+    expect($('resumeBtn').hidden).toBe(true);
+    expect($('strictFocusTile').getAttribute('aria-disabled')).toBe('true');
+    expect($('focusTile').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('keeps Settings edits in progress, and asks the worker nothing', async () => {
+    await load();
+    $('resumeMin').value = '9';
+    $('method').value = '3';
+    $('city').value = 'Lon';
+    const asked = chrome.__.sent.length;
+    await prayerFires();
+    await chrome.__.fireStorageChange({ schedule: { newValue: { ...defaultState().schedule, date: '2026-05-24' } } });
+    expect($('resumeMin').value).toBe('9');
+    expect($('method').value).toBe('3');
+    expect($('city').value).toBe('Lon');
+    expect(chrome.__.sent.length).toBe(asked);
+  });
+
+  it('ignores other storage areas and keys', async () => {
+    await load();
+    await chrome.__.fireStorageChange({ paused: { newValue: { active: true, prayer: 'Asr' } } }, 'sync');
+    await chrome.__.fireStorageChange({ appearance: { newValue: 'dark' } });
+    expect($('pausedBanner').hidden).toBe(true);
+    expect($('nextName').textContent).toBe('Asr');
+  });
+});
+
 describe('saving settings', () => {
   it('blocks the save until a real location is picked', async () => {
     await load();
@@ -526,6 +593,81 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
     expect($('city').value).toBe('London, England, United Kingdom');
     expect($('locLabel').title).toBe('London, England, United Kingdom');
     expect(results.hidden).toBe(true);
+  });
+
+  // Open-Meteo answers in the language asked for, and matches the query against the
+  // names in that language: an Arabic name was found only when Arabic was asked for.
+  const AR_FOUND = {
+    results: [{ id: 2553604, name: 'الدار البيضاء', admin1: 'الدار البيضاء - سطات', country: 'المغرب', country_code: 'MA', latitude: 33.59, longitude: -7.61 }],
+  };
+  const AR_LABEL = 'الدار البيضاء, الدار البيضاء - سطات, المغرب';
+  const CASABLANCA_EN = { id: 2553604, name: 'Casablanca', admin1: 'Casablanca-Settat', country: 'Morocco', country_code: 'MA', latitude: 33.59, longitude: -7.61 };
+  const toArabic = async () => {
+    $('lang').value = 'ar';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+  };
+  const searchAndPick = async (q) => {
+    $('city').value = q;
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    $('cityResults').children[0].dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  };
+  const saveSent = async () => {
+    $('save').click();
+    await settle();
+    return chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+  };
+
+  it('searches in the UI language, and saves the place under its English names', async () => {
+    await load({ fetchRoutes: [['/v1/get?', CASABLANCA_EN], ['language=ar', AR_FOUND]] });
+    await toArabic();
+    await searchAndPick('الدار البيضاء');
+    const search = globalThis.fetch.calls.find((u) => u.includes('/v1/search'));
+    expect(search).toContain('&language=ar&');
+    expect($('city').getAttribute('dir')).toBe('auto'); // a Latin place shows from its start in ar/ur
+    expect($('city').value).toBe(AR_LABEL);
+    expect($('locLabel').textContent).toBe(AR_LABEL);
+
+    const saved = await saveSent();
+    // Aladhan is asked by these names, as for a place found in English.
+    expect(saved.settings).toMatchObject({ city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.61 });
+    expect(saved.settings.placeLabel).toEqual({ lang: 'ar', text: AR_LABEL });
+    expect(globalThis.fetch.calls).toContain('https://geocoding-api.open-meteo.com/v1/get?id=2553604&language=en');
+  });
+
+  it('shows a saved place as it was found while the UI is in that language', async () => {
+    const state = defaultState();
+    Object.assign(state.settings, { city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.61, placeLabel: { lang: 'ar', text: AR_LABEL } });
+    await load({ state });
+    expect($('locLabel').textContent).toBe('Casablanca, Casablanca-Settat, Morocco');
+    await toArabic();
+    expect($('locLabel').textContent).toBe(AR_LABEL);
+    expect($('city').value).toBe(AR_LABEL);
+    // Saving other settings keeps the place and its label, and asks nothing.
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Casablanca', country: 'Morocco', placeLabel: { lang: 'ar', text: AR_LABEL } });
+    expect(globalThis.fetch.calls.filter((u) => u.includes('open-meteo'))).toEqual([]);
+  });
+
+  it('a place found in English clears the label an earlier place left', async () => {
+    const state = defaultState();
+    state.settings.placeLabel = { lang: 'ar', text: AR_LABEL };
+    await load({ state });
+    await searchAndPick('Lon');
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'London', country: 'United Kingdom', placeLabel: null });
+    expect(globalThis.fetch.calls.some((u) => u.includes('/v1/get'))).toBe(false);
+  });
+
+  it('saves nothing when the English names cannot be had', async () => {
+    await load({ fetchRoutes: [['/v1/get?', { status: 503 }], ['language=ar', AR_FOUND]] });
+    await toArabic();
+    await searchAndPick('الدار البيضاء');
+    expect(await saveSent()).toBeUndefined();
+    expect($('saveMsg').textContent).toContain('geocode 503');
+    expect($('save').disabled).toBe(false);
   });
 
   it('does not search for fewer than two characters', async () => {

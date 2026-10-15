@@ -277,7 +277,8 @@
                   </button>
                 </div>
                 <span class="city-wrap">
-                  <input type="text" id="city" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
+                  <!-- dir="auto": a Latin place shows from its start, not clipped there, in ar/ur. -->
+                  <input type="text" id="city" dir="auto" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
                   <div id="cityResults" class="suggest" hidden></div>
                 </span>
               </label>

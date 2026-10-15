@@ -781,6 +781,14 @@ body {
 /* viewBox-only SVG: at auto size it fills the control's height and covers the value; 10 + 12px fits the 28px padding. */
 .set-row select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%237a988b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px; padding-inline-end: 28px; }
 [dir="rtl"] .set-row select { background-position: left 10px center; }
+/* The method names are in Latin script in every language, so the select reads left to
+   right: in Arabic and Urdu a long name shows its start and is cut at its end (it lost
+   "ISNA — I"), while the chevron, the padding and a short name keep the RTL places. */
+#method { direction: ltr; }
+[dir="rtl"] #method { text-align: right; padding-left: 28px; padding-right: 11px; }
+/* dir="auto" (a Latin place shows from its start) turns an empty field left to right,
+   and its placeholder with it. */
+[dir="rtl"] #city:placeholder-shown { direction: rtl; }
 .set-row input:focus, .set-row select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* Per-prayer minute adjustment: five compact selects in a row. */
