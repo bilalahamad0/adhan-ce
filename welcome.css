@@ -386,6 +386,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px; /* a prompt wrapped on a phone-width screen stays clear of "Today" */
   font-size: 12.5px;
   color: var(--muted);
   font-weight: 600;

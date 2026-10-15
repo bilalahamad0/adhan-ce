@@ -87,11 +87,14 @@ export const PACKED_BUILDINFO = 'export const DEV = false;\n';
 // `background.scripts` (what Gecko runs); Firefox ignores the former and AMO
 // validation warns about it on every submission. Only the XPI packer passes
 // this — Chrome builds must keep the key. Returns stageDir.
+// opts.stripDynamicUrl: drop the Chromium-only (Chrome 130+)
+// `web_accessible_resources[].use_dynamic_url`, which Firefox reports as an
+// unexpected manifest property on every load. Only the XPI packer passes this.
 // opts.stripOffscreen: drop `offscreen` from `permissions` in the staged
 // manifest. Firefox does not support the chrome.offscreen API and AMO
 // addons-linter errors if it sees it; Firefox uses its background event page
 // for Audio directly instead. Only the XPI packer passes this.
-export async function stageExtension(stageDir, { manifestName, stripServiceWorker, stripGecko, stripBackgroundScripts, stripOffscreen } = {}) {
+export async function stageExtension(stageDir, { manifestName, stripServiceWorker, stripDynamicUrl, stripGecko, stripBackgroundScripts, stripOffscreen } = {}) {
   // Fresh dir every run — avoids stale files from a previous pack.
   await rm(stageDir, { recursive: true, force: true });
   for (const rel of await runtimeFiles()) {
@@ -107,7 +110,7 @@ export async function stageExtension(stageDir, { manifestName, stripServiceWorke
   await writeFile(join(stageDir, 'lib', 'buildinfo.js'), PACKED_BUILDINFO);
   // Per-target manifest rewrites (Firefox / Edge) — always on the staged copy,
   // never the committed source.
-  if (manifestName || stripServiceWorker || stripGecko || stripBackgroundScripts || stripOffscreen) {
+  if (manifestName || stripServiceWorker || stripDynamicUrl || stripGecko || stripBackgroundScripts || stripOffscreen) {
     const mfPath = join(stageDir, 'manifest.json');
     const mf = JSON.parse(await readFile(mfPath, 'utf8'));
     if (manifestName) mf.name = manifestName;
@@ -117,6 +120,11 @@ export async function stageExtension(stageDir, { manifestName, stripServiceWorke
       // background.js and lib/*.js are ES modules: as a classic script Gecko stops
       // at the first `import` and the extension never runs (2.1.0–2.1.1).
       mf.background.type = 'module';
+    }
+    // Gecko has no per-session web-accessible URLs (its moz-extension:// host is
+    // already a random per-install UUID), so the key is only a load-time warning.
+    if (stripDynamicUrl && Array.isArray(mf.web_accessible_resources)) {
+      for (const war of mf.web_accessible_resources) delete war.use_dynamic_url;
     }
     if (stripBackgroundScripts && mf.background) delete mf.background.scripts;
     if (stripGecko) delete mf.browser_specific_settings;

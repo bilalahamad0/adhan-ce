@@ -130,6 +130,34 @@ describe('onboarding location field', () => {
   });
 });
 
+describe('onboarding preview card', () => {
+  // Its markup used to name Makkah, which a new user read as already chosen: until
+  // a place is picked or detected it asks for one, with no times.
+  const label = () => document.getElementById('previewCityLabel').textContent;
+
+  it('names no place on a fresh install, then shows the picked one and its times', async () => {
+    await load();
+    expect(document.body.textContent).not.toContain('Makkah');
+    expect(label()).toBe(cat('en').preview_pick_city);
+    expect(document.getElementById('ppFajr').textContent).toBe('--:--');
+    await pickCasablanca();
+    expect(label()).toBe('Casablanca, Morocco');
+    expect(document.getElementById('ppFajr').textContent).toBe('04:27 AM');
+    expect(document.getElementById('ppMaghrib').textContent).toBe('08:17 PM');
+  });
+
+  it('asks in the page language, and a detected place survives a language switch', async () => {
+    await load({ uiLang: 'ar' });
+    expect(label()).toBe(cat('ar').preview_pick_city);
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    expect(label()).toBe('Casablanca, Morocco');
+    document.querySelector('.lang-chip[data-lang="fr"]').click();
+    await settle();
+    expect(label()).toBe('Casablanca, Morocco');
+  });
+});
+
 describe('onboarding page', () => {
   it('Detect location fills in the place, which is saved like a searched one', async () => {
     await load();

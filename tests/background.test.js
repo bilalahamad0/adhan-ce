@@ -403,6 +403,17 @@ describe('notifications + command', () => {
     expect(h.broadcasts.some((b) => b.message.type === 'RESUME')).toBe(true);
   });
 
+  it('registers the button listener only where notification buttons exist', async () => {
+    const chromium = (await loadBackground({ storage: { settings: DEFAULTS } })).h;
+    expect(chromium.notifButtonClicked._fns).toHaveLength(1);
+
+    // Gecko's onButtonClicked is a stub that warns "unimplemented" on addListener,
+    // so the Firefox build must not call it; a notification click still works.
+    const firefox = (await loadBackground({ firefox: true, storage: { settings: DEFAULTS } })).h;
+    expect(firefox.notifButtonClicked._fns).toHaveLength(0);
+    expect(firefox.notifClicked._fns).toHaveLength(1);
+  });
+
   it('the toggle-focus command flips focus on/off', async () => {
     const { h } = await loadBackground({ storage: { settings: DEFAULTS, paused: { active: true, prayer: 'Asr', time: '4:56 PM', since: Date.now(), focus: false } } });
     await h.fireCommand('toggle-focus');
@@ -844,7 +855,7 @@ describe('toolbar icon badge countdown', () => {
     await h.fireAlarm(ALARM_PRAYER);
     await flush();
     expect(h.badge.text).toBe('❚❚');
-    expect(h.title).toBe('Dhuhr Adhan · Media paused');
+    expect(h.title).toBe('Media paused for Dhuhr');
 
     // Resume
     await h.fireAlarm(ALARM_RESUME);
@@ -880,7 +891,7 @@ describe('toolbar icon badge countdown', () => {
     await flush();
     expect(h.badge.text).toBe('❚❚');
     expect(h.badge.color).toBe('#d97706'); // Asr Amber
-    expect(h.title).toBe('Asr Adhan · Media paused');
+    expect(h.title).toBe('Media paused for Asr');
     expect(h.store.nextPrayer.name).toBe('Maghrib');
 
     // 2. Asr concludes / auto-resumes:
@@ -903,7 +914,7 @@ describe('toolbar icon badge countdown', () => {
       await flush();
       expect(h.badge.text).toBe('❚❚');
       expect(h.badge.color).toBe('#be123c'); // Maghrib Crimson
-      expect(h.title).toBe('Maghrib Adhan · Media paused');
+      expect(h.title).toBe('Media paused for Maghrib');
       expect(h.store.nextPrayer.name).toBe('Isha');
 
       // 4. Maghrib concludes / auto-resumes:
@@ -939,6 +950,66 @@ describe('toolbar icon badge countdown', () => {
     expect(h.badge.text).toBe('45m');
     expect(h.badge.color).toBe('#d97706');
     expect(h.title).toBe('Next: Asr in 45m (04:56 PM)');
+  });
+});
+
+describe('toolbar tooltip in the UI language', () => {
+  // The tooltip for Asr `ms` away, with `storage` (e.g. a saved lang) on top.
+  async function tooltipFor(ms, { storage = {}, uiLang } = {}) {
+    const now = Date.now();
+    const sched = scheduleAround(now);
+    sched.prayers[2] = { name: 'Asr', time: '04:56 PM', ts: now + ms };
+    const loaded = await loadBackground({
+      uiLang,
+      storage: { settings: DEFAULTS, schedule: sched, nextPrayer: sched.prayers[2], paused: { active: false }, ...storage },
+    });
+    await loaded.h.fireStartup();
+    await flush();
+    return loaded;
+  }
+  // The clock is isolated left-to-right in Arabic and Urdu: "04:56 PM", not "PM 04:56".
+  const LRI = '\u2066';
+  const PDI = '\u2069';
+
+  it.each([
+    ['ar', 45 * 60e3, `الصلاة القادمة: العصر بعد 45 د (${LRI}04:56 PM${PDI})`],
+    ['ar', 105 * 60e3, `الصلاة القادمة: العصر بعد 1 س 45 د (${LRI}04:56 PM${PDI})`],
+    ['ar', 30e3, `الصلاة القادمة: العصر بعد أقل من دقيقة (${LRI}04:56 PM${PDI})`],
+    ['ur', 105 * 60e3, `اگلی نماز: عصر 1 گھنٹے 45 منٹ میں (${LRI}04:56 PM${PDI})`],
+    ['ur', 30e3, `اگلی نماز: عصر ایک منٹ سے کم میں (${LRI}04:56 PM${PDI})`],
+    ['id', 2 * 3600e3, 'Salat berikutnya: Asar dalam 2 jam (04:56 PM)'],
+    ['tr', 105 * 60e3, 'Sonraki namaz: İkindi 1 sa 45 dk içinde (04:56 PM)'],
+    ['fr', 30e3, 'Prochaine prière : Asr dans <1 min (04:56 PM)'],
+    ['en', 105 * 60e3, 'Next: Asr in 1h 45m (04:56 PM)'],
+  ])('%s, %d ms before Asr', async (lang, ms, title) => {
+    const { h } = await tooltipFor(ms, { storage: { lang } });
+    expect(h.title).toBe(title);
+  });
+
+  it("follows the browser's language when none was chosen, as the popup does", async () => {
+    const { h } = await tooltipFor(45 * 60e3, { uiLang: 'ar-EG' });
+    expect(h.title).toBe(`الصلاة القادمة: العصر بعد 45 د (${LRI}04:56 PM${PDI})`);
+  });
+
+  it('keeps the badge compact in every language: it fits about 4 characters', async () => {
+    for (const lang of ['ar', 'ur', 'fr']) {
+      const { h } = await tooltipFor(45 * 60e3, { storage: { lang } });
+      expect(h.badge.text).toBe('45m');
+    }
+  });
+
+  it('words the paused tooltip in the UI language too, like the popup banner', async () => {
+    const { h } = await tooltipFor(45 * 60e3, { storage: { lang: 'ar', paused: { active: true, prayer: 'Asr' } } });
+    expect(h.badge.text).toBe('❚❚');
+    expect(h.title).toBe('تم إيقاف الوسائط من أجل العصر');
+  });
+
+  it('re-words the tooltip as soon as the language is switched', async () => {
+    const { h } = await tooltipFor(45 * 60e3);
+    expect(h.title).toBe('Next: Asr in 45m (04:56 PM)');
+    await chrome.storage.local.set({ lang: 'tr' });
+    await flush();
+    expect(h.title).toBe('Sonraki namaz: İkindi 45 dk içinde (04:56 PM)');
   });
 });
 

@@ -21,12 +21,16 @@
       <header class="head">
         <span class="brand">
           <span class="brand-logo"><img src="icons/icon48.png" alt="" /></span>
+          <!-- The date shares the name's row so the place gets the full width below;
+               dir="auto" keeps a Latin name's start (the city) visible in ar/ur. -->
           <span class="brand-text">
-            <strong data-i18n="app_name">Adhan Focus</strong>
-            <span id="locLabel" class="loc">—</span>
+            <span class="brand-row">
+              <strong data-i18n="app_name">Adhan Focus</strong>
+              <span class="head-now" id="headDate"></span>
+            </span>
+            <span id="locLabel" class="loc" dir="auto">—</span>
           </span>
         </span>
-        <span class="head-now" id="headDate"></span>
       </header>
 
       <section id="pausedBanner" class="paused-banner glass" hidden>

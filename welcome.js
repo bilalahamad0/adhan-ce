@@ -306,7 +306,12 @@ function formatTo12(timeStr) {
 
 function updatePrayerPreview(prayers, city, country) {
   const cityLabel = document.getElementById('previewCityLabel');
-  if (cityLabel) cityLabel.textContent = [city, country].filter(Boolean).join(', ');
+  if (cityLabel) {
+    // Until now the label was the translated "pick your city" prompt; it is the
+    // place from here on, which a language switch must not turn back into it.
+    cityLabel.removeAttribute('data-i18n');
+    cityLabel.textContent = [city, country].filter(Boolean).join(', ');
+  }
 
   prayers.forEach((p) => {
     const el = document.getElementById(`pp${p.name}`);

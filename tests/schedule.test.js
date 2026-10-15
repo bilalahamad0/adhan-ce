@@ -8,6 +8,7 @@ import {
   formatCountdown,
   formatBadgeCountdown,
   formatTooltipCountdown,
+  COUNTDOWN_UNITS,
   hhmmTo12h,
   isStaleFire,
   STALE_FIRE_MS,
@@ -256,6 +257,19 @@ describe('formatCountdown', () => {
   it('clamps negatives to 0s', () => {
     expect(formatCountdown(-5000)).toBe('0s');
   });
+  it('words the units with the labels passed in (the UI language), the digits staying Latin', () => {
+    const ar = { h: '{n} س', m: '{n} د', s: '{n} ث' };
+    expect(formatCountdown(3 * 3600e3 + 12 * 60e3, ar)).toBe('3 س 12 د');
+    expect(formatCountdown(4 * 60e3 + 13e3, ar)).toBe('4 د 13 ث');
+    expect(formatCountdown(12e3, ar)).toBe('12 ث');
+    expect(formatCountdown(-5000, ar)).toBe('0 ث');
+  });
+  it('keeps the English letter for any label left out', () => {
+    expect(COUNTDOWN_UNITS).toEqual({ h: '{n}h', m: '{n}m', s: '{n}s', lt1m: '<1m' });
+    expect(formatCountdown(4 * 60e3 + 13e3, { m: '{n} min' })).toBe('4 min 13s');
+    expect(formatCountdown(4 * 60e3 + 13e3, { m: undefined, s: '' })).toBe('4m 13s');
+    expect(formatCountdown(4 * 60e3 + 13e3, {})).toBe('4m 13s');
+  });
 });
 
 describe('formatBadgeCountdown', () => {
@@ -334,6 +348,16 @@ describe('formatTooltipCountdown', () => {
   it('clamps zero and negatives to empty string', () => {
     expect(formatTooltipCountdown(0)).toBe('');
     expect(formatTooltipCountdown(-5000)).toBe('');
+  });
+  it('words the units with the labels passed in (the UI language)', () => {
+    const fr = { h: '{n} h', m: '{n} min', lt1m: '<1 min' };
+    expect(formatTooltipCountdown(1 * 3600e3 + 45 * 60e3, fr)).toBe('1 h 45 min');
+    expect(formatTooltipCountdown(2 * 3600e3, fr)).toBe('2 h');
+    expect(formatTooltipCountdown(45 * 60e3, fr)).toBe('45 min');
+    expect(formatTooltipCountdown(30e3, fr)).toBe('<1 min');
+    expect(formatTooltipCountdown(30e3, { lt1m: 'أقل من دقيقة' })).toBe('أقل من دقيقة');
+    expect(formatTooltipCountdown(0, fr)).toBe('');
+    expect(formatTooltipCountdown(45 * 60e3, { h: '{n} h' })).toBe('45m'); // left out: English
   });
 });
 

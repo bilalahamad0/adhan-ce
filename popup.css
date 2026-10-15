@@ -218,10 +218,12 @@ body {
   box-shadow: 0 6px 16px -6px rgba(8, 80, 56, .6), inset 0 0 0 1px rgba(255, 255, 255, .25);
 }
 .brand-logo img { width: 100%; height: 100%; object-fit: cover; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; flex: 1; min-width: 0; }
+.brand-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .brand-text strong { font-size: 14px; font-weight: 750; color: var(--text-strong); letter-spacing: .1px; }
-.loc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 195px; }
-.head-now { font-size: 11px; color: var(--muted); text-align: end; line-height: 1.3; font-weight: 600; }
+/* Hug the start side: the label's own direction (dir="auto") may differ from the UI's. */
+.loc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: flex-start; max-width: 100%; }
+.head-now { font-size: 11px; color: var(--muted); text-align: end; line-height: 1.3; font-weight: 600; white-space: nowrap; }
 
 /* -------------------------------------------------------- paused banner --- */
 .paused-banner {
@@ -776,7 +778,8 @@ body {
   text-align: center; border-radius: 8px;
 }
 #hijriOffset, #badgeManualHours { width: 130px; }
-.set-row select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%237a988b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-inline-end: 28px; }
+/* viewBox-only SVG: at auto size it fills the control's height and covers the value; 10 + 12px fits the 28px padding. */
+.set-row select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%237a988b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px; padding-inline-end: 28px; }
 [dir="rtl"] .set-row select { background-position: left 10px center; }
 .set-row input:focus, .set-row select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 

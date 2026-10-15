@@ -34,9 +34,10 @@ export async function packXpi(outPath) {
 
   // stripServiceWorker: Gecko runs background.scripts and ignores
   // background.service_worker, which AMO validation flags on every submission.
+  // stripDynamicUrl: Firefox warns about the Chromium-only use_dynamic_url on load.
   // stripOffscreen: Gecko uses background page Audio directly and rejects
   // the Chromium-only offscreen permission.
-  await stageExtension(STAGE, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripOffscreen: true });
+  await stageExtension(STAGE, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripDynamicUrl: true, stripOffscreen: true });
   await rm(xpiPath, { force: true });
   // -r recurse, -q quiet, -X strip platform extra-attrs for a reproducible zip.
   await pexec('zip', ['-rqX', xpiPath, '.'], { cwd: STAGE });

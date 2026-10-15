@@ -514,6 +514,10 @@ async function updateBadge(providedState) {
       return;
     }
 
+    // The tooltip, unlike the badge, is worded in the UI language.
+    const code = await uiLang();
+    const M = await getCatalog(code);
+
     if (paused && paused.active) {
       await chrome.action.setBadgeText({ text: '❚❚' });
       const p = paused.prayer || (nextPrayer && nextPrayer.name) || 'Prayer';
@@ -523,7 +527,8 @@ async function updateBadge(providedState) {
       try {
         await chrome.action.setBadgeTextColor({ color: textColor });
       } catch (_) {}
-      await chrome.action.setTitle({ title: `${p} Adhan · Media paused` });
+      // Worded like the popup's paused banner, so the tooltip doesn't fall back to English at prayer time.
+      await chrome.action.setTitle({ title: interpolate(M.media_paused_for, { prayer: M['prayer_' + p] || p }) });
       return;
     }
 
@@ -548,11 +553,27 @@ async function updateBadge(providedState) {
       } catch (_) {}
     }
 
-    const countdownStr = formatTooltipCountdown(diff) || formatBadgeCountdown(diff);
+    // Its countdown units too.
+    const countdownStr = formatTooltipCountdown(diff, { h: M.countdown_h, m: M.countdown_m, lt1m: M.countdown_lt1m });
     await chrome.action.setTitle({
-      title: `Next: ${nextPrayer.name} in ${countdownStr} (${nextPrayer.time})`,
+      title: interpolate(M.icon_tooltip_next, {
+        prayer: M['prayer_' + nextPrayer.name] || nextPrayer.name,
+        time: countdownStr,
+        // Isolated left-to-right, so an Arabic or Urdu sentence keeps "08:15 PM", not "PM 08:15".
+        clock: isRTLLang(code) ? `\u2066${nextPrayer.time}\u2069` : nextPrayer.time,
+      }),
     });
   } catch (_) {}
+}
+
+// The UI language as the popup picks it: the saved choice, else the browser's.
+async function uiLang() {
+  const { lang } = await chrome.storage.local.get('lang');
+  let ui = 'en';
+  try {
+    ui = chrome.i18n.getUILanguage();
+  } catch (_) {}
+  return resolveLang(lang, ui);
 }
 
 async function setPausedBadge(on) {
@@ -612,8 +633,8 @@ async function handlePrayerFire() {
     // create() can fail synchronously (Firefox throws on schema validation) or
     // asynchronously (rejected promise), so attempt the rich Chrome notification
     // and on ANY failure retry a plain toast — behavior detection, not UA
-    // sniffing — so Firefox shows the alert instead of nothing. The
-    // onButtonClicked listener is a harmless no-op stub on Firefox, left as-is.
+    // sniffing — so Firefox shows the alert instead of nothing. Firefox gets no
+    // onButtonClicked listener either (see its registration below).
     const base = {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
@@ -853,10 +874,19 @@ chrome.notifications.onClicked.addListener(() => {
   chrome.action.openPopup?.().catch(() => {});
 });
 
-chrome.notifications.onButtonClicked.addListener((_id, btnIdx) => {
-  if (btnIdx === 0) enableFocus();
-  else if (btnIdx === 1) resumeNow();
-});
+// Notification buttons are Chromium-only. Gecko's schema marks the `buttons`
+// option and notifications.update() unsupported together (so update() is simply
+// absent there), yet keeps onButtonClicked as a stub whose addListener logs
+// "…which is unimplemented" on every background start. So update()'s presence
+// is the capability check, not UA sniffing: no update(), no buttons, no
+// listener. `in` rather than a read: addons-linter flags any read of
+// notifications.update as an API Firefox lacks.
+if ('update' in chrome.notifications) {
+  chrome.notifications.onButtonClicked.addListener((_id, btnIdx) => {
+    if (btnIdx === 0) enableFocus();
+    else if (btnIdx === 1) resumeNow();
+  });
+}
 
 if (chrome.commands && chrome.commands.onCommand) {
   chrome.commands.onCommand.addListener((cmd) => {
@@ -876,6 +906,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const now = !!(changes.paused.newValue && changes.paused.newValue.active);
   if (!was && now) recordUsage('pauses');
   else if (was && !now) recordUsage('resumes');
+});
+
+// The toolbar tooltip follows a language switch at once, not at the next badge tick.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.lang) updateBadge();
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -908,12 +943,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'GET_I18N': {
         // Content scripts can't import the i18n module (classic content script),
         // so the background hands them the merged catalog + direction.
-        const { lang } = await chrome.storage.local.get('lang');
-        let ui = 'en';
-        try {
-          ui = chrome.i18n.getUILanguage();
-        } catch (_) {}
-        const code = resolveLang(lang, ui);
+        const code = await uiLang();
         sendResponse({ lang: code, dir: isRTLLang(code) ? 'rtl' : 'ltr', messages: await getCatalog(code) });
         break;
       }
