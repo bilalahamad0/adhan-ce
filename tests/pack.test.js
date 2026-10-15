@@ -233,6 +233,43 @@ describe('per-target Firefox manifest (offscreen permission strip)', () => {
   });
 });
 
+// web_accessible_resources[].use_dynamic_url is Chromium-only (Chrome 130+);
+// Firefox reports it as an unexpected manifest property on every load. Only the
+// Firefox stage drops it: the Chromium packages keep their per-session URLs.
+describe('per-target Firefox manifest (use_dynamic_url strip)', () => {
+  it('Firefox build drops use_dynamic_url; Chrome, Edge and Opera keep it', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-war-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-war-'));
+    const edgeDir = await mkdtemp(join(tmpdir(), 'adhan-edge-war-'));
+    const operaDir = await mkdtemp(join(tmpdir(), 'adhan-opera-war-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripDynamicUrl: true, stripOffscreen: true });
+      await stageExtension(crDir);
+      await stageExtension(edgeDir, { stripGecko: true, stripBackgroundScripts: true });
+      await stageExtension(operaDir, { stripGecko: true, stripBackgroundScripts: true });
+
+      const war = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).web_accessible_resources;
+      const ffRaw = await readFile(join(ffDir, 'manifest.json'), 'utf8');
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      const edge = JSON.parse(await readFile(join(edgeDir, 'manifest.json'), 'utf8'));
+      const opera = JSON.parse(await readFile(join(operaDir, 'manifest.json'), 'utf8'));
+
+      expect(war.some((w) => w.use_dynamic_url === true)).toBe(true); // the source declares it
+      expect(ffRaw).not.toContain('use_dynamic_url');
+      // Only the key goes: the same resources stay reachable from the same pages.
+      expect(JSON.parse(ffRaw).web_accessible_resources).toEqual(war.map(({ use_dynamic_url: _dropped, ...w }) => w));
+      expect(cr.web_accessible_resources).toEqual(war);
+      expect(edge.web_accessible_resources).toEqual(war);
+      expect(opera.web_accessible_resources).toEqual(war);
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+      await rm(edgeDir, { recursive: true, force: true });
+      await rm(operaDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('per-target Firefox Mobile (Android) manifest', () => {
   it('Firefox build retains gecko_android while Edge and Opera strip it', async () => {
     const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-android-'));

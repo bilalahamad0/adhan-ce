@@ -524,6 +524,7 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
     // Picking a suggestion fills the field and closes the list.
     results.children[0].dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     expect($('city').value).toBe('London, England, United Kingdom');
+    expect($('locLabel').title).toBe('London, England, United Kingdom');
     expect(results.hidden).toBe(true);
   });
 
@@ -578,6 +579,69 @@ describe('language switching', () => {
     expect(document.documentElement.lang).toBe('ar');
     // Static markup re-translated: the next-prayer label now reads Arabic.
     expect(document.querySelector('[data-i18n="next_prayer"]').textContent).toBe(cat('ar').next_prayer);
+  });
+
+  it('keeps the header place whole, in its own direction, in Arabic', async () => {
+    // A Latin place name in an RTL header used to clip at its start (the city).
+    // dir="auto" gives it its own direction, the title holds the whole name, and
+    // the date shares the app name's row so the place has the width below it.
+    await load();
+    $('lang').value = 'ar';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    const loc = $('locLabel');
+    expect(loc.getAttribute('dir')).toBe('auto');
+    expect(loc.textContent).toBe('Sunnyvale, California, United States'); // as geocoded, untranslated
+    expect(loc.title).toBe(loc.textContent);
+    expect($('headDate').parentElement).toBe(loc.previousElementSibling);
+  });
+});
+
+describe('the next-prayer countdown in the UI language', () => {
+  // Asr 4 min 13 s away.
+  function soonState() {
+    const state = defaultState();
+    state.nextPrayer = { ...state.nextPrayer, ts: BASE + 4 * 60e3 + 13e3 };
+    return state;
+  }
+
+  it.each([
+    ['en', 'in 4m 13s'],
+    ['ar', 'بعد 4 د 13 ث'],
+    ['ur', '4 منٹ 13 سیکنڈ میں'],
+    ['id', 'dalam 4 mnt 13 dtk'],
+    ['tr', '4 dk 13 sn içinde'],
+    ['fr', 'dans 4 min 13 s'],
+  ])('%s: "%s", with Latin digits as in the clock and the prayer times', async (lang, text) => {
+    await load({ state: soonState(), initialStorage: { lang } });
+    expect($('nextCountdown').textContent).toBe(text);
+  });
+
+  it('hours and minutes too', async () => {
+    const state = defaultState();
+    state.nextPrayer.ts = BASE + 3600e3 + 5 * 60e3;
+    await load({ state, initialStorage: { lang: 'ar' } });
+    expect($('nextCountdown').textContent).toBe('بعد 1 س 5 د');
+  });
+
+  it('the 1-second tick keeps the language', async () => {
+    const state = defaultState();
+    state.nextPrayer.ts = BASE + 61e3;
+    await load({ state, initialStorage: { lang: 'ar' } });
+    expect($('nextCountdown').textContent).toBe('بعد 1 د 1 ث');
+    jest.advanceTimersByTime(1000);
+    expect($('nextCountdown').textContent).toBe('بعد 1 د 0 ث');
+    jest.advanceTimersByTime(1000);
+    expect($('nextCountdown').textContent).toBe('بعد 59 ث');
+  });
+
+  it('switching the language re-words it at once', async () => {
+    await load({ state: soonState() });
+    expect($('nextCountdown').textContent).toBe('in 4m 13s');
+    $('lang').value = 'ur';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    expect($('nextCountdown').textContent).toBe('4 منٹ 13 سیکنڈ میں');
   });
 });
 

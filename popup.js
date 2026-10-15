@@ -459,6 +459,7 @@ function choosePlace(p) {
   selectedPlace = p;
   $('city').value = p.label;
   $('locLabel').textContent = p.label;
+  $('locLabel').title = p.label;
   $('cityResults').hidden = true;
 }
 async function doCitySearch() {
@@ -515,6 +516,7 @@ function renderAll() {
   $('resumeMin').value = settings.autoResumeMinutes != null ? settings.autoResumeMinutes : 5;
   $('leadSeconds').value = String(settings.leadSeconds || 30);
   $('locLabel').textContent = place ? place.label : '—';
+  $('locLabel').title = place ? place.label : ''; // the whole name, should a long one still clip
 
   // Header date (Gregorian) at the location (see clockParts). The Hijri date lives
   // in the Tracker (not the header).
@@ -561,7 +563,14 @@ function renderNext() {
   }
   $('nextName').textContent = t('prayer_' + np.name);
   $('nextTime').textContent = np.time;
-  $('nextCountdown').textContent = t('next_in', { time: formatCountdown(np.ts - Date.now()) });
+  $('nextCountdown').textContent = nextIn(np.ts);
+}
+
+// "in 4m 13s" until `ts`, its units too in the UI language. The digits stay Latin,
+// as in the clock and the prayer times beside it.
+function nextIn(ts) {
+  const units = { h: t('countdown_h'), m: t('countdown_m'), s: t('countdown_s') };
+  return t('next_in', { time: formatCountdown(ts - Date.now(), units) });
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -664,7 +673,7 @@ function startTick() {
   tickTimer = setInterval(() => {
     updateClock();
     if (st && st.nextPrayer) {
-      $('nextCountdown').textContent = t('next_in', { time: formatCountdown(st.nextPrayer.ts - Date.now()) });
+      $('nextCountdown').textContent = nextIn(st.nextPrayer.ts);
     }
   }, 1000);
 }

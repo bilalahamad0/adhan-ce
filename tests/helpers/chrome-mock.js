@@ -170,9 +170,13 @@ export function makeChrome(opts = {}) {
         harness.notifications.push({ id, options });
         return id;
       },
+      // Gecko leaves the API members it marks unsupported out of the namespace
+      // (no key at all), update() among them; background.js keys button support
+      // off its presence.
+      ...(opts.firefox ? {} : { update: async () => true }),
       onClicked: { addListener: notifClicked.addListener },
-      // Firefox exposes onButtonClicked as a no-op stub (never fires); Chrome
-      // delivers real clicks. Either way addListener is safe to call.
+      // Firefox exposes onButtonClicked as a stub (never fires, and addListener
+      // logs an "unimplemented" warning); Chrome delivers real clicks.
       onButtonClicked: { addListener: notifButtonClicked.addListener },
     },
     action: {
