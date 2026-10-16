@@ -52,17 +52,23 @@ Check **only** the data type that actually leaves the device:
 
 > The user chooses a location (city / region / country). That city/region/country
 > is sent to the public AlAdhan prayer-times API (`api.aladhan.com`) to retrieve
-> that location's daily prayer times, and the location-search text the user types
-> is sent to the Open-Meteo geocoding API (`geocoding-api.open-meteo.com`) to
-> resolve real places. The chosen location is stored only on the user's device
+> that location's daily prayer times; the place's coordinates are sent instead when
+> AlAdhan cannot look the place up by name, and for the welcome page's preview. The
+> location-search text the user types (with the extension's display language, and
+> the picked place's id when it was found in another language) is sent to the
+> Open-Meteo geocoding API (`geocoding-api.open-meteo.com`) to resolve real places.
+> Only when the user clicks "Detect location", a request goes to
+> `api.bigdatacloud.net` (or `ipapi.co`), which estimates the city from the IP
+> address. The chosen location is stored only on the user's device
 > (`chrome.storage.local`). It is never stored on any server we control, never
 > linked to an identity, and never used for any purpose other than fetching prayer
 > times. As with any web request, those third-party APIs automatically receive
 > standard technical metadata (e.g. IP address); the extension attaches no
 > identifier of its own.
 
-> *Note:* "Location" is the location the user **types/picks**, not device GPS or
-> automatic geolocation. We declare it because the city is transmitted off-device.
+> *Note:* "Location" is the location the user **types/picks**, or asks to have
+> estimated from the IP address with "Detect location"; never device GPS. We declare
+> it because the place is transmitted off-device.
 
 > *On-device usage counts are NOT declared.* The extension keeps a few activity
 > counts (media auto-paused, prayer alerts, active days) in `chrome.storage.local`,

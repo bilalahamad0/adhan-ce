@@ -54,7 +54,7 @@ function localeRoute() {
 
 // Real Aladhan answers carry the date they are for: the requested one.
 function requestedDay(url) {
-  const m = String(url).match(/timingsByCity\/(\d{2}-\d{2}-\d{4})/);
+  const m = String(url).match(/(?:timingsByCity|timings)\/(\d{2}-\d{2}-\d{4})/);
   return m ? { date: { gregorian: { date: m[1] } } } : {};
 }
 
@@ -179,6 +179,20 @@ describe('handlePrayerFire', () => {
     expect(h.badge.text).toBe('❚❚');
     expect(h.alarms.has(ALARM_RESUME)).toBe(true);
     expect(h.store.nextPrayer.name).toBe('Asr'); // advanced past Dhuhr
+  });
+
+  it("words the notification in the browser's language when none is saved, its time kept in order in Arabic", async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      uiLang: 'ar-EG',
+      storage: { settings: DEFAULTS, schedule: scheduleAround(now), nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 } },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    const { title, message } = h.notifications[0].options;
+    expect(title).toContain('الظهر');
+    // Isolated, "(01:05 PM)" stays one left-to-right run: not "(PM 01:05)".
+    expect(message).toContain('(\u206601:05 PM\u2069)');
   });
 
   it('on Firefox: retries a plain toast without buttons, and still counts the alert', async () => {
@@ -2451,5 +2465,125 @@ describe('per-prayer minute adjustments (±5, Settings)', () => {
     await refreshed;
     await flush();
     expect(h.store.schedule).toBeUndefined();
+  });
+});
+
+// Aladhan looks a place up by name with its own geocoder. It has answered 503
+// ("Geocoding is temporarily unavailable") for every name it had not cached, and
+// 400 ("Unable to geocode address: Cairo, Cairo Governorate, Egypt") for the names
+// an English search stores for Cairo. The place's coordinates give the same times.
+describe('when Aladhan cannot look the place up by name', () => {
+  const NOW = Date.parse('2026-10-16T06:00:00Z');
+  const CAIRO = { ...DEFAULTS, city: 'Cairo', state: 'Cairo Governorate', country: 'Egypt', lat: 30.06263, lon: 31.24967, method: 5 };
+  const CAIRO_TIMES = { Fajr: '05:31', Sunrise: '06:56', Dhuhr: '12:41', Asr: '15:55', Sunset: '18:24', Maghrib: '18:24', Isha: '19:41' };
+  // Cairo's stored day: Refresh asks for the location's today, whatever this machine's date.
+  const at = (hm) => Date.parse(`2026-10-16T${hm}:00+03:00`);
+  const CAIRO_DAY = {
+    date: '2026-10-16',
+    tz: 'Africa/Cairo',
+    prayers: Object.entries({ Fajr: '05:31', Dhuhr: '12:41', Asr: '15:55', Maghrib: '18:24', Isha: '19:41' }).map(([name, hm]) => ({ name, time: hhmmTo12h(hm), ts: at(hm), offsetMin: 180 })),
+    sunrise: { time: '06:56 AM', ts: at('06:56'), offsetMin: 180 },
+    fetchedAt: NOW - 3600e3,
+  };
+  const aladhanCalls = (fetch) => fetch.calls.filter((u) => u.includes('api.aladhan.com'));
+  const byName = (status) => ['/v1/timingsByCity/', { status }];
+  const byCoords = (zone = 'Africa/Cairo', offset = '+03:00') => [
+    '/v1/timings/',
+    (url) => aladhanPayload({ timings: CAIRO_TIMES, meta: { timezone: zone }, data: requestedDay(url), isoOffset: offset }),
+  ];
+
+  beforeEach(() => {
+    jest.useFakeTimers({
+      now: NOW,
+      doNotFake: ['Intl', 'nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'queueMicrotask', 'hrtime', 'performance'],
+    });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it.each([400, 503])('asks for the same day by its coordinates after a %i, and keeps that answer', async (status) => {
+    const { h, fetch } = await loadBackground({ storage: { settings: CAIRO, schedule: CAIRO_DAY }, fetchRoutes: [byName(status), byCoords()] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    const [first, second] = aladhanCalls(fetch);
+    expect(aladhanCalls(fetch)).toHaveLength(2);
+    expect(first).toContain('/v1/timingsByCity/16-10-2026?city=Cairo&country=Egypt&method=5&school=0&state=Cairo%20Governorate&iso8601=true');
+    expect(second).toBe('https://api.aladhan.com/v1/timings/16-10-2026?latitude=30.06263&longitude=31.24967&method=5&school=0&iso8601=true');
+    expect(h.store.schedule).toMatchObject({ date: '2026-10-16', tz: 'Africa/Cairo' });
+    expect(h.store.schedule.prayers.find((p) => p.name === 'Fajr')).toMatchObject({ time: '05:31 AM', ts: Date.parse('2026-10-16T02:31:00Z'), offsetMin: 180 });
+    expect(h.store.nextPrayer).toMatchObject({ name: 'Dhuhr' });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('asking by its coordinates'));
+  });
+
+  it('fails as before when the coordinates fail too', async () => {
+    const { h, fetch } = await loadBackground({ storage: { settings: CAIRO, schedule: CAIRO_DAY }, fetchRoutes: [byName(400), ['/v1/timings/', { status: 503 }]] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: false, error: 'Aladhan 503' });
+    expect(aladhanCalls(fetch)).toHaveLength(2);
+    expect(h.store.schedule).toEqual(CAIRO_DAY); // kept
+  });
+
+  it('without saved coordinates, asks by name only and fails as before', async () => {
+    const { lat, lon, ...noCoords } = CAIRO;
+    const { h, fetch } = await loadBackground({ storage: { settings: noCoords, schedule: CAIRO_DAY }, fetchRoutes: [byName(400), byCoords()] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: false, error: 'Aladhan 400' });
+    expect(aladhanCalls(fetch)).toHaveLength(1);
+  });
+
+  it("never asks by the welcome page's old placeholder coordinates (Makkah's, saved by a skipped setup)", async () => {
+    const SKIPPED = { ...DEFAULTS, lat: 21.42, lon: 39.83 }; // Sunnyvale with Makkah's placeholder
+    const { h, fetch } = await loadBackground({ storage: { settings: SKIPPED }, fetchRoutes: [byName(503), byCoords('Asia/Riyadh', '+03:00')] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: false, error: 'Aladhan 503' });
+    expect(aladhanCalls(fetch).some((u) => u.includes('/v1/timings/'))).toBe(false);
+    expect(h.store.schedule).toBeUndefined(); // not Riyadh's times
+  });
+
+  it('a place that shares its name with another (only the coordinates change) is fetched again', async () => {
+    // Two "Springfield, Florida, United States" in Open-Meteo: told apart by coordinates alone.
+    const SPRINGFIELD = { ...DEFAULTS, city: 'Springfield', state: 'Florida', country: 'United States', lat: 30.16, lon: -85.61 };
+    const { h, fetch } = await loadBackground({ storage: { settings: SPRINGFIELD, schedule: CAIRO_DAY }, fetchRoutes: [byName(400), byCoords()] });
+    const before = aladhanCalls(fetch).length;
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { lat: 30.2, lon: -85.68 } })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch).slice(before).some((u) => u.includes('latitude=30.2&longitude=-85.68'))).toBe(true);
+  });
+
+  it('asks a place with no country by its coordinates alone (Aladhan took a bare "Dakhla" for a place in India)', async () => {
+    const DAKHLA = { ...DEFAULTS, city: 'Dakhla', state: '', country: '', lat: 23.68477, lon: -15.95798 };
+    const { h, fetch } = await loadBackground({ storage: { settings: DAKHLA, schedule: CAIRO_DAY }, fetchRoutes: [byName(200), byCoords('Africa/El_Aaiun', '+00:00')] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch).every((u) => u.includes('/v1/timings/') && u.includes('latitude=23.68477&longitude=-15.95798'))).toBe(true);
+    expect(h.store.schedule.tz).toBe('Africa/El_Aaiun');
+  });
+
+  it('asks a place found by name by name only, as always', async () => {
+    const { h, fetch } = await loadBackground({ storage: { settings: CAIRO, schedule: CAIRO_DAY }, fetchRoutes: [['/v1/timingsByCity/', byCoords()[1]], byCoords()] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch).map((u) => u.includes('/v1/timingsByCity/'))).toEqual([true]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("asks the location's own day by coordinates too, without the name again (Kiritimati, +14)", async () => {
+    // A new place: this machine's date is asked for first, then, when the answer says
+    // it is another day there (unless this machine is in Kiritimati's), that day.
+    jest.setSystemTime(Date.parse('2026-10-10T12:00:00Z')); // 02:00 on the 11th there
+    const KIRI = { ...DEFAULTS, city: 'Kiritimati', state: '', country: 'Kiribati', lat: 1.87, lon: -157.4 };
+    const { h, fetch } = await loadBackground({ storage: { settings: KIRI }, fetchRoutes: [byName(503), byCoords('Pacific/Kiritimati', '+14:00')] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    const calls = aladhanCalls(fetch).map((u) => [u.includes('/v1/timingsByCity/') ? 'name' : 'coords', u.match(/\/(\d{2}-\d{2}-\d{4})\?/)[1]]);
+    expect(calls[0][0]).toBe('name');
+    expect(calls.slice(1).map(([how]) => how)).toEqual(calls.slice(1).map(() => 'coords'));
+    expect(calls[calls.length - 1]).toEqual(['coords', '11-10-2026']);
+    expect(h.store.schedule).toMatchObject({ date: '2026-10-11', tz: 'Pacific/Kiritimati' });
+  });
+
+  it('a settings save to such a place succeeds, and later fetches ask by name first again', async () => {
+    let nameFails = true;
+    const name = ['/v1/timingsByCity/', (url) => (nameFails ? { status: 400 } : byCoords()[1](url))];
+    const { h, fetch } = await loadBackground({ storage: { settings: DEFAULTS }, fetchRoutes: [name, byCoords()] });
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { city: 'Cairo', state: 'Cairo Governorate', country: 'Egypt', lat: 30.06263, lon: 31.24967 } })).toEqual({ ok: true });
+    expect(h.store.schedule.tz).toBe('Africa/Cairo');
+    nameFails = false; // Aladhan's geocoder is back
+    const before = aladhanCalls(fetch).length;
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch).slice(before).map((u) => u.includes('/v1/timingsByCity/'))).toEqual([true]);
   });
 });

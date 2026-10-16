@@ -268,19 +268,22 @@
 
             <!-- 2. Prayer Calculation & Location Setup (Core Setup) -->
             <div class="set-group glass">
-              <!-- Location -->
-              <label class="set-row col field-stack">
+              <!-- Location. A <div>, not a <label>: a label wrapping the Detect button
+                   would forward any click on it (the heading, a suggestion) to that
+                   button and run the IP lookup unasked. -->
+              <div class="set-row col field-stack">
                 <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
-                  <span class="set-label" data-i18n="location">Location</span>
+                  <label class="set-label" for="city" data-i18n="location">Location</label>
                   <button type="button" id="detectLocBtn" class="btn-action-sm">
                     <span aria-hidden="true">📍</span> <span id="detectText" data-i18n="detect_location">Detect location</span>
                   </button>
                 </div>
                 <span class="city-wrap">
-                  <input type="text" id="city" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
+                  <!-- dir="auto": a Latin place shows from its start, not clipped there, in ar/ur. -->
+                  <input type="text" id="city" dir="auto" placeholder="Search any city…" autocomplete="off" data-i18n-attr="placeholder:city_placeholder" />
                   <div id="cityResults" class="suggest" hidden></div>
                 </span>
-              </label>
+              </div>
 
               <!-- Calculation method -->
               <label class="set-row col">

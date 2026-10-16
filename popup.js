@@ -7,8 +7,8 @@
 import { formatCountdown, ymd, PRAYER_ORDER, locationClock, prayerAdjustments, ADJUST_LIMIT_MIN } from './lib/schedule.js';
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { emptyUsage, recent, activeDays } from './lib/usage.js';
-import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
-import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
+import { searchPlaces, placeToSave, detectLocationByIp } from './lib/geocode.js';
+import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir, placeDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
 import { DEV } from './lib/buildinfo.js';
 import { playChime } from './lib/audio.js';
@@ -436,6 +436,18 @@ let searchAbort = null;
 function placeLabel(p) {
   return [p.city, p.state, p.country].filter(Boolean).join(', ');
 }
+// The saved place as shown: as it was found, when that was in the UI language
+// (see placeToSave), else its stored English names.
+function shownLabel(p) {
+  return p.placeLabel && p.placeLabel.lang === localeFor() && p.placeLabel.text ? p.placeLabel.text : placeLabel(p);
+}
+// The place the settings hold, labelled as shown, or null.
+function savedPlace(settings) {
+  if (!settings.city) return null;
+  const place = { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon, placeLabel: settings.placeLabel || null, saved: true };
+  place.label = shownLabel(place);
+  return place;
+}
 function renderCityResults(items) {
   const box = $('cityResults');
   box.replaceChildren();
@@ -455,11 +467,15 @@ function renderCityResults(items) {
   }
   box.hidden = false;
 }
+function showPlace(label) {
+  $('city').value = label;
+  $('locLabel').textContent = label;
+  $('locLabel').title = label; // the whole name, should a long one still clip
+  $('city').dir = $('locLabel').dir = placeDir(label);
+}
 function choosePlace(p) {
   selectedPlace = p;
-  $('city').value = p.label;
-  $('locLabel').textContent = p.label;
-  $('locLabel').title = p.label;
+  showPlace(p.label);
   $('cityResults').hidden = true;
 }
 async function doCitySearch() {
@@ -472,7 +488,7 @@ async function doCitySearch() {
   try {
     if (searchAbort) searchAbort.abort();
     searchAbort = new AbortController();
-    const items = await searchPlaces(q, { signal: searchAbort.signal });
+    const items = await searchPlaces(q, { signal: searchAbort.signal, lang: localeFor() });
     renderCityResults(items.slice(0, 8));
   } catch (_) {
     /* aborted or offline */
@@ -485,9 +501,59 @@ async function load() {
   renderAll();
 }
 
+// State the worker changes on its own — the pause at a prayer and its resume, the
+// next prayer, a new day's times, the activity counts — with GET_STATE's value for
+// a key that is gone. A popup left open across a prayer kept its countdown until
+// reopened. Taken from the change itself: GET_STATE stores nextPrayer, which can
+// wake this listener again.
+const LIVE_STATE = { paused: { active: false }, nextPrayer: null, schedule: null, usage: null };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function onStorageChange(changes, area) {
+  if (area !== 'local' || !st) return;
+  let live = false;
+  let usage = false;
+  for (const k of Object.keys(LIVE_STATE)) {
+    if (!(k in changes)) continue;
+    const value = changes[k].newValue !== undefined ? changes[k].newValue : LIVE_STATE[k];
+    if (same(value, st[k])) continue; // Firefox reports a write of the same value too
+    st[k] = value;
+    if (k === 'usage') usage = true;
+    else live = true;
+  }
+  // Saved settings (a toggle here, the worker's strict-focus hold): what renderLive
+  // reads of them stays current — never the Settings fields being edited.
+  const settings = changes.settings && changes.settings.newValue;
+  if (settings && !same(settings, st.settings)) {
+    // A place saved elsewhere (the welcome page, another popup) shows here too,
+    // unless the field holds a search or a pick not yet saved (which any toggle's
+    // autosave would otherwise throw away, two places sharing a label unseen).
+    const untouched = selectedPlace ? selectedPlace.saved === true && $('city').value.trim() === selectedPlace.label : !$('city').value.trim();
+    st.settings = { ...st.settings, ...settings };
+    if (untouched) {
+      selectedPlace = savedPlace(st.settings);
+      showPlace(selectedPlace ? selectedPlace.label : '');
+      if (!selectedPlace) $('locLabel').textContent = '—';
+    }
+    live = true;
+  }
+  if (live) renderLive(); // rebuilds the prayer list: only for a real change
+  if (usage) renderUsage();
+}
+
+// After Resume or Focus: the state they changed, without renderAll, which would put
+// the saved settings back into Settings fields being edited (the banner shows over
+// Settings too).
+async function refreshLive() {
+  const s = await send({ type: 'GET_STATE' });
+  if (!s) return;
+  st = s;
+  renderLive();
+  renderUsage();
+}
+
 function renderAll() {
   if (!st) return;
-  const { settings, schedule, paused } = st;
+  const { settings } = st;
 
   $('enabled').checked = settings.enabled !== false;
   $('focusMode').checked = settings.focusMode === true;
@@ -507,16 +573,21 @@ function renderAll() {
   syncBadgeSettings();
   syncFocusSettings();
 
-  const place = settings.city
-    ? { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon }
-    : null;
-  if (place) place.label = placeLabel(place);
+  const place = savedPlace(settings);
   selectedPlace = place;
-  $('city').value = place ? place.label : '';
+  showPlace(place ? place.label : '');
+  if (!place) $('locLabel').textContent = '—';
   $('resumeMin').value = settings.autoResumeMinutes != null ? settings.autoResumeMinutes : 5;
   $('leadSeconds').value = String(settings.leadSeconds || 30);
-  $('locLabel').textContent = place ? place.label : '—';
-  $('locLabel').title = place ? place.label : ''; // the whole name, should a long one still clip
+  renderLive();
+  renderUsage();
+}
+
+// The parts drawn from what the worker changes on its own while the popup is open
+// (see LIVE_STATE) — never the Settings fields, so an edit in progress survives.
+function renderLive() {
+  const { schedule, paused } = st;
+  syncToggleTiles(); // strict focus locks two tiles while a prayer's pause lasts
 
   // Header date (Gregorian) at the location (see clockParts). The Hijri date lives
   // in the Tracker (not the header).
@@ -543,7 +614,6 @@ function renderAll() {
   renderList();
   updateClock();
   if (trackerActive()) renderTracker();
-  renderUsage();
 
   $('updated').textContent =
     schedule && schedule.fetchedAt
@@ -661,7 +731,10 @@ function renderList() {
     const past = p.ts < now;
     const isNext = p.name === nextName;
     const cls = [past ? 'past' : '', isNext ? 'next' : '', 'p-' + p.name.toLowerCase()].filter(Boolean).join(' ');
-    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name, adjustMin: p.adjustMin });
+    // The prayer paused for is not tomorrow's: the worker moves nextPrayer on just
+    // after it stores the pause.
+    const pausedFor = st.paused && st.paused.active && st.paused.prayer === p.name;
+    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past && !pausedFor, prayer: p.name, adjustMin: p.adjustMin });
     if (p.name === 'Fajr' && sched.sunrise) {
       makeRow('sunrise', ico(ICO_SUN), t('sunrise'), sched.sunrise.time, {});
     }
@@ -848,11 +921,11 @@ function renderUsage() {
 // ───────────────────────────── wiring ─────────────────────────────────────
 $('resumeBtn').addEventListener('click', async () => {
   await send({ type: 'RESUME_NOW' });
-  await load();
+  await refreshLive();
 });
 $('focusBtn').addEventListener('click', async () => {
   await send({ type: 'FOCUS_NOW' });
-  await load();
+  await refreshLive();
 });
 $('testBtn').addEventListener('click', async () => {
   $('testMsg').textContent = '';
@@ -883,17 +956,32 @@ $('save').addEventListener('click', async () => {
     setTimeout(() => ($('saveMsg').textContent = ''), 3000);
     return;
   }
+  $('save').disabled = true;
+  $('save').textContent = t('saving');
+  let place;
+  try {
+    place = await placeToSave(selectedPlace);
+  } catch (e) {
+    // A place found in another language is saved under its English names, which
+    // could not be had (offline): nothing is saved, as when the worker can't fetch.
+    $('save').disabled = false;
+    $('save').textContent = t('save');
+    $('saveMsg').textContent = t('error_detail', { msg: String((e && e.message) || e) });
+    setTimeout(() => ($('saveMsg').textContent = ''), 2500);
+    return;
+  }
   const method = parseInt($('method').value, 10);
   const settings = {
     enabled: $('enabled').checked,
     focusMode: $('focusMode').checked,
     strictFocus: $('strictFocus') ? $('strictFocus').checked : false,
     adhanChime: $('adhanChime') ? $('adhanChime').checked : true,
-    country: selectedPlace.country || 'United States',
-    state: selectedPlace.state || '',
-    city: selectedPlace.city,
-    lat: selectedPlace.lat,
-    lon: selectedPlace.lon,
+    country: place.country || '', // Open-Meteo has none for some places (Hebron, Gaza): never a made-up one
+    state: place.state || '',
+    city: place.city,
+    lat: place.lat,
+    lon: place.lon,
+    placeLabel: place.placeLabel, // null clears one an earlier place left (settings are merged)
     autoResumeMinutes: Math.max(0, parseInt($('resumeMin').value, 10) || 5),
     leadSeconds: parseInt($('leadSeconds').value, 10) || 30,
     method: Number.isFinite(method) ? method : 2,
@@ -904,8 +992,6 @@ $('save').addEventListener('click', async () => {
     badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
     badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
   };
-  $('save').disabled = true;
-  $('save').textContent = t('saving');
   const res = await send({ type: 'SAVE_SETTINGS', settings });
   $('save').disabled = false;
   $('save').textContent = t('save');
@@ -920,9 +1006,14 @@ $('save').addEventListener('click', async () => {
 $('refresh').addEventListener('click', async (e) => {
   e.preventDefault();
   $('refresh').textContent = t('refreshing');
-  await send({ type: 'REFRESH' });
+  const res = await send({ type: 'REFRESH' });
   await load();
   $('refresh').textContent = t('refresh');
+  if (!res || !res.ok) {
+    // The times shown are the last ones fetched: say why they did not change.
+    $('saveMsg').textContent = res && res.error ? t('error_detail', { msg: res.error }) : t('error');
+    setTimeout(() => ($('saveMsg').textContent = ''), 2500);
+  }
 });
 
 // Tabs
@@ -1026,6 +1117,7 @@ $('calNext').addEventListener('click', () => {
 
 // Location autocomplete
 $('city').addEventListener('input', () => {
+  $('city').dir = 'auto'; // what is typed, from its first letter
   clearTimeout(searchTimer);
   searchTimer = setTimeout(doCitySearch, 300);
 });
@@ -1206,6 +1298,7 @@ async function start() {
 
   await load();
   startTick();
+  chrome.storage.onChanged.addListener(onStorageChange);
 
   try {
     const { onboardingCompleted } = await chrome.storage.local.get('onboardingCompleted');

@@ -15,6 +15,17 @@ import { playChime } from './lib/audio.js';
 // Times are asked for in iso8601 form so each carries its UTC offset: the browser's
 // own tz data can be out of date (see "the location's UTC offset" in lib/schedule.js).
 const ALADHAN_BASE = 'https://api.aladhan.com/v1/timingsByCity';
+// The same day's times asked by the place's coordinates, saved with it: what
+// fetchSchedule falls back to when Aladhan cannot look the place up by name.
+const ALADHAN_BY_COORDS = 'https://api.aladhan.com/v1/timings';
+// Not 21.42/39.83: the welcome page's placeholder (Makkah) that a skipped setup up to
+// 2.1.4 saved beside the default city, never a place's own coordinates (Open-Meteo's
+// Mecca is 21.42664/39.82563).
+const PLACEHOLDER_COORDS = { lat: 21.42, lon: 39.83 };
+const hasCoords = (settings) =>
+  Number.isFinite(settings.lat) &&
+  Number.isFinite(settings.lon) &&
+  !(settings.lat === PLACEHOLDER_COORDS.lat && settings.lon === PLACEHOLDER_COORDS.lon);
 
 // Aladhan's optional date path segment is DD-MM-YYYY.
 function ddmmyyyy(d = new Date()) {
@@ -113,7 +124,7 @@ function recordUsage(event) {
 // ---------- schedule fetch ----------
 // The settings that make up the Aladhan request, plus the minute adjustments
 // applied to its answer. A fetched schedule belongs to these.
-const REQUEST_KEYS = ['city', 'country', 'state', 'method', 'school'];
+const REQUEST_KEYS = ['city', 'country', 'state', 'lat', 'lon', 'method', 'school']; // lat/lon: see fetchSchedule's fallback
 const adjustKey = (s) => Object.values(prayerAdjustments(s && s.adjustMinutes)).join(',');
 function sameRequest(a, b) {
   return REQUEST_KEYS.every((k) => (a && a[k]) === (b && b[k])) && adjustKey(a) === adjustKey(b);
@@ -161,17 +172,32 @@ function noonOf(day, zone) {
 // today (read from the answer's offsets) is another date, that date is asked for
 // in turn (an answer without offsets is stored under the location's today as it
 // is). `tz`, when given, is the timezone the answer must carry.
-async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
+// The place is asked for by name, as always. Aladhan looks a name up with its own
+// geocoder, which can fail: it has answered 503 ("Geocoding is temporarily
+// unavailable") for every name it had not cached, and 400 for names it should know
+// ("Cairo, Cairo Governorate, Egypt"). Then, if the place's coordinates are saved,
+// the same day is asked for by them (`byCoords`), which needs no lookup and gives
+// the same times; its day rollover is asked for the same way.
+async function fetchSchedule(settings, { day, tz, timeoutMs, byCoords = false } = {}) {
   const date = day ? ymdToAladhan(day) : ddmmyyyy(new Date());
-  let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(
-    settings.country
-  )}&method=${settings.method}&school=${settings.school}`;
-  if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
-  url += '&iso8601=true';
+  const calc = `method=${settings.method}&school=${settings.school}`;
   const init = { cache: 'no-store' };
   const signal = timeoutMs ? timeoutSignal(timeoutMs) : undefined;
   if (signal) init.signal = signal;
-  const res = await fetch(url, init);
+  // With no country a bare name can be any place's (Aladhan answers "Dakhla" with
+  // a place in India): such a place is asked for by its coordinates alone.
+  if (!settings.country && hasCoords(settings)) byCoords = true;
+  let res;
+  if (!byCoords) {
+    let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(settings.country)}&${calc}`;
+    if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
+    res = await fetch(url + '&iso8601=true', init);
+    if (!res.ok && hasCoords(settings)) {
+      console.warn(`Adhan: Aladhan could not take ${settings.city} by name (${res.status}); asking by its coordinates`);
+      byCoords = true;
+    }
+  }
+  if (byCoords) res = await fetch(`${ALADHAN_BY_COORDS}/${date}?latitude=${settings.lat}&longitude=${settings.lon}&${calc}&iso8601=true`, init);
   if (!res.ok) throw new Error(`Aladhan ${res.status}`);
   const json = await res.json();
   const data = json && json.data;
@@ -223,7 +249,7 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
     // This machine's date was asked for, and it is another day at the location:
     // ask for that day's own times (its offsets can differ, e.g. across a DST night).
     const today = day || locationYmd({ tz: zone, prayers, sunrise });
-    if (today !== asked) return fetchSchedule(settings, { day: today, tz: zone, timeoutMs });
+    if (today !== asked) return fetchSchedule(settings, { day: today, tz: zone, timeoutMs, byCoords });
     return { date: asked, prayers, sunrise, tz: zone, fetchedAt: Date.now() };
   }
   // An answer without offsets: anchor every prayer's epoch to the location's
@@ -625,8 +651,8 @@ async function handlePrayerFire() {
   await chrome.storage.local.set({ paused });
 
   try {
-    const { lang } = await chrome.storage.local.get('lang');
-    const M = await getCatalog(lang || 'en');
+    const code = await uiLang(); // the saved language, else the browser's (as the tooltip)
+    const M = await getCatalog(code);
     const pname = M['prayer_' + nextPrayer.name] || nextPrayer.name;
     // Chrome supports notification action buttons (+ priority); Firefox's
     // WebExtensions schema rejects the `buttons` property and ignores `priority`.
@@ -639,7 +665,8 @@ async function handlePrayerFire() {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: interpolate(M.notif_title, { prayer: pname }),
-      message: interpolate(M.notif_body, { prayer: pname, time: nextPrayer.time }),
+      // "(5:12 AM)", not "(AM 5:12)", in Arabic and Urdu: isolated, as the tooltip's clock.
+      message: interpolate(M.notif_body, { prayer: pname, time: isRTLLang(code) ? `\u2066${nextPrayer.time}\u2069` : nextPrayer.time }),
     };
     try {
       await chrome.notifications.create(`adhan-${firedTs}`, {
@@ -1021,8 +1048,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const settings = { ...current, ...incoming };
         await chrome.storage.local.set({ settings });
         const { schedule } = await chrome.storage.local.get('schedule');
-        const locationChanged =
-          settings.city !== current.city || settings.country !== current.country || settings.state !== current.state;
+        // The coordinates too: two places can share a name, and fetchSchedule's
+        // fallback asks by them.
+        const locationChanged = ['city', 'country', 'state', 'lat', 'lon'].some((k) => settings[k] !== current[k]);
         const locationOrCalcChanged =
           !schedule ||
           locationChanged ||

@@ -1,24 +1,27 @@
 // Adhan Focus — Welcome & Onboarding Controller
-import { searchPlaces, detectLocationByIp } from './lib/geocode.js';
-import { initI18n, setLang, applyDir, t as translate } from './lib/i18n.js';
+import { searchPlaces, placeToSave, detectLocationByIp } from './lib/geocode.js';
+import { initI18n, setLang, applyDir, getLang, placeDir, t as translate } from './lib/i18n.js';
 
 let t = (k) => k;
 let currentStep = 1;
 let selectedPlace = null;
+// Whether the picked place's English names are in state.settings (see placeToSave):
+// Finish waits for it, and asks once more when they could not be had.
+let placeSaved = Promise.resolve(true);
+// Finish's hand-over of the settings to the worker, and the moment they are on
+// their way: Close waits for the first, or 2 s after the second.
+let saving = Promise.resolve();
+let handedOver = Promise.resolve();
 let simTimer = null;
 // Until onboarding is done, the stored city is the install default (Sunnyvale), not
 // the user's: the location field starts empty and no default-city preview is shown.
 let onboarded = false;
 
-// Initial state cache
+// Initial state cache. No place: the stored settings bring the install default's,
+// and a placeholder's coordinates (Makkah's, until 2.1.4) were saved beside it.
 let state = {
   settings: {
     enabled: true,
-    city: 'Makkah',
-    state: '',
-    country: 'Saudi Arabia',
-    lat: 21.42,
-    lon: 39.83,
     adhanChime: true,
     focusMode: true,
     strictFocus: false,
@@ -175,6 +178,7 @@ function wireLocationSearch() {
   let debounceTimer = null;
 
   input.addEventListener('input', () => {
+    input.dir = 'auto'; // what is typed, from its first letter
     clearTimeout(debounceTimer);
     const query = input.value.trim();
     if (query.length < 2) {
@@ -185,7 +189,8 @@ function wireLocationSearch() {
 
     debounceTimer = setTimeout(async () => {
       try {
-        const places = await searchPlaces(query);
+        const places = await searchPlaces(query, { lang: getLang() || 'en' });
+        if (input.value.trim() !== query) return; // a later query's answer is due
         renderSuggestions(places);
       } catch (_) {
         suggest.hidden = true;
@@ -222,6 +227,7 @@ function wireLocationSearch() {
   async function selectPlace(place, label) {
     selectedPlace = place;
     input.value = label;
+    input.dir = placeDir(label);
     suggest.hidden = true;
 
     state.settings.city = place.city;
@@ -229,10 +235,25 @@ function wireLocationSearch() {
     state.settings.country = place.country || '';
     state.settings.lat = place.lat;
     state.settings.lon = place.lon;
+    state.settings.placeLabel = null;
+    placeSaved = englishNamesOf(place);
 
     // Fetch and preview real prayer times for this location
     await fetchPreviewTimings(place.lat, place.lon, place.city, place.country);
   }
+}
+
+// The picked place's English names into state.settings, unless a later choice came
+// first; resolves to whether they are there. Should they not come (offline), the
+// names as found are kept.
+function englishNamesOf(place) {
+  return placeToSave(place).then(
+    (saved) => {
+      if (selectedPlace === place) Object.assign(state.settings, saved);
+      return true;
+    },
+    () => false
+  );
 }
 
 // Geolocation ("Detect My Location") via IP lookup
@@ -254,9 +275,14 @@ function wireGeolocation() {
         state.settings.country = place.country;
         state.settings.lat = place.lat;
         state.settings.lon = place.lon;
+        state.settings.placeLabel = null; // nor one an earlier pick left
         selectedPlace = place;
+        placeSaved = Promise.resolve(true); // named in English already
 
-        if (input) input.value = place.label;
+        if (input) {
+          input.value = place.label;
+          input.dir = placeDir(place.label);
+        }
         await fetchPreviewTimings(place.lat, place.lon, place.city, place.country);
       }
     } catch (_) {
@@ -509,25 +535,34 @@ async function finishOnboarding() {
   triggerCelebration();
 
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    try {
-      await chrome.storage.local.set({ onboardingCompleted: true });
-
-      // Hand the settings to the background, which stores them and — the location
-      // or calculation having changed — fetches that place's schedule and re-arms
-      // the alarms. Writing them to storage first left it nothing to compare
-      // against, so it kept the schedule fetched at install for the default city.
-      // Only when it can't be reached are they stored here.
+    // Hand the settings to the background, which stores them and — the location
+    // or calculation having changed — fetches that place's schedule and re-arms
+    // the alarms. Writing them to storage first left it nothing to compare
+    // against, so it kept the schedule fetched at install for the default city.
+    // Only when it can't be reached are they stored here.
+    let sent;
+    handedOver = new Promise((resolve) => (sent = resolve));
+    saving = (async () => {
+      // A lookup that failed at the pick is usually a blip: one more try.
+      if (!(await placeSaved) && selectedPlace) await englishNamesOf(selectedPlace);
       const settings = state.settings;
-      (async () => {
-        let res;
-        try {
-          if (chrome.runtime && chrome.runtime.sendMessage) {
-            res = await chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings });
-          }
-        } catch (_) {}
-        if (!res) await chrome.storage.local.set({ settings });
-      })().catch(() => {});
-    } catch (_) {}
+      let reply;
+      try {
+        // Its failure handled at once: it is awaited only after the flag below is set.
+        if (chrome.runtime && chrome.runtime.sendMessage) reply = Promise.resolve(chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings })).catch(() => undefined);
+      } catch (_) {}
+      // Set up only once the place is on its way: a tab closed before then leaves
+      // setup to be finished, rather than the default city kept unasked.
+      await chrome.storage.local.set({ onboardingCompleted: true });
+      sent();
+      let res;
+      try {
+        res = await reply;
+      } catch (_) {}
+      if (!res) await chrome.storage.local.set({ settings });
+    })()
+      .catch(() => {})
+      .finally(() => sent());
   }
 
   setTimeout(() => {
@@ -539,14 +574,22 @@ async function finishOnboarding() {
 
     const successView = document.getElementById('stepSuccessView');
     const citySpan = document.getElementById('completionCity');
-    if (citySpan) citySpan.textContent = state.settings.city || 'your location';
+    // The city as it was found while the page is still in that language, else as stored.
+    const shown = selectedPlace && selectedPlace.lang === getLang() ? selectedPlace.city : state.settings.city;
+    if (citySpan) {
+      citySpan.textContent = shown || 'your location';
+      citySpan.dir = 'auto'; // isolated: an Arabic name keeps the English sentence in order
+    }
     if (successView) {
       successView.hidden = false;
       successView.classList.add('is-active');
     }
   }, 350);
 
-  document.getElementById('closeWelcomeBtn')?.addEventListener('click', () => {
+  document.getElementById('closeWelcomeBtn')?.addEventListener('click', async () => {
+    // The place reaches the worker before the page goes, though not its answer, which
+    // waits on Aladhan: the worker has stored the settings by then.
+    await Promise.race([saving, handedOver.then(() => new Promise((resolve) => setTimeout(resolve, 2000)))]);
     window.close();
   });
 }

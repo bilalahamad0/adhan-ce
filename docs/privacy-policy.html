@@ -73,7 +73,7 @@
         <div class="logo">🕌</div>
         <h1>Privacy Policy — Adhan Focus</h1>
         <p>Live prayer-time countdown with automatic cross-tab media pausing.</p>
-        <div class="updated">Last updated: October 7, 2026</div>
+        <div class="updated">Last updated: October 16, 2026</div>
       </div>
     </header>
 
@@ -82,8 +82,10 @@
         Adhan Focus is built to be privacy-friendly. It does <strong>not</strong> use analytics or
         trackers, does <strong>not</strong> require an account, and does <strong>not</strong> sell or share
         your data. Your settings stay on your own device. The only information sent off your device is the
-        location you choose (a city name) and the text you type into the location search — used solely to
-        look up prayer times and resolve places.
+        place you choose (its name, and its coordinates when the prayer-times service needs them), the text
+        you type into the location search (with the extension's display language), and, only when you click
+        "Detect location", a request from which your city is estimated by its IP address — used solely to look
+        up prayer times and resolve places.
       </p>
 
       <h2>Who this applies to</h2>
@@ -103,7 +105,8 @@
           <tr>
             <td>Your chosen location (city, region/state, country, and the coordinates of the place you pick)</td>
             <td>To fetch the correct daily prayer times and display them.</td>
-            <td>Stored locally on your device; the city/region/country are sent to the prayer-times API (see below).</td>
+            <td>Stored locally on your device; the city/region/country are sent to the prayer-times API, and the
+              coordinates in the cases described below.</td>
           </tr>
           <tr>
             <td>Location search text you type</td>
@@ -133,21 +136,30 @@
       </p>
 
       <h2>Third-party services</h2>
-      <p>To do its job, the extension makes requests to two external services:</p>
+      <p>To do its job, the extension makes requests to these external services:</p>
       <ul>
         <li>
           <strong>Prayer-times API</strong> (<code>api.aladhan.com</code>, the public
           <a href="https://aladhan.com/prayer-times-api" target="_blank" rel="noopener">AlAdhan API</a>) —
           receives the <em>city, region/state, and country</em> you selected (plus your chosen calculation
-          method and Asr school) in order to return that location's prayer times. No personal identifiers
-          are sent.
+          method and Asr school) in order to return that location's prayer times. It receives the place's
+          <em>coordinates</em> instead when it cannot look the place up by its name, and when the welcome page
+          previews the times of the place you pick. No personal identifiers are sent.
         </li>
         <li>
           <strong>Open-Meteo geocoding API</strong>
           (<code>geocoding-api.open-meteo.com</code>, see the
           <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener">Open-Meteo terms &amp; privacy</a>)
-          — receives the <em>text you type</em> in the location search to return matching places and their
-          coordinates.
+          — receives the <em>text you type</em> in the location search, asked in English and, if the extension
+          is set to another language, in that language too, to return matching places and their coordinates.
+          When you pick a place found in another language, it also receives that place's Open-Meteo id, to
+          return its English names, which are the ones saved and sent to AlAdhan (should they not come during
+          the welcome setup, the names as found are saved instead).
+        </li>
+        <li>
+          <strong>IP-based location detection</strong>, only when you click "Detect location"
+          (<code>api.bigdatacloud.net</code>, and <code>ipapi.co</code> when the first gives no place) — receives
+          the request, and so your IP address, from which it estimates your city.
         </li>
       </ul>
       <p>
@@ -179,7 +191,7 @@
           <tr><td><code>alarms</code></td><td>Trigger the countdown and pause exactly at prayer time.</td></tr>
           <tr><td><code>notifications</code></td><td>Show the desktop notification when it's time to pray.</td></tr>
           <tr><td><code>scripting</code></td><td>Insert the pause/countdown logic into pages that are already open when you install or update.</td></tr>
-          <tr><td><code>tabs</code></td><td>Send the pause/resume signal to your open tabs.</td></tr>
+          <tr><td><code>offscreen</code></td><td>Play the Adhan chime from the background (Chrome, Edge and Opera; Firefox has no such permission and plays it from its background page).</td></tr>
           <tr><td>Access to websites (<code>http://*/*</code>, <code>https://*/*</code>)</td><td>Required so media can be paused in <em>any</em> tab at prayer time — the extension's core feature.</td></tr>
         </tbody>
       </table>
