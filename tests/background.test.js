@@ -2546,6 +2546,14 @@ describe('when Aladhan cannot look the place up by name', () => {
     expect(aladhanCalls(fetch).slice(before).some((u) => u.includes('latitude=30.2&longitude=-85.68'))).toBe(true);
   });
 
+  it('asks a place with no country by its coordinates alone (Aladhan took a bare "Dakhla" for a place in India)', async () => {
+    const DAKHLA = { ...DEFAULTS, city: 'Dakhla', state: '', country: '', lat: 23.68477, lon: -15.95798 };
+    const { h, fetch } = await loadBackground({ storage: { settings: DAKHLA, schedule: CAIRO_DAY }, fetchRoutes: [byName(200), byCoords('Africa/El_Aaiun', '+00:00')] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch).every((u) => u.includes('/v1/timings/') && u.includes('latitude=23.68477&longitude=-15.95798'))).toBe(true);
+    expect(h.store.schedule.tz).toBe('Africa/El_Aaiun');
+  });
+
   it('asks a place found by name by name only, as always', async () => {
     const { h, fetch } = await loadBackground({ storage: { settings: CAIRO, schedule: CAIRO_DAY }, fetchRoutes: [['/v1/timingsByCity/', byCoords()[1]], byCoords()] });
     expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });

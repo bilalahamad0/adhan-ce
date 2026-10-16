@@ -260,6 +260,33 @@ describe('live updates while the popup is open', () => {
     expect($('city').value).toBe('Lon');
   });
 
+  it("keeps a pick not yet saved when a toggle's autosave writes the settings", async () => {
+    // Two "Springfield, Florida, United States": the pick differs only by its coordinates.
+    const SPRING = (lat, lon) => ({ name: 'Springfield', admin1: 'Florida', country: 'United States', latitude: lat, longitude: lon });
+    const state = defaultState();
+    Object.assign(state.settings, { city: 'Springfield', state: 'Florida', country: 'United States', lat: 30.16, lon: -85.61 });
+    await load({ state, fetchRoutes: [['geocoding-api.open-meteo.com', { results: [SPRING(30.2, -85.68)] }]] });
+    $('city').value = 'Spring';
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    $('cityResults').children[0].dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    // A tile's autosave: the worker stores the merged settings, still the saved place.
+    await chrome.__.fireStorageChange({ settings: { newValue: { ...state.settings, adhanChime: false } } });
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').pop();
+    expect(saved.settings).toMatchObject({ city: 'Springfield', lat: 30.2, lon: -85.68 });
+  });
+
+  it('says why a Refresh changed nothing', async () => {
+    const state = defaultState();
+    await load({ state, send: (m) => (m.type === 'GET_STATE' ? state : m.type === 'REFRESH' ? { ok: false, error: 'Aladhan 503' } : { ok: true }) });
+    $('refresh').click();
+    await settle();
+    expect($('saveMsg').textContent).toContain('Aladhan 503');
+  });
+
   it('ignores other storage areas and keys', async () => {
     await load();
     await chrome.__.fireStorageChange({ paused: { newValue: { active: true, prayer: 'Asr' } } }, 'sync');

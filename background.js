@@ -184,6 +184,9 @@ async function fetchSchedule(settings, { day, tz, timeoutMs, byCoords = false } 
   const init = { cache: 'no-store' };
   const signal = timeoutMs ? timeoutSignal(timeoutMs) : undefined;
   if (signal) init.signal = signal;
+  // With no country a bare name can be any place's (Aladhan answers "Dakhla" with
+  // a place in India): such a place is asked for by its coordinates alone.
+  if (!settings.country && hasCoords(settings)) byCoords = true;
   let res;
   if (!byCoords) {
     let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(settings.country)}&${calc}`;

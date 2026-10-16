@@ -548,7 +548,8 @@ async function finishOnboarding() {
       const settings = state.settings;
       let reply;
       try {
-        if (chrome.runtime && chrome.runtime.sendMessage) reply = chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings });
+        // Its failure handled at once: it is awaited only after the flag below is set.
+        if (chrome.runtime && chrome.runtime.sendMessage) reply = Promise.resolve(chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings })).catch(() => undefined);
       } catch (_) {}
       // Set up only once the place is on its way: a tab closed before then leaves
       // setup to be finished, rather than the default city kept unasked.

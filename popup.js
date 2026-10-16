@@ -444,7 +444,7 @@ function shownLabel(p) {
 // The place the settings hold, labelled as shown, or null.
 function savedPlace(settings) {
   if (!settings.city) return null;
-  const place = { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon, placeLabel: settings.placeLabel || null };
+  const place = { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon, placeLabel: settings.placeLabel || null, saved: true };
   place.label = shownLabel(place);
   return place;
 }
@@ -525,8 +525,9 @@ function onStorageChange(changes, area) {
   const settings = changes.settings && changes.settings.newValue;
   if (settings && !same(settings, st.settings)) {
     // A place saved elsewhere (the welcome page, another popup) shows here too,
-    // unless the field holds a search or a pick not yet saved.
-    const untouched = selectedPlace ? $('city').value.trim() === selectedPlace.label : !$('city').value.trim();
+    // unless the field holds a search or a pick not yet saved (which any toggle's
+    // autosave would otherwise throw away, two places sharing a label unseen).
+    const untouched = selectedPlace ? selectedPlace.saved === true && $('city').value.trim() === selectedPlace.label : !$('city').value.trim();
     st.settings = { ...st.settings, ...settings };
     if (untouched) {
       selectedPlace = savedPlace(st.settings);
@@ -1005,9 +1006,14 @@ $('save').addEventListener('click', async () => {
 $('refresh').addEventListener('click', async (e) => {
   e.preventDefault();
   $('refresh').textContent = t('refreshing');
-  await send({ type: 'REFRESH' });
+  const res = await send({ type: 'REFRESH' });
   await load();
   $('refresh').textContent = t('refresh');
+  if (!res || !res.ok) {
+    // The times shown are the last ones fetched: say why they did not change.
+    $('saveMsg').textContent = res && res.error ? t('error_detail', { msg: res.error }) : t('error');
+    setTimeout(() => ($('saveMsg').textContent = ''), 2500);
+  }
 });
 
 // Tabs
