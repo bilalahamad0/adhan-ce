@@ -103,7 +103,8 @@
           <tr>
             <td>Your chosen location (city, region/state, country, and the coordinates of the place you pick)</td>
             <td>To fetch the correct daily prayer times and display them.</td>
-            <td>Stored locally on your device; the city/region/country are sent to the prayer-times API (see below).</td>
+            <td>Stored locally on your device; the city/region/country are sent to the prayer-times API, and the
+              coordinates in the cases described below.</td>
           </tr>
           <tr>
             <td>Location search text you type</td>
@@ -133,14 +134,15 @@
       </p>
 
       <h2>Third-party services</h2>
-      <p>To do its job, the extension makes requests to two external services:</p>
+      <p>To do its job, the extension makes requests to these external services:</p>
       <ul>
         <li>
           <strong>Prayer-times API</strong> (<code>api.aladhan.com</code>, the public
           <a href="https://aladhan.com/prayer-times-api" target="_blank" rel="noopener">AlAdhan API</a>) —
           receives the <em>city, region/state, and country</em> you selected (plus your chosen calculation
-          method and Asr school) in order to return that location's prayer times. No personal identifiers
-          are sent.
+          method and Asr school) in order to return that location's prayer times. It receives the place's
+          <em>coordinates</em> instead when it cannot look the place up by its name, and when the welcome page
+          previews the times of the place you pick. No personal identifiers are sent.
         </li>
         <li>
           <strong>Open-Meteo geocoding API</strong>
@@ -151,6 +153,11 @@
           When you pick a place found in another language, it also receives that place's Open-Meteo id, to
           return its English names, which are the ones saved and sent to AlAdhan (should they not come during
           the welcome setup, the names as found are saved instead).
+        </li>
+        <li>
+          <strong>IP-based location detection</strong>, only when you click "Detect location"
+          (<code>api.bigdatacloud.net</code>, and <code>ipapi.co</code> when the first gives no place) — receives
+          the request, and so your IP address, from which it estimates your city.
         </li>
       </ul>
       <p>

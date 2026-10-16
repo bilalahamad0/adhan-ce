@@ -15,6 +15,10 @@ import { playChime } from './lib/audio.js';
 // Times are asked for in iso8601 form so each carries its UTC offset: the browser's
 // own tz data can be out of date (see "the location's UTC offset" in lib/schedule.js).
 const ALADHAN_BASE = 'https://api.aladhan.com/v1/timingsByCity';
+// The same day's times asked by the place's coordinates, saved with it: what
+// fetchSchedule falls back to when Aladhan cannot look the place up by name.
+const ALADHAN_BY_COORDS = 'https://api.aladhan.com/v1/timings';
+const hasCoords = (settings) => Number.isFinite(settings.lat) && Number.isFinite(settings.lon);
 
 // Aladhan's optional date path segment is DD-MM-YYYY.
 function ddmmyyyy(d = new Date()) {
@@ -161,17 +165,29 @@ function noonOf(day, zone) {
 // today (read from the answer's offsets) is another date, that date is asked for
 // in turn (an answer without offsets is stored under the location's today as it
 // is). `tz`, when given, is the timezone the answer must carry.
-async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
+// The place is asked for by name, as always. Aladhan looks a name up with its own
+// geocoder, which can fail: it has answered 503 ("Geocoding is temporarily
+// unavailable") for every name it had not cached, and 400 for names it should know
+// ("Cairo, Cairo Governorate, Egypt"). Then, if the place's coordinates are saved,
+// the same day is asked for by them (`byCoords`), which needs no lookup and gives
+// the same times; its day rollover is asked for the same way.
+async function fetchSchedule(settings, { day, tz, timeoutMs, byCoords = false } = {}) {
   const date = day ? ymdToAladhan(day) : ddmmyyyy(new Date());
-  let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(
-    settings.country
-  )}&method=${settings.method}&school=${settings.school}`;
-  if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
-  url += '&iso8601=true';
+  const calc = `method=${settings.method}&school=${settings.school}`;
   const init = { cache: 'no-store' };
   const signal = timeoutMs ? timeoutSignal(timeoutMs) : undefined;
   if (signal) init.signal = signal;
-  const res = await fetch(url, init);
+  let res;
+  if (!byCoords) {
+    let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(settings.country)}&${calc}`;
+    if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
+    res = await fetch(url + '&iso8601=true', init);
+    if (!res.ok && hasCoords(settings)) {
+      console.warn(`Adhan: Aladhan could not take ${settings.city} by name (${res.status}); asking by its coordinates`);
+      byCoords = true;
+    }
+  }
+  if (byCoords) res = await fetch(`${ALADHAN_BY_COORDS}/${date}?latitude=${settings.lat}&longitude=${settings.lon}&${calc}&iso8601=true`, init);
   if (!res.ok) throw new Error(`Aladhan ${res.status}`);
   const json = await res.json();
   const data = json && json.data;
@@ -223,7 +239,7 @@ async function fetchSchedule(settings, { day, tz, timeoutMs } = {}) {
     // This machine's date was asked for, and it is another day at the location:
     // ask for that day's own times (its offsets can differ, e.g. across a DST night).
     const today = day || locationYmd({ tz: zone, prayers, sunrise });
-    if (today !== asked) return fetchSchedule(settings, { day: today, tz: zone, timeoutMs });
+    if (today !== asked) return fetchSchedule(settings, { day: today, tz: zone, timeoutMs, byCoords });
     return { date: asked, prayers, sunrise, tz: zone, fetchedAt: Date.now() };
   }
   // An answer without offsets: anchor every prayer's epoch to the location's
