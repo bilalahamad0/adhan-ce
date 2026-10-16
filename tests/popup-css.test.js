@@ -44,9 +44,9 @@ describe('popup.css SVG backgrounds', () => {
 // A Latin run in an Arabic or Urdu page is laid out right to left unless told
 // otherwise: a long value was clipped at its start and a time read "AM 09:05".
 describe('Latin text in right-to-left pages', () => {
-  it('lets the method select read left to right while it keeps the RTL chevron side', () => {
-    expect(rule('#method').decls.direction).toBe('ltr');
-    const rtl = rule('[dir="rtl"] #method').decls;
+  it('lets the method and Hijri selects read left to right while they keep the RTL chevron side', () => {
+    expect(rule('#method, #hijriOffset').decls.direction).toBe('ltr'); // "+1", not "1+"
+    const rtl = rule('[dir="rtl"] #method, [dir="rtl"] #hijriOffset').decls;
     expect(rtl['text-align']).toBe('right'); // a short name sits where the other values do
     // The chevron is drawn at "left 10px" in RTL: the padding there must clear it.
     const chevron = rule('.set-row select').decls;
@@ -58,6 +58,13 @@ describe('Latin text in right-to-left pages', () => {
   it("keeps an empty city field's placeholder right to left in Arabic and Urdu", () => {
     expect(rule('[dir="rtl"] #city:placeholder-shown').decls.direction).toBe('rtl');
     expect(rule('[dir="rtl"] .loc-input:placeholder-shown', rulesOf('welcome.css')).decls.direction).toBe('rtl');
+  });
+
+  it("leaves the Tracker's Hijri date in the UI language's direction", () => {
+    // Forced left to right, "4 جمادى الأولى 1448 هـ" put the day number at the wrong end.
+    const hijri = rule('.dd-hijri').decls;
+    expect(hijri.direction).toBeUndefined();
+    expect(hijri['unicode-bidi']).toBe('isolate');
   });
 
   it('keeps the welcome preview times left to right', () => {

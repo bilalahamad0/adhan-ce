@@ -8,7 +8,7 @@ import { formatCountdown, ymd, PRAYER_ORDER, locationClock, prayerAdjustments, A
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { emptyUsage, recent, activeDays } from './lib/usage.js';
 import { searchPlaces, placeToSave, detectLocationByIp } from './lib/geocode.js';
-import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
+import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir, placeDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
 import { DEV } from './lib/buildinfo.js';
 import { playChime } from './lib/audio.js';
@@ -460,11 +460,15 @@ function renderCityResults(items) {
   }
   box.hidden = false;
 }
+function showPlace(label) {
+  $('city').value = label;
+  $('locLabel').textContent = label;
+  $('locLabel').title = label; // the whole name, should a long one still clip
+  $('city').dir = $('locLabel').dir = placeDir(label);
+}
 function choosePlace(p) {
   selectedPlace = p;
-  $('city').value = p.label;
-  $('locLabel').textContent = p.label;
-  $('locLabel').title = p.label;
+  showPlace(p.label);
   $('cityResults').hidden = true;
 }
 async function doCitySearch() {
@@ -496,13 +500,39 @@ async function load() {
 // reopened. Taken from the change itself: GET_STATE stores nextPrayer, which can
 // wake this listener again.
 const LIVE_STATE = { paused: { active: false }, nextPrayer: null, schedule: null, usage: null };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function onStorageChange(changes, area) {
   if (area !== 'local' || !st) return;
-  const keys = Object.keys(LIVE_STATE).filter((k) => k in changes);
-  if (!keys.length) return;
-  for (const k of keys) st[k] = changes[k].newValue !== undefined ? changes[k].newValue : LIVE_STATE[k];
+  let live = false;
+  let usage = false;
+  for (const k of Object.keys(LIVE_STATE)) {
+    if (!(k in changes)) continue;
+    const value = changes[k].newValue !== undefined ? changes[k].newValue : LIVE_STATE[k];
+    if (same(value, st[k])) continue; // Firefox reports a write of the same value too
+    st[k] = value;
+    if (k === 'usage') usage = true;
+    else live = true;
+  }
+  // Saved settings (a toggle here, the worker's strict-focus hold): what renderLive
+  // reads of them stays current — never the Settings fields being edited.
+  const settings = changes.settings && changes.settings.newValue;
+  if (settings && !same(settings, st.settings)) {
+    st.settings = { ...st.settings, ...settings };
+    live = true;
+  }
+  if (live) renderLive(); // rebuilds the prayer list: only for a real change
+  if (usage) renderUsage();
+}
+
+// After Resume or Focus: the state they changed, without renderAll, which would put
+// the saved settings back into Settings fields being edited (the banner shows over
+// Settings too).
+async function refreshLive() {
+  const s = await send({ type: 'GET_STATE' });
+  if (!s) return;
+  st = s;
   renderLive();
-  if (keys.includes('usage')) renderUsage();
+  renderUsage();
 }
 
 function renderAll() {
@@ -532,12 +562,10 @@ function renderAll() {
     : null;
   if (place) place.label = shownLabel(place);
   selectedPlace = place;
-  $('city').value = place ? place.label : '';
+  showPlace(place ? place.label : '');
+  if (!place) $('locLabel').textContent = '—';
   $('resumeMin').value = settings.autoResumeMinutes != null ? settings.autoResumeMinutes : 5;
   $('leadSeconds').value = String(settings.leadSeconds || 30);
-  $('locLabel').textContent = place ? place.label : '—';
-  $('locLabel').title = place ? place.label : ''; // the whole name, should a long one still clip
-
   renderLive();
   renderUsage();
 }
@@ -690,7 +718,10 @@ function renderList() {
     const past = p.ts < now;
     const isNext = p.name === nextName;
     const cls = [past ? 'past' : '', isNext ? 'next' : '', 'p-' + p.name.toLowerCase()].filter(Boolean).join(' ');
-    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name, adjustMin: p.adjustMin });
+    // The prayer paused for is not tomorrow's: the worker moves nextPrayer on just
+    // after it stores the pause.
+    const pausedFor = st.paused && st.paused.active && st.paused.prayer === p.name;
+    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past && !pausedFor, prayer: p.name, adjustMin: p.adjustMin });
     if (p.name === 'Fajr' && sched.sunrise) {
       makeRow('sunrise', ico(ICO_SUN), t('sunrise'), sched.sunrise.time, {});
     }
@@ -877,11 +908,11 @@ function renderUsage() {
 // ───────────────────────────── wiring ─────────────────────────────────────
 $('resumeBtn').addEventListener('click', async () => {
   await send({ type: 'RESUME_NOW' });
-  await load();
+  await refreshLive();
 });
 $('focusBtn').addEventListener('click', async () => {
   await send({ type: 'FOCUS_NOW' });
-  await load();
+  await refreshLive();
 });
 $('testBtn').addEventListener('click', async () => {
   $('testMsg').textContent = '';
@@ -1068,6 +1099,7 @@ $('calNext').addEventListener('click', () => {
 
 // Location autocomplete
 $('city').addEventListener('input', () => {
+  $('city').dir = 'auto'; // what is typed, from its first letter
   clearTimeout(searchTimer);
   searchTimer = setTimeout(doCitySearch, 300);
 });

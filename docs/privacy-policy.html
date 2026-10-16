@@ -82,8 +82,8 @@
         Adhan Focus is built to be privacy-friendly. It does <strong>not</strong> use analytics or
         trackers, does <strong>not</strong> require an account, and does <strong>not</strong> sell or share
         your data. Your settings stay on your own device. The only information sent off your device is the
-        location you choose (a city name) and the text you type into the location search — used solely to
-        look up prayer times and resolve places.
+        location you choose (a city name) and the text you type into the location search (with the
+        extension's display language) — used solely to look up prayer times and resolve places.
       </p>
 
       <h2>Who this applies to</h2>
@@ -146,10 +146,11 @@
           <strong>Open-Meteo geocoding API</strong>
           (<code>geocoding-api.open-meteo.com</code>, see the
           <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener">Open-Meteo terms &amp; privacy</a>)
-          — receives the <em>text you type</em> in the location search, and the extension's display language,
-          to return matching places and their coordinates in that language. When you pick a place found in
-          another language than English, it also receives that place's Open-Meteo id, to return its English
-          names, which are the ones saved and sent to AlAdhan.
+          — receives the <em>text you type</em> in the location search, asked in English and, if the extension
+          is set to another language, in that language too, to return matching places and their coordinates.
+          When you pick a place found in another language, it also receives that place's Open-Meteo id, to
+          return its English names, which are the ones saved and sent to AlAdhan (should they not come during
+          the welcome setup, the names as found are saved instead).
         </li>
       </ul>
       <p>

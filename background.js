@@ -625,8 +625,8 @@ async function handlePrayerFire() {
   await chrome.storage.local.set({ paused });
 
   try {
-    const { lang } = await chrome.storage.local.get('lang');
-    const M = await getCatalog(lang || 'en');
+    const code = await uiLang(); // the saved language, else the browser's (as the tooltip)
+    const M = await getCatalog(code);
     const pname = M['prayer_' + nextPrayer.name] || nextPrayer.name;
     // Chrome supports notification action buttons (+ priority); Firefox's
     // WebExtensions schema rejects the `buttons` property and ignores `priority`.
@@ -639,7 +639,8 @@ async function handlePrayerFire() {
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: interpolate(M.notif_title, { prayer: pname }),
-      message: interpolate(M.notif_body, { prayer: pname, time: nextPrayer.time }),
+      // "(5:12 AM)", not "(AM 5:12)", in Arabic and Urdu: isolated, as the tooltip's clock.
+      message: interpolate(M.notif_body, { prayer: pname, time: isRTLLang(code) ? `\u2066${nextPrayer.time}\u2069` : nextPrayer.time }),
     };
     try {
       await chrome.notifications.create(`adhan-${firedTs}`, {

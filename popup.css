@@ -410,7 +410,7 @@ body {
 .day-detail { padding: 10px 13px; } /* spacing comes from the view's space-evenly */
 .dd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 7px; border-bottom: 1px solid var(--line); }
 .dd-date { font-size: 12.5px; font-weight: 750; color: var(--text-strong); }
-.dd-hijri { font-size: 10.5px; color: var(--gold); font-weight: 650; direction: ltr; unicode-bidi: isolate; }
+.dd-hijri { font-size: 10.5px; color: var(--gold); font-weight: 650; unicode-bidi: isolate; } /* in the UI language: "4 جمادى الأولى 1448 هـ" reads right to left */
 .dd-prayers { display: flex; gap: 6px; }
 .dd-p {
   flex: 1; text-align: center; font-size: 10px; font-weight: 650; padding: 7px 2px; border-radius: 9px;
@@ -783,9 +783,10 @@ body {
 [dir="rtl"] .set-row select { background-position: left 10px center; }
 /* The method names are in Latin script in every language, so the select reads left to
    right: in Arabic and Urdu a long name shows its start and is cut at its end (it lost
-   "ISNA — I"), while the chevron, the padding and a short name keep the RTL places. */
-#method { direction: ltr; }
-[dir="rtl"] #method { text-align: right; padding-left: 28px; padding-right: 11px; }
+   "ISNA — I"), while the chevron, the padding and a short name keep the RTL places.
+   The Hijri adjustment too, for "+1", not "1+". */
+#method, #hijriOffset { direction: ltr; }
+[dir="rtl"] #method, [dir="rtl"] #hijriOffset { text-align: right; padding-left: 28px; padding-right: 11px; }
 /* dir="auto" (a Latin place shows from its start) turns an empty field left to right,
    and its placeholder with it. */
 [dir="rtl"] #city:placeholder-shown { direction: rtl; }

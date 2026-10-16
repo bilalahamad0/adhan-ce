@@ -206,6 +206,49 @@ describe('live updates while the popup is open', () => {
     expect(chrome.__.sent.length).toBe(asked);
   });
 
+  it('draws nothing again for a write of the same value (Firefox reports those)', async () => {
+    await load();
+    const box = $('list').querySelector('input[type="checkbox"]');
+    box.focus();
+    await chrome.__.fireStorageChange({ nextPrayer: { oldValue: defaultState().nextPrayer, newValue: defaultState().nextPrayer } });
+    expect(document.activeElement).toBe(box);
+  });
+
+  it('follows saved settings for the strict-focus lock, never into the Settings fields', async () => {
+    const state = defaultState();
+    state.settings.strictFocus = true;
+    await load({ state });
+    $('resumeMin').value = '9';
+    // Strict focus turned off (here, or by the worker) before the prayer comes.
+    await chrome.__.fireStorageChange({ settings: { newValue: { ...state.settings, strictFocus: false } } });
+    await prayerFires();
+    expect($('resumeBtn').hidden).toBe(false);
+    expect($('strictFocusTile').getAttribute('aria-disabled')).toBeNull();
+    expect($('resumeMin').value).toBe('9');
+  });
+
+  it('Resume and Focus keep Settings edits in progress', async () => {
+    await load();
+    $('method').value = '3';
+    $('school').value = '1';
+    await prayerFires();
+    $('focusBtn').click();
+    await settle();
+    expect(sentTypes()).toContain('FOCUS_NOW');
+    expect($('method').value).toBe('3');
+    expect($('school').value).toBe('1');
+  });
+
+  it("never shows the prayer paused for as tomorrow's", async () => {
+    // The worker stores the pause, then moves nextPrayer on: in between the fired
+    // prayer is still next, its time just past.
+    await load();
+    await chrome.__.fireStorageChange({ paused: { newValue: { active: true, prayer: 'Dhuhr' } }, nextPrayer: { newValue: { name: 'Dhuhr', time: '01:05 PM', ts: BASE - 1000 } } });
+    const dhuhr = $('list').querySelector('.row.p-dhuhr');
+    expect(dhuhr.classList.contains('next')).toBe(true);
+    expect(dhuhr.querySelector('.ptime').textContent).not.toContain(EN.tomorrow);
+  });
+
   it('ignores other storage areas and keys', async () => {
     await load();
     await chrome.__.fireStorageChange({ paused: { newValue: { active: true, prayer: 'Asr' } } }, 'sync');
@@ -601,6 +644,7 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
     results: [{ id: 2553604, name: 'الدار البيضاء', admin1: 'الدار البيضاء - سطات', country: 'المغرب', country_code: 'MA', latitude: 33.59, longitude: -7.61 }],
   };
   const AR_LABEL = 'الدار البيضاء, الدار البيضاء - سطات, المغرب';
+  const NONE = { results: [] }; // an Arabic query, asked in English
   const CASABLANCA_EN = { id: 2553604, name: 'Casablanca', admin1: 'Casablanca-Settat', country: 'Morocco', country_code: 'MA', latitude: 33.59, longitude: -7.61 };
   const toArabic = async () => {
     $('lang').value = 'ar';
@@ -621,12 +665,12 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
   };
 
   it('searches in the UI language, and saves the place under its English names', async () => {
-    await load({ fetchRoutes: [['/v1/get?', CASABLANCA_EN], ['language=ar', AR_FOUND]] });
+    await load({ fetchRoutes: [['/v1/get?', CASABLANCA_EN], ['language=en', NONE], ['language=ar', AR_FOUND]] });
     await toArabic();
     await searchAndPick('الدار البيضاء');
-    const search = globalThis.fetch.calls.find((u) => u.includes('/v1/search'));
-    expect(search).toContain('&language=ar&');
-    expect($('city').getAttribute('dir')).toBe('auto'); // a Latin place shows from its start in ar/ur
+    const searches = globalThis.fetch.calls.filter((u) => u.includes('/v1/search'));
+    expect(searches.map((u) => u.match(/language=(\w+)/)[1]).sort()).toEqual(['ar', 'en']);
+    expect($('city').getAttribute('dir')).toBe('rtl');
     expect($('city').value).toBe(AR_LABEL);
     expect($('locLabel').textContent).toBe(AR_LABEL);
 
@@ -662,12 +706,79 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
   });
 
   it('saves nothing when the English names cannot be had', async () => {
-    await load({ fetchRoutes: [['/v1/get?', { status: 503 }], ['language=ar', AR_FOUND]] });
+    await load({ fetchRoutes: [['/v1/get?', { status: 503 }], ['language=en', NONE], ['language=ar', AR_FOUND]] });
     await toArabic();
     await searchAndPick('الدار البيضاء');
     expect(await saveSent()).toBeUndefined();
     expect($('saveMsg').textContent).toContain('geocode 503');
     expect($('save').disabled).toBe(false);
+  });
+
+  it('gives up on English names that do not come, so Save can be tried again', async () => {
+    await load({ fetchRoutes: [['/v1/get?', () => new Promise(() => {})], ['language=en', NONE], ['language=ar', AR_FOUND]] });
+    await toArabic();
+    await searchAndPick('الدار البيضاء');
+    $('save').click();
+    await settle();
+    expect($('save').disabled).toBe(true);
+    await jest.advanceTimersByTimeAsync(8000);
+    expect($('save').disabled).toBe(false);
+    expect($('saveMsg').textContent).toContain('geocode: no answer');
+    expect(chrome.__.sent.some((m) => m.type === 'SAVE_SETTINGS')).toBe(false);
+  });
+
+  it('finds places English knows when the UI is in another language (Mecca, Saudi Arabia, not California)', async () => {
+    const MECCA_SA = { id: 104515, name: 'Mecca', admin1: 'Mecca Region', country: 'Saudi Arabia', latitude: 21.42, longitude: 39.83 };
+    const MECCA_CA_FR = { id: 5371965, name: 'Mecca', admin1: 'Californie', country: 'États-Unis', latitude: 33.57, longitude: -116.08 };
+    await load({ fetchRoutes: [['language=en', { results: [MECCA_SA] }], ['language=fr', { results: [MECCA_CA_FR] }]] });
+    $('lang').value = 'fr';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    await searchAndPick('Mecca');
+    expect($('city').value).toBe('Mecca, Mecca Region, Saudi Arabia');
+    expect([...$('cityResults').children].map((c) => c.textContent)).toEqual(['Mecca, Mecca Region, Saudi Arabia', 'Mecca, Californie, États-Unis']);
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Mecca', country: 'Saudi Arabia', placeLabel: null });
+    expect(globalThis.fetch.calls.some((u) => u.includes('/v1/get'))).toBe(false); // already in English
+  });
+
+  it('keeps an Arabic label that opens with a Latin city right to left', async () => {
+    // By its first letter "Toronto, داكوتا الجنوبية, …" read left to right, its parts
+    // reordered: region and country before the city for an Arabic reader.
+    const TORONTO_AR = { id: 5232379, name: 'Toronto', admin1: 'داكوتا الجنوبية', country: 'الولايات المتحدة الأمريكية', latitude: 44.57, longitude: -96.64 };
+    await load({ fetchRoutes: [['language=en', NONE], ['language=ar', { results: [TORONTO_AR] }]] });
+    await toArabic();
+    // A Latin place (the saved Sunnyvale) keeps its own direction, from its start.
+    expect($('city').dir).toBe('auto');
+    expect($('locLabel').dir).toBe('auto');
+    await searchAndPick('Toronto');
+    expect($('city').value).toBe('Toronto, داكوتا الجنوبية, الولايات المتحدة الأمريكية');
+    expect($('city').dir).toBe('rtl');
+    expect($('locLabel').dir).toBe('rtl');
+    // What is typed takes its own direction again.
+    $('city').value = 'الدار';
+    $('city').dispatchEvent(new window.Event('input'));
+    expect($('city').dir).toBe('auto');
+  });
+
+  it('picking a suggestion, or clicking the Location heading, never runs Detect location', async () => {
+    // The block was a <label> whose control was the Detect button: any click in it
+    // ran the IP lookup and saved the detected city over the pick.
+    await load();
+    $('city').value = 'Lon';
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    const item = $('cityResults').children[0];
+    item.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    item.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    item.click();
+    document.querySelector('[data-i18n="location"]').click();
+    await settle();
+    expect(globalThis.fetch.calls.some((u) => u.includes('bigdatacloud'))).toBe(false);
+    expect(chrome.__.sent.some((m) => m.type === 'SAVE_SETTINGS')).toBe(false);
+    expect($('city').value).toBe('London, England, United Kingdom');
+    expect(document.querySelector('label[for="city"]').getAttribute('data-i18n')).toBe('location'); // the heading labels the field
   });
 
   it('does not search for fewer than two characters', async () => {

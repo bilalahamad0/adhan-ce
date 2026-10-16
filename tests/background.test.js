@@ -181,6 +181,20 @@ describe('handlePrayerFire', () => {
     expect(h.store.nextPrayer.name).toBe('Asr'); // advanced past Dhuhr
   });
 
+  it("words the notification in the browser's language when none is saved, its time kept in order in Arabic", async () => {
+    const now = Date.now();
+    const { h } = await loadBackground({
+      uiLang: 'ar-EG',
+      storage: { settings: DEFAULTS, schedule: scheduleAround(now), nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 } },
+    });
+    await h.fireAlarm(ALARM_PRAYER);
+    await flush();
+    const { title, message } = h.notifications[0].options;
+    expect(title).toContain('الظهر');
+    // Isolated, "(01:05 PM)" stays one left-to-right run: not "(PM 01:05)".
+    expect(message).toContain('(\u206601:05 PM\u2069)');
+  });
+
   it('on Firefox: retries a plain toast without buttons, and still counts the alert', async () => {
     const now = Date.now();
     const schedule = scheduleAround(now);

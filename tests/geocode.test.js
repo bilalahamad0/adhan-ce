@@ -1,4 +1,5 @@
-import { parseGeoResults, searchPlaces, placeToSave, detectLocationByIp } from '../lib/geocode.js';
+import { jest } from '@jest/globals';
+import { parseGeoResults, searchPlaces, mergeByLang, placeToSave, detectLocationByIp } from '../lib/geocode.js';
 
 const sample = {
   results: [
@@ -60,19 +61,64 @@ describe('searchPlaces', () => {
     await expect(searchPlaces('London')).rejects.toThrow('geocode 500');
   });
 
-  it('asks in English unless told the UI language, and says which on each place', async () => {
+  // Open-Meteo matches the query against the names in the language asked for.
+  const answers = (byLang) => {
     const requested = [];
     global.fetch = async (url) => {
       requested.push(url);
-      return { ok: true, json: async () => ({ results: [{ id: 2553604, name: 'الدار البيضاء', admin1: 'الدار البيضاء - سطات', country: 'المغرب', latitude: 33.59, longitude: -7.61 }] }) };
+      const lang = url.match(/language=(\w+)/)[1];
+      if (byLang[lang] instanceof Error) throw byLang[lang];
+      return { ok: true, json: async () => ({ results: byLang[lang] || [] }) };
     };
-    expect((await searchPlaces('Casablanca'))[0].lang).toBe('en');
-    // A name in Arabic script is matched only when Arabic is asked for.
-    const [place] = await searchPlaces('الدار البيضاء', { lang: 'ar' });
+    return requested;
+  };
+  const MECCA_SA = { id: 104515, name: 'Mecca', admin1: 'Mecca Region', country: 'Saudi Arabia', latitude: 21.42, longitude: 39.83 };
+  const MECCA_CA = { id: 5371965, name: 'Mecca', admin1: 'California', country: 'United States', latitude: 33.57, longitude: -116.08 };
+  const MECCA_CA_FR = { ...MECCA_CA, admin1: 'Californie', country: 'États-Unis' };
+  const CASA_AR = { id: 2553604, name: 'الدار البيضاء', admin1: 'الدار البيضاء - سطات', country: 'المغرب', latitude: 33.59, longitude: -7.61 };
+
+  it('asks only in English for an English UI', async () => {
+    const requested = answers({ en: [MECCA_SA] });
+    const places = await searchPlaces('Mecca');
+    expect(requested).toHaveLength(1);
     expect(requested[0]).toContain('&language=en&');
-    expect(requested[1]).toContain(`name=${encodeURIComponent('الدار البيضاء')}&`);
-    expect(requested[1]).toContain('&language=ar&');
+    expect(places.map((p) => [p.id, p.lang])).toEqual([[104515, 'en']]);
+  });
+
+  it('in another UI language, keeps what English finds, in its order and in that language where it can', async () => {
+    // In French alone "Mecca" misses Mecca, Saudi Arabia; in English it comes first.
+    const requested = answers({ en: [MECCA_SA, MECCA_CA], fr: [MECCA_CA_FR] });
+    const places = await searchPlaces('Mecca', { lang: 'fr' });
+    expect(requested.map((u) => u.match(/language=(\w+)/)[1]).sort()).toEqual(['en', 'fr']);
+    expect(places.map((p) => [p.id, p.lang, p.label])).toEqual([
+      [104515, 'en', 'Mecca, Mecca Region, Saudi Arabia'],
+      [5371965, 'fr', 'Mecca, Californie, États-Unis'],
+    ]);
+  });
+
+  it('finds a name in Arabic script, which only the Arabic answer has', async () => {
+    answers({ en: [], ar: [CASA_AR] });
+    const [place] = await searchPlaces('الدار البيضاء', { lang: 'ar' });
     expect(place).toMatchObject({ id: 2553604, lang: 'ar', city: 'الدار البيضاء', label: 'الدار البيضاء, الدار البيضاء - سطات, المغرب' });
+  });
+
+  it('does with one answer when the other fails, and fails only when both do', async () => {
+    answers({ en: new Error('offline'), ar: [CASA_AR] });
+    expect((await searchPlaces('الدار', { lang: 'ar' })).map((p) => p.id)).toEqual([2553604]);
+    answers({ en: [MECCA_SA], ar: new Error('offline') });
+    expect((await searchPlaces('Mecca', { lang: 'ar' })).map((p) => p.lang)).toEqual(['en']);
+    answers({ en: new Error('offline'), ar: new Error('offline') });
+    await expect(searchPlaces('Mecca', { lang: 'ar' })).rejects.toThrow('offline');
+  });
+});
+
+describe('mergeByLang', () => {
+  const en = (id) => ({ id, lang: 'en' });
+  const ar = (id) => ({ id, lang: 'ar' });
+  it("takes the English order, each place in the UI language where that answer has it, then the rest", () => {
+    expect(mergeByLang([en(1), en(2), en(3)], [ar(3), ar(4), ar(1)])).toEqual([ar(1), en(2), ar(3), ar(4)]);
+    expect(mergeByLang([], [ar(4)])).toEqual([ar(4)]);
+    expect(mergeByLang([en(1)], [])).toEqual([en(1)]);
   });
 });
 
@@ -119,6 +165,24 @@ describe('placeToSave', () => {
     const placeLabel = { lang: 'ar', text: 'الدار البيضاء, الدار البيضاء - سطات, المغرب' };
     const saved = { city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.61, placeLabel };
     expect(await placeToSave(saved)).toEqual(saved);
+  });
+
+  it('gives up on a lookup that does not answer', async () => {
+    jest.useFakeTimers();
+    try {
+      let signal;
+      global.fetch = (url, init) => {
+        signal = init.signal;
+        return new Promise(() => {});
+      };
+      const saving = placeToSave(foundInArabic);
+      const failed = expect(saving).rejects.toThrow('geocode: no answer');
+      await jest.advanceTimersByTimeAsync(8000);
+      await failed;
+      expect(signal.aborted).toBe(true); // the request is let go
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('fails rather than store names Aladhan may not find', async () => {
