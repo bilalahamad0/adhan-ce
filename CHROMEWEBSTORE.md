@@ -35,7 +35,7 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ━━━━━━━━━━━━━━━━━━━━━━━━
 • No ads. No subscriptions. No account. No sign-in. Ever.
 • Zero analytics. Zero tracking. Zero data harvesting.
-• Everything stays on your device — the only thing that ever leaves is the city name needed to look up prayer times.
+• Your settings stay on your device — only what's needed to find your place and its prayer times ever leaves it: the place's name (or its coordinates), and what you type in the search.
 • Open source and built on the latest, most secure Manifest V3.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━

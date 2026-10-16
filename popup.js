@@ -441,6 +441,13 @@ function placeLabel(p) {
 function shownLabel(p) {
   return p.placeLabel && p.placeLabel.lang === localeFor() && p.placeLabel.text ? p.placeLabel.text : placeLabel(p);
 }
+// The place the settings hold, labelled as shown, or null.
+function savedPlace(settings) {
+  if (!settings.city) return null;
+  const place = { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon, placeLabel: settings.placeLabel || null };
+  place.label = shownLabel(place);
+  return place;
+}
 function renderCityResults(items) {
   const box = $('cityResults');
   box.replaceChildren();
@@ -517,7 +524,15 @@ function onStorageChange(changes, area) {
   // reads of them stays current — never the Settings fields being edited.
   const settings = changes.settings && changes.settings.newValue;
   if (settings && !same(settings, st.settings)) {
+    // A place saved elsewhere (the welcome page, another popup) shows here too,
+    // unless the field holds a search or a pick not yet saved.
+    const untouched = selectedPlace ? $('city').value.trim() === selectedPlace.label : !$('city').value.trim();
     st.settings = { ...st.settings, ...settings };
+    if (untouched) {
+      selectedPlace = savedPlace(st.settings);
+      showPlace(selectedPlace ? selectedPlace.label : '');
+      if (!selectedPlace) $('locLabel').textContent = '—';
+    }
     live = true;
   }
   if (live) renderLive(); // rebuilds the prayer list: only for a real change
@@ -557,10 +572,7 @@ function renderAll() {
   syncBadgeSettings();
   syncFocusSettings();
 
-  const place = settings.city
-    ? { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon, placeLabel: settings.placeLabel || null }
-    : null;
-  if (place) place.label = shownLabel(place);
+  const place = savedPlace(settings);
   selectedPlace = place;
   showPlace(place ? place.label : '');
   if (!place) $('locLabel').textContent = '—';
@@ -963,7 +975,7 @@ $('save').addEventListener('click', async () => {
     focusMode: $('focusMode').checked,
     strictFocus: $('strictFocus') ? $('strictFocus').checked : false,
     adhanChime: $('adhanChime') ? $('adhanChime').checked : true,
-    country: place.country || 'United States',
+    country: place.country || '', // Open-Meteo has none for some places (Hebron, Gaza): never a made-up one
     state: place.state || '',
     city: place.city,
     lat: place.lat,

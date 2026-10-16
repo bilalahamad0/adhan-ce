@@ -2529,6 +2529,23 @@ describe('when Aladhan cannot look the place up by name', () => {
     expect(aladhanCalls(fetch)).toHaveLength(1);
   });
 
+  it("never asks by the welcome page's old placeholder coordinates (Makkah's, saved by a skipped setup)", async () => {
+    const SKIPPED = { ...DEFAULTS, lat: 21.42, lon: 39.83 }; // Sunnyvale with Makkah's placeholder
+    const { h, fetch } = await loadBackground({ storage: { settings: SKIPPED }, fetchRoutes: [byName(503), byCoords('Asia/Riyadh', '+03:00')] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: false, error: 'Aladhan 503' });
+    expect(aladhanCalls(fetch).some((u) => u.includes('/v1/timings/'))).toBe(false);
+    expect(h.store.schedule).toBeUndefined(); // not Riyadh's times
+  });
+
+  it('a place that shares its name with another (only the coordinates change) is fetched again', async () => {
+    // Two "Springfield, Florida, United States" in Open-Meteo: told apart by coordinates alone.
+    const SPRINGFIELD = { ...DEFAULTS, city: 'Springfield', state: 'Florida', country: 'United States', lat: 30.16, lon: -85.61 };
+    const { h, fetch } = await loadBackground({ storage: { settings: SPRINGFIELD, schedule: CAIRO_DAY }, fetchRoutes: [byName(400), byCoords()] });
+    const before = aladhanCalls(fetch).length;
+    expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { lat: 30.2, lon: -85.68 } })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch).slice(before).some((u) => u.includes('latitude=30.2&longitude=-85.68'))).toBe(true);
+  });
+
   it('asks a place found by name by name only, as always', async () => {
     const { h, fetch } = await loadBackground({ storage: { settings: CAIRO, schedule: CAIRO_DAY }, fetchRoutes: [['/v1/timingsByCity/', byCoords()[1]], byCoords()] });
     expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });

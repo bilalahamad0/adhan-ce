@@ -73,7 +73,7 @@
         <div class="logo">🕌</div>
         <h1>Privacy Policy — Adhan Focus</h1>
         <p>Live prayer-time countdown with automatic cross-tab media pausing.</p>
-        <div class="updated">Last updated: October 15, 2026</div>
+        <div class="updated">Last updated: October 16, 2026</div>
       </div>
     </header>
 
@@ -82,8 +82,10 @@
         Adhan Focus is built to be privacy-friendly. It does <strong>not</strong> use analytics or
         trackers, does <strong>not</strong> require an account, and does <strong>not</strong> sell or share
         your data. Your settings stay on your own device. The only information sent off your device is the
-        location you choose (a city name) and the text you type into the location search (with the
-        extension's display language) — used solely to look up prayer times and resolve places.
+        place you choose (its name, and its coordinates when the prayer-times service needs them), the text
+        you type into the location search (with the extension's display language), and, only when you click
+        "Detect location", a request from which your city is estimated by its IP address — used solely to look
+        up prayer times and resolve places.
       </p>
 
       <h2>Who this applies to</h2>
@@ -189,7 +191,7 @@
           <tr><td><code>alarms</code></td><td>Trigger the countdown and pause exactly at prayer time.</td></tr>
           <tr><td><code>notifications</code></td><td>Show the desktop notification when it's time to pray.</td></tr>
           <tr><td><code>scripting</code></td><td>Insert the pause/countdown logic into pages that are already open when you install or update.</td></tr>
-          <tr><td><code>tabs</code></td><td>Send the pause/resume signal to your open tabs.</td></tr>
+          <tr><td><code>offscreen</code></td><td>Play the Adhan chime from the background (Chrome, Edge and Opera; Firefox has no such permission and plays it from its background page).</td></tr>
           <tr><td>Access to websites (<code>http://*/*</code>, <code>https://*/*</code>)</td><td>Required so media can be paused in <em>any</em> tab at prayer time — the extension's core feature.</td></tr>
         </tbody>
       </table>

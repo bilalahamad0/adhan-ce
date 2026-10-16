@@ -96,6 +96,22 @@ describe('searchPlaces', () => {
     ]);
   });
 
+  it('counts the people of populated places only', () => {
+    const [city, region] = parseGeoResults({ results: [
+      { id: 1, name: 'A', feature_code: 'PPLC', population: 500 },
+      { id: 2, name: 'B', feature_code: 'ADM1', population: 9000 },
+    ] });
+    expect([city.population, region.population]).toEqual([500, -1]);
+  });
+
+  it('gives no answer to a search a later one replaced', async () => {
+    answers({ en: [MECCA_SA], fr: [MECCA_CA_FR] });
+    const abort = new AbortController();
+    const searching = searchPlaces('Mecca', { lang: 'fr', signal: abort.signal });
+    abort.abort();
+    await expect(searching).rejects.toThrow('aborted');
+  });
+
   it('finds a name in Arabic script, which only the Arabic answer has', async () => {
     answers({ en: [], ar: [CASA_AR] });
     const [place] = await searchPlaces('الدار البيضاء', { lang: 'ar' });
@@ -113,12 +129,24 @@ describe('searchPlaces', () => {
 });
 
 describe('mergeByLang', () => {
-  const en = (id) => ({ id, lang: 'en' });
-  const ar = (id) => ({ id, lang: 'ar' });
-  it("takes the English order, each place in the UI language where that answer has it, then the rest", () => {
-    expect(mergeByLang([en(1), en(2), en(3)], [ar(3), ar(4), ar(1)])).toEqual([ar(1), en(2), ar(3), ar(4)]);
-    expect(mergeByLang([], [ar(4)])).toEqual([ar(4)]);
+  const en = (id, population = -1) => ({ id, lang: 'en', city: `E${id}`, state: '', country: 'C', population });
+  const fr = (id, population = -1) => ({ id, lang: 'fr', city: `F${id}`, state: '', country: 'C', population });
+  const withEn = (p) => ({ ...p, en: { city: `E${p.id}`, state: '', country: 'C' } });
+  it('gives each place once, in the UI language where it can, its English names kept', () => {
+    expect(mergeByLang([en(1), en(2), en(3)], [fr(3), fr(4), fr(1)])).toEqual([withEn(fr(1)), en(2), withEn(fr(3)), fr(4)]);
+    expect(mergeByLang([], [fr(4)])).toEqual([fr(4)]);
     expect(mergeByLang([en(1)], [])).toEqual([en(1)]);
+  });
+  it('puts the most populous place first, else keeps the English order, then the UI answer\'s', () => {
+    // "Londres": the English answer has villages named Londres; London is only the
+    // French answer's, and came ninth, past the end of the list.
+    const villages = [1, 2, 3, 4, 5, 6, 7, 8].map((id) => en(id, 100 * id));
+    const london = fr(2643743, 8961989);
+    const merged = mergeByLang(villages, [london, fr(99, -1)]);
+    expect(merged[0]).toEqual(london);
+    expect(merged.slice(1, 9).map((p) => p.id)).toEqual([8, 7, 6, 5, 4, 3, 2, 1]);
+    expect(merged[9].id).toBe(99); // not a populated place
+    expect(mergeByLang([en(1, 5), en(2, 5)], [fr(3, 5)]).map((p) => p.id)).toEqual([1, 2, 3]);
   });
 });
 
@@ -146,6 +174,14 @@ describe('placeToSave', () => {
       placeLabel: { lang: 'ar', text: 'الدار البيضاء, الدار البيضاء - سطات, المغرب' },
     });
     expect(requested).toEqual(['https://geocoding-api.open-meteo.com/v1/get?id=2553604&language=en']);
+  });
+
+  it('saves the names the English answer gave a place, asking nothing', async () => {
+    global.fetch = async () => {
+      throw new Error('no request expected');
+    };
+    const paris = { id: 2988507, lang: 'fr', city: 'Paris', state: 'Île-de-France', country: 'France', lat: 48.85, lon: 2.35, label: 'Paris, Île-de-France, France', en: { city: 'Paris', state: 'Île-de-France Region', country: 'France' } };
+    expect(await placeToSave(paris)).toEqual({ city: 'Paris', state: 'Île-de-France Region', country: 'France', lat: 48.85, lon: 2.35, placeLabel: { lang: 'fr', text: 'Paris, Île-de-France, France' } });
   });
 
   it('asks nothing for a place found in English or detected, and clears an earlier label', async () => {

@@ -98,6 +98,51 @@ describe('onboarding location', () => {
     expect(chrome.__.store.onboardingCompleted).toBe(true);
   });
 
+  it('Skip saves no placeholder coordinates beside the default city', async () => {
+    // The page started from Makkah's 21.42/39.83, which a Skip saved with Sunnyvale:
+    // the worker's fallback by coordinates would then fetch Makkah's times.
+    await load();
+    document.getElementById('skipWelcomeBtn').click();
+    await settle();
+    const [saved] = chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').map((m) => m.settings);
+    expect(saved).toMatchObject({ city: 'Sunnyvale', country: 'United States' });
+    expect(saved.lat).toBeUndefined();
+    expect(saved.lon).toBeUndefined();
+  });
+
+  it('marks setup done only once the place is on its way to the worker', async () => {
+    let answer;
+    await load({ uiLang: 'ar', routes: [['/v1/get?', () => new Promise((r) => (answer = r))], ['language=en', { results: [] }], ['language=ar', { results: [{ id: 2553604, name: 'الدار البيضاء', admin1: 'الدار البيضاء - سطات', country: 'المغرب', latitude: 33.59, longitude: -7.62 }] }]] });
+    const input = document.getElementById('welcomeCity');
+    input.value = 'الدار البيضاء';
+    input.dispatchEvent(new Event('input'));
+    await jest.advanceTimersByTimeAsync(300);
+    await settle();
+    document.querySelector('#welcomeSuggest .suggest-item').click();
+    await settle();
+    document.getElementById('finishBtn').click();
+    await settle();
+    expect(chrome.__.store.onboardingCompleted).not.toBe(true); // closed now, setup is offered again
+    answer({ id: 2553604, name: 'Casablanca', admin1: 'Casablanca-Settat', country: 'Morocco', latitude: 33.59, longitude: -7.62 });
+    await settle();
+    expect(chrome.__.store.onboardingCompleted).toBe(true);
+    expect(chrome.__.sent.some((m) => m.type === 'SAVE_SETTINGS')).toBe(true);
+  });
+
+  it('Close waits at most 2 s for the worker, which has the settings by then', async () => {
+    await load({ send: (m) => (m.type === 'SAVE_SETTINGS' ? new Promise(() => {}) : { ok: true }) });
+    window.close = jest.fn();
+    await pickCasablanca();
+    document.getElementById('finishBtn').click();
+    await settle();
+    await jest.advanceTimersByTimeAsync(400);
+    document.getElementById('closeWelcomeBtn').click();
+    await jest.advanceTimersByTimeAsync(1900);
+    expect(window.close).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(200);
+    expect(window.close).toHaveBeenCalled();
+  });
+
   it('keeps the choice in storage itself when the worker cannot be reached', async () => {
     await load({ send: (m) => (m.type === 'SAVE_SETTINGS' ? Promise.reject(new Error('no receiver')) : { ok: true }) });
     await pickCasablanca();
@@ -231,6 +276,7 @@ describe('onboarding search in the page language', () => {
     expect(saved.placeLabel).toEqual({ lang: 'ar', text: AR_LABEL });
     jest.advanceTimersByTime(400); // the success view
     expect(document.getElementById('completionCity').textContent).toBe('الدار البيضاء');
+    expect(document.getElementById('completionCity').dir).toBe('auto'); // isolated in the English sentence
   });
 
   it('Finish waits for the English names', async () => {

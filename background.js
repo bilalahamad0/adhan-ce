@@ -18,7 +18,14 @@ const ALADHAN_BASE = 'https://api.aladhan.com/v1/timingsByCity';
 // The same day's times asked by the place's coordinates, saved with it: what
 // fetchSchedule falls back to when Aladhan cannot look the place up by name.
 const ALADHAN_BY_COORDS = 'https://api.aladhan.com/v1/timings';
-const hasCoords = (settings) => Number.isFinite(settings.lat) && Number.isFinite(settings.lon);
+// Not 21.42/39.83: the welcome page's placeholder (Makkah) that a skipped setup up to
+// 2.1.4 saved beside the default city, never a place's own coordinates (Open-Meteo's
+// Mecca is 21.42664/39.82563).
+const PLACEHOLDER_COORDS = { lat: 21.42, lon: 39.83 };
+const hasCoords = (settings) =>
+  Number.isFinite(settings.lat) &&
+  Number.isFinite(settings.lon) &&
+  !(settings.lat === PLACEHOLDER_COORDS.lat && settings.lon === PLACEHOLDER_COORDS.lon);
 
 // Aladhan's optional date path segment is DD-MM-YYYY.
 function ddmmyyyy(d = new Date()) {
@@ -117,7 +124,7 @@ function recordUsage(event) {
 // ---------- schedule fetch ----------
 // The settings that make up the Aladhan request, plus the minute adjustments
 // applied to its answer. A fetched schedule belongs to these.
-const REQUEST_KEYS = ['city', 'country', 'state', 'method', 'school'];
+const REQUEST_KEYS = ['city', 'country', 'state', 'lat', 'lon', 'method', 'school']; // lat/lon: see fetchSchedule's fallback
 const adjustKey = (s) => Object.values(prayerAdjustments(s && s.adjustMinutes)).join(',');
 function sameRequest(a, b) {
   return REQUEST_KEYS.every((k) => (a && a[k]) === (b && b[k])) && adjustKey(a) === adjustKey(b);
@@ -1038,8 +1045,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const settings = { ...current, ...incoming };
         await chrome.storage.local.set({ settings });
         const { schedule } = await chrome.storage.local.get('schedule');
-        const locationChanged =
-          settings.city !== current.city || settings.country !== current.country || settings.state !== current.state;
+        // The coordinates too: two places can share a name, and fetchSchedule's
+        // fallback asks by them.
+        const locationChanged = ['city', 'country', 'state', 'lat', 'lon'].some((k) => settings[k] !== current[k]);
         const locationOrCalcChanged =
           !schedule ||
           locationChanged ||

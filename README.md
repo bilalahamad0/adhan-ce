@@ -86,7 +86,7 @@ See [docs/TESTING.md](docs/TESTING.md) for the full pre-publish QA checklist.
 ### Notes & assumptions
 
 - Prayer times are requested from Aladhan with `iso8601=true`, so each one carries the location's UTC offset (e.g. `2026-10-10T12:17:00+00:00`), and its exact moment comes from that offset — never from the browser's own tz database, which can lag the real rules by months (Morocco moved to permanent GMT+0 on 2026-09-20; British Columbia and Alberta stop falling back from 2026-11-01). The popup clock and "today" follow the browser's tz data only while it agrees with Aladhan's offsets. Times show as `"hh:mm a"`, in the chosen location's time, whatever your machine's timezone.
-- The place is asked for by its English name (`timingsByCity`). When Aladhan's own geocoder cannot take that name (it has answered 503 for every name it had not cached, and 400 for "Cairo, Cairo Governorate, Egypt"), the same day is asked for by the place's saved coordinates (`timings`), which gives the same times.
+- The place is asked for by its English name (`timingsByCity`). When Aladhan's own geocoder cannot take that name (it has answered 503 for every name it had not cached, and 400 for "Cairo, Cairo Governorate, Egypt"), the same day is asked for by the place's saved coordinates (`timings`), which gives the same times (to within a minute).
 - `chrome.alarms` isn't second-accurate when the service worker is asleep, so `content.js` self-triggers the pause when its own countdown hits zero. Both paths are idempotent.
 - Restricted pages (`chrome://`, the Web Store, the PDF viewer) can't host content scripts, so media there isn't paused — a Chrome platform limitation.
 

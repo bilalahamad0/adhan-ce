@@ -249,6 +249,17 @@ describe('live updates while the popup is open', () => {
     expect(dhuhr.querySelector('.ptime').textContent).not.toContain(EN.tomorrow);
   });
 
+  it('shows a place saved elsewhere, unless the field holds a search', async () => {
+    const CAIRO = { ...defaultState().settings, city: 'Cairo', state: 'Cairo Governorate', country: 'Egypt', lat: 30.06, lon: 31.25 };
+    await load();
+    await chrome.__.fireStorageChange({ settings: { newValue: CAIRO } });
+    expect($('locLabel').textContent).toBe('Cairo, Cairo Governorate, Egypt');
+    expect($('city').value).toBe('Cairo, Cairo Governorate, Egypt');
+    $('city').value = 'Lon'; // being searched
+    await chrome.__.fireStorageChange({ settings: { newValue: { ...CAIRO, city: 'Giza', state: 'Giza' } } });
+    expect($('city').value).toBe('Lon');
+  });
+
   it('ignores other storage areas and keys', async () => {
     await load();
     await chrome.__.fireStorageChange({ paused: { newValue: { active: true, prayer: 'Asr' } } }, 'sync');
@@ -779,6 +790,46 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
     expect(chrome.__.sent.some((m) => m.type === 'SAVE_SETTINGS')).toBe(false);
     expect($('city').value).toBe('London, England, United Kingdom');
     expect(document.querySelector('label[for="city"]').getAttribute('data-i18n')).toBe('location'); // the heading labels the field
+  });
+
+  it('saves a place with no country as having none (not "United States")', async () => {
+    // Open-Meteo gives Hebron (and Gaza, Ramallah, Nablus, Laayoune) no country;
+    // Aladhan took "Hebron, United States" for Hebron, Connecticut.
+    const HEBRON = { id: 285066, name: 'Hebron', admin1: 'West Bank', latitude: 31.53, longitude: 35.09, feature_code: 'PPLA', population: 160470 };
+    await load({ fetchRoutes: [['geocoding-api.open-meteo.com', { results: [HEBRON] }]] });
+    await searchAndPick('Hebron');
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Hebron', state: 'West Bank', country: '', lat: 31.53, lon: 35.09 });
+  });
+
+  it('finds a city by its name in the UI language ("Londres") ahead of the villages of that name, and saves its English names', async () => {
+    const village = (id, population) => ({ id, name: 'Londres', admin1: 'X', country: 'Argentina', latitude: -27.7, longitude: -67.1, feature_code: 'PPL', population });
+    const LONDRES_EN = { results: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => village(i, 100 * i)) };
+    const LONDRES_FR = { results: [{ id: 2643743, name: 'Londres', admin1: 'Angleterre', country: 'Royaume-Uni', latitude: 51.5, longitude: -0.12, feature_code: 'PPLC', population: 8961989 }] };
+    const LONDON_EN = { id: 2643743, name: 'London', admin1: 'England', country: 'United Kingdom', latitude: 51.5, longitude: -0.12 };
+    await load({ fetchRoutes: [['/v1/get?', LONDON_EN], ['language=en', LONDRES_EN], ['language=fr', LONDRES_FR]] });
+    $('lang').value = 'fr';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    await searchAndPick('Londres');
+    expect($('city').value).toBe('Londres, Angleterre, Royaume-Uni');
+    const saved = await saveSent();
+    // Found only in French: its English names asked for by id.
+    expect(globalThis.fetch.calls.filter((u) => u.includes('/v1/get'))).toHaveLength(1);
+    expect(saved.settings).toMatchObject({ city: 'London', state: 'England', country: 'United Kingdom' });
+    expect(saved.settings.placeLabel).toEqual({ lang: 'fr', text: 'Londres, Angleterre, Royaume-Uni' });
+  });
+
+  it('saves a place both answers have under the English answer\'s names, asking nothing more', async () => {
+    const PARIS = (country, admin1) => ({ results: [{ id: 2988507, name: 'Paris', admin1, country, latitude: 48.85, longitude: 2.35, feature_code: 'PPLC', population: 2138551 }] });
+    await load({ fetchRoutes: [['language=en', PARIS('France', 'Île-de-France Region')], ['language=fr', PARIS('France', 'Île-de-France')]] });
+    $('lang').value = 'fr';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    await searchAndPick('Paris');
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Paris', state: 'Île-de-France Region', country: 'France', placeLabel: { lang: 'fr', text: 'Paris, Île-de-France, France' } });
+    expect(globalThis.fetch.calls.some((u) => u.includes('/v1/get'))).toBe(false);
   });
 
   it('does not search for fewer than two characters', async () => {
