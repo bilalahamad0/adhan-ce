@@ -8,6 +8,7 @@ import { getCatalog, interpolate, isRTLLang, resolveLang } from './lib/i18n.js';
 import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
 import { playChime } from './lib/audio.js';
+import { sanitizeSettings, sanitizeLocationField, assertSafeOutboundUrl } from './lib/privacy-guard.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
 // settings (defaults method=2 ISNA, school=0 Standard — unchanged from before);
@@ -189,15 +190,25 @@ async function fetchSchedule(settings, { day, tz, timeoutMs, byCoords = false } 
   if (!settings.country && hasCoords(settings)) byCoords = true;
   let res;
   if (!byCoords) {
-    let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(settings.city)}&country=${encodeURIComponent(settings.country)}&${calc}`;
-    if (settings.state) url += `&state=${encodeURIComponent(settings.state)}`;
-    res = await fetch(url + '&iso8601=true', init);
+    const safeCity = sanitizeLocationField(settings.city, 'Sunnyvale');
+    const safeCountry = sanitizeLocationField(settings.country, 'United States');
+    const safeState = sanitizeLocationField(settings.state, '');
+    let url = `${ALADHAN_BASE}/${date}?city=${encodeURIComponent(safeCity)}&country=${encodeURIComponent(safeCountry)}&${calc}`;
+    if (safeState) url += `&state=${encodeURIComponent(safeState)}`;
+    url += '&iso8601=true';
+    assertSafeOutboundUrl(url);
+    res = await fetch(url, init);
     if (!res.ok && hasCoords(settings)) {
       console.warn(`Adhan: Aladhan could not take ${settings.city} by name (${res.status}); asking by its coordinates`);
       byCoords = true;
     }
   }
-  if (byCoords) res = await fetch(`${ALADHAN_BY_COORDS}/${date}?latitude=${settings.lat}&longitude=${settings.lon}&${calc}&iso8601=true`, init);
+  if (byCoords) {
+    const url = `${ALADHAN_BY_COORDS}/${date}?latitude=${settings.lat}&longitude=${settings.lon}&${calc}&iso8601=true`;
+    assertSafeOutboundUrl(url);
+    res = await fetch(url, init);
+  }
+
   if (!res.ok) throw new Error(`Aladhan ${res.status}`);
   const json = await res.json();
   const data = json && json.data;
@@ -1036,7 +1047,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'SAVE_SETTINGS': {
         const current = await getSettings();
         const { paused } = await getState();
-        const incoming = { ...(msg.settings || {}) };
+        const incoming = sanitizeSettings(msg.settings || {}, current);
         // If strict focus is currently active during prayer freeze, prevent turning
         // strictFocus, focusMode, or enabled off intermittently!
         if (paused && paused.active && current.strictFocus) {
@@ -1047,6 +1058,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (incoming.adjustMinutes !== undefined) incoming.adjustMinutes = prayerAdjustments(incoming.adjustMinutes);
         const settings = { ...current, ...incoming };
         await chrome.storage.local.set({ settings });
+
         const { schedule } = await chrome.storage.local.get('schedule');
         // The coordinates too: two places can share a name, and fetchSchedule's
         // fallback asks by them.

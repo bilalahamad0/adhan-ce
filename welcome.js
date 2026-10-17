@@ -1,6 +1,9 @@
 // Adhan Focus — Welcome & Onboarding Controller
 import { searchPlaces, placeToSave, detectLocationByIp } from './lib/geocode.js';
+
 import { initI18n, setLang, applyDir, getLang, placeDir, t as translate } from './lib/i18n.js';
+import { containsPii, assertSafeOutboundUrl } from './lib/privacy-guard.js';
+
 
 let t = (k) => k;
 let currentStep = 1;
@@ -187,6 +190,16 @@ function wireLocationSearch() {
       return;
     }
 
+    if (containsPii(query)) {
+      suggest.replaceChildren();
+      const item = document.createElement('div');
+      item.className = 'suggest-item suggest-empty';
+      item.textContent = t('pii_blocked') || 'Please enter a city or country name (personal information is not accepted).';
+      suggest.appendChild(item);
+      suggest.hidden = false;
+      return;
+    }
+
     debounceTimer = setTimeout(async () => {
       try {
         const places = await searchPlaces(query, { lang: getLang() || 'en' });
@@ -197,6 +210,7 @@ function wireLocationSearch() {
       }
     }, 250);
   });
+
 
   document.addEventListener('click', (e) => {
     if (!suggest.contains(e.target) && e.target !== input) {
@@ -301,7 +315,9 @@ async function fetchPreviewTimings(lat, lon, city, country) {
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const y = today.getFullYear();
     const url = `https://api.aladhan.com/v1/timings/${d}-${m}-${y}?latitude=${lat}&longitude=${lon}&method=${state.settings.method || 2}`;
+    assertSafeOutboundUrl(url);
     const res = await fetch(url);
+
     if (!res.ok) return;
     const json = await res.json();
     if (!json.data || !json.data.timings) return;

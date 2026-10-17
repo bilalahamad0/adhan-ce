@@ -88,8 +88,9 @@ jobs:
       - name: Commit and push if changed
         run: |
           git config user.name "bilalahamad-bot"
-          git config user.email "bilal.ahamad@gmail.com"
+          git config user.email "112401250+bilalahamad0@users.noreply.github.com"
           git add ai-metrics.json
+
           if ! git diff --cached --quiet; then
             git commit -m "chore: weekly AI metrics update [skip actions]"
             git push origin HEAD

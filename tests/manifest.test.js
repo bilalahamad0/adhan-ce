@@ -2,8 +2,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { auditManifestPrivacy } from '../lib/privacy-guard.js';
 
 const EXT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
 const manifest = JSON.parse(readFileSync(join(EXT, 'manifest.json'), 'utf8'));
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const exists = (p) => existsSync(join(EXT, p));
@@ -55,6 +57,18 @@ describe('manifest qualification', () => {
     // widen the review surface. Keep it out unless host_permissions are narrowed.
     expect(manifest.permissions).not.toContain('tabs');
   });
+
+  it('passes privacy audit (no identity, cookies, webRequest, or externally_connectable)', () => {
+    const audit = auditManifestPrivacy(manifest);
+    expect(audit.valid).toBe(true);
+    expect(audit.errors).toEqual([]);
+    expect(manifest.permissions).not.toContain('identity');
+    expect(manifest.permissions).not.toContain('identity.email');
+    expect(manifest.permissions).not.toContain('cookies');
+    expect(manifest.permissions).not.toContain('webRequest');
+    expect(manifest.externally_connectable).toBeUndefined();
+  });
+
 
   it('host permissions cover the prayer-times API and all http/https sites', () => {
     expect(manifest.host_permissions).toEqual(

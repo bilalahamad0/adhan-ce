@@ -12,6 +12,9 @@ import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir, placeDir } fr
 import { formatHijri } from './lib/hijri.js';
 import { DEV } from './lib/buildinfo.js';
 import { playChime } from './lib/audio.js';
+import { containsPii } from './lib/privacy-guard.js';
+
+
 
 const $ = (id) => document.getElementById(id);
 let st = null;
@@ -481,10 +484,11 @@ function choosePlace(p) {
 async function doCitySearch() {
   const q = $('city').value;
   selectedPlace = null;
-  if (q.trim().length < 2) {
+  if (q.trim().length < 2 || containsPii(q)) {
     $('cityResults').hidden = true;
     return;
   }
+
   try {
     if (searchAbort) searchAbort.abort();
     searchAbort = new AbortController();
