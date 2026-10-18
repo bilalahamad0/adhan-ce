@@ -1,6 +1,6 @@
 # Adhan Focus — Browser Extension
 
-[![Featured on Product Hunt](https://img.shields.io/badge/Product%20Hunt-Adhan%20Focus-DA552F?style=flat&logo=producthunt&logoColor=white)](https://www.producthunt.com/products/adhan-focus)
+[![Featured on Product Hunt](https://img.shields.io/badge/Product%20Hunt-Adhan%20Focus-DA552F?style=flat&logo=producthunt&logoColor=white)](https://www.producthunt.com/products/adhan-focus?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-adhan-focus)
 [![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Adhan%20Focus-2B96D7?style=flat&logo=alternative-to&logoColor=white)](https://alternativeto.net/software/adhan-focus/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-253%20passing-brightgreen.svg)](tests/)
