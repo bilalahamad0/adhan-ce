@@ -362,13 +362,28 @@
     lockScroll(false);
   }
 
+  // The "Test prayer pause" demo (isDemo) is not the prayer's pause: it never takes
+  // over a real one, and ending it leaves the per-tab fallback armed for the real
+  // prayer. Its Resume ends the demo in every tab (RESUME_DEMO); a real Resume
+  // (RESUME_NOW) would make every tab count the next prayer as handled.
+  function demoPaused() {
+    return !!(state.paused && state.paused.active && state.paused.isDemo);
+  }
+  function realPaused() {
+    return !!(state.paused && state.paused.active && !state.paused.isDemo);
+  }
+  function resumeRequest() {
+    return { type: demoPaused() ? 'RESUME_DEMO' : 'RESUME_NOW' };
+  }
+
   function onFocusResume() {
     if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
+    const request = resumeRequest();
     resumeMedia();
     state.paused = { active: false };
     hideFocusUI();
     render();
-    chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {});
+    chrome.runtime.sendMessage(request).catch(() => {});
   }
 
   function render() {
@@ -470,10 +485,11 @@
 
   function onResumeClick() {
     if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
+    const request = resumeRequest();
     resumeMedia();
     state.paused = { active: false }; // optimistic; background confirms
     render();
-    chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {});
+    chrome.runtime.sendMessage(request).catch(() => {});
   }
 
   // ---- ticking + sync ----
@@ -509,16 +525,17 @@
   function onResumeBackstop() {
     resumeTimer = null;
     resumeTimerDue = 0;
+    const request = resumeRequest();
     resumeMedia();
     const np = state.nextPrayer;
-    if (np && np.ts) lastHandledTs = Math.max(lastHandledTs, np.ts);
+    if (np && np.ts && request.type === 'RESUME_NOW') lastHandledTs = Math.max(lastHandledTs, np.ts);
     state.paused = { active: false };
     pauseObservedAt = 0;
     hideFocusUI();
     if (isTop) hideUI();
     lockScroll(false);
     if (isTop) {
-      try { chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {}); } catch (_) {}
+      try { chrome.runtime.sendMessage(request).catch(() => {}); } catch (_) {}
     }
   }
 
@@ -576,17 +593,18 @@
       // later throttled/frozen or the context dies before teardown runs.
       armResumeBackstop(dueAt);
       if (now >= dueAt) {
+        const request = resumeRequest();
         resumeMedia();
         // Pin lastHandledTs so the fallback block below can't re-pause for the
-        // prayer we just timed out of.
-        if (np && np.ts) lastHandledTs = Math.max(lastHandledTs, np.ts);
+        // prayer we just timed out of (a demo's was not that prayer's).
+        if (np && np.ts && request.type === 'RESUME_NOW') lastHandledTs = Math.max(lastHandledTs, np.ts);
         state.paused = { active: false };
         pauseObservedAt = 0;
         clearResumeBackstop();
         hideFocusUI();
         render();
         if (isTop) {
-          chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {});
+          chrome.runtime.sendMessage(request).catch(() => {});
         }
         return;
       }
@@ -651,12 +669,14 @@
   chrome.runtime.onMessage.addListener((msg) => {
     if (!msg) return;
     if (msg.type === 'PRAYER_NOW') {
+      if (msg.isDemo && realPaused()) return; // the prayer's own pause stands
       pauseMediaFor(msg.prayer);
       state.paused = { active: true, prayer: msg.prayer, time: msg.time, focus: !!msg.focus, since: msg.since };
+      if (msg.isDemo) state.paused.isDemo = true;
       // Treat the broadcast as authoritative handling of this prayer so the
       // 90-second fallback in tick() can't re-fire on tabs that didn't trigger
-      // the fallback themselves.
-      if (state.nextPrayer && state.nextPrayer.ts) {
+      // the fallback themselves. A demo handles no prayer.
+      if (!msg.isDemo && state.nextPrayer && state.nextPrayer.ts) {
         lastHandledTs = Math.max(lastHandledTs, state.nextPrayer.ts);
       }
       render();
@@ -675,10 +695,11 @@
       hideFocusUI();
       render();
     } else if (msg.type === 'RESUME') {
+      if (msg.isDemo && realPaused()) return; // the demo's end, not the prayer's
       resumeMedia();
       // Pin lastHandledTs so the per-tab fallback in tick() can't re-pause for
-      // the just-resumed prayer within its 90s window.
-      if (state.nextPrayer && state.nextPrayer.ts) {
+      // the just-resumed prayer within its 90s window (not after a demo's).
+      if (!msg.isDemo && state.nextPrayer && state.nextPrayer.ts) {
         lastHandledTs = Math.max(lastHandledTs, state.nextPrayer.ts);
       }
       state.paused = { active: false };

@@ -90,8 +90,7 @@ English
 | `notifications` | permissions | Shows a desktop notification when prayer time begins so the user is alerted to the Adhan. |
 | `offscreen` | permissions | Plays an audible prayer notification chime (`audio/chime.mp3`) at prayer time via a background audio document, without requiring an active browser tab or user gesture. |
 | `scripting` | permissions | Injects media control and overlay logic into open tabs when the extension is first installed or updated, ensuring already-open tabs auto-pause without requiring a manual page reload. |
-| `https://api.aladhan.com/*` | host_permissions | Fetches accurate daily prayer times for the user's selected city/coordinates. |
-| `http://*/*`, `https://*/*` | host_permissions | Required to detect and pause playing `<video>` and `<audio>` elements across any site open during Adhan (e.g. YouTube, Netflix, podcasts). Page contents and browsing history are never read or stored. |
+| `http://*/*`, `https://*/*` | host_permissions | Required to detect and pause playing `<video>` and `<audio>` elements across any site open during Adhan (e.g. YouTube, Netflix, podcasts). Page contents and browsing history are never read or stored. The same grant covers the daily prayer-times request to `api.aladhan.com`, so no separate host is requested. |
 
 ---
 

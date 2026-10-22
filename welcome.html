@@ -170,7 +170,7 @@
         <section class="step-view" id="step3View">
           <div class="step-hero">
             <h1 data-i18n="onboarding_step_pin">Pin Extension</h1>
-            <p data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
+            <p data-i18n="pin_extension_desc">Click the Extensions icon in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
           </div>
 
           <div class="pin-guide-card">
@@ -184,9 +184,8 @@
           <div class="sim-box">
             <p>Want to see how media pause works? Try a quick simulation:</p>
             <button type="button" id="simPauseBtn" class="btn-sim" data-i18n="simulate_pause">Test prayer pause (10s)</button>
-            <div id="simBanner" class="test-banner" hidden>
-              <span>⏸️ Media paused for Maghrib · Auto-resumes in <b id="simCount">10</b>s</span>
-            </div>
+            <!-- Why the test is off (no place picked yet, or its times could not be had) or was refused (a prayer pause is on); set by welcome.js. -->
+            <p id="simHint" class="sim-hint" role="status" hidden></p>
           </div>
 
           <div class="welcome-footer">
@@ -228,8 +227,9 @@
           <span class="demo-crescent">🕌</span>
         </div>
         <div class="demo-ftitle" data-i18n="time_for_prayer">Time for prayer</div>
-        <div class="demo-fname" id="demoPrayerName" data-i18n="prayer_Maghrib">Maghrib</div>
-        <div class="demo-ftime" id="demoPrayerTime">06:45 PM</div>
+        <!-- The next prayer and its time, set by welcome.js when the demo starts. -->
+        <div class="demo-fname" id="demoPrayerName"></div>
+        <div class="demo-ftime" id="demoPrayerTime" dir="ltr"></div>
         <div class="demo-fmsg" data-i18n="media_paused_msg">Media is paused. Take a moment for your prayer.</div>
         <div class="demo-fauto">
           <span>Auto-resumes in <b id="demoAutoResumeCount">10</b>s</span>

@@ -107,8 +107,11 @@ set is now `storage, alarms, notifications, scripting`.
 non-gesture moment fundamentally needs all-sites reach. `activeTab` (active tab, on user
 gesture only), `declarativeContent`, and `user_scripts` cannot substitute. The reach
 comes from the static `content_scripts` (`http://*/*`, `https://*/*`) plus
-`host_permissions` for `scripting.executeScript` into already-open tabs, and
-`https://api.aladhan.com/*` for the schedule fetch.
+`host_permissions` for `scripting.executeScript` into already-open tabs, which also
+cover the schedule fetch from `api.aladhan.com`. That host is not listed on its own:
+Opera's review rejects a host permission another one already grants. Only
+`icons/icon48.png` (the overlays' icon) is web-accessible, as the only file
+`content.js` loads into a page.
 
 **Per-permission justification (for the CWS dashboard):**
 
@@ -118,8 +121,7 @@ comes from the static `content_scripts` (`http://*/*`, `https://*/*`) plus
 | `alarms` | Fire the pause + arm auto-resume at prayer time | none |
 | `notifications` | The prayer-time toast | "Display notifications" |
 | `scripting` | Inject the pause/overlay into tabs open before load/update | none |
-| `host_permissions` all-URLs + content_scripts | Pause `<video>/<audio>` and show the overlay on any site | "Read and change all your data on all websites" |
-| `host_permissions` `api.aladhan.com` | Fetch the prayer schedule from the service worker | (collapsed under all-URLs) |
+| `host_permissions` all-URLs + content_scripts | Pause `<video>/<audio>` and show the overlay on any site; also covers the service worker's prayer-schedule fetch (`api.aladhan.com`) | "Read and change all your data on all websites" |
 
 ### Optional: soften the install prompt (a product decision, not yet done)
 

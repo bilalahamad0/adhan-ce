@@ -165,6 +165,8 @@ Add an explicit host permission for the direct calls (the broad `https://*/*` al
 ```json
 "host_permissions": ["https://api.aladhan.com/*", "http://*/*", "https://*/*"]
 ```
+> Since removed again: Opera's review rejects a host that `https://*/*` already grants, so the manifest lists only `http://*/*` and `https://*/*`.
+
 You may **remove** `https://adhan-api-mauve.vercel.app/*` once the companion is no longer called (and update `tests/manifest.test.js`, which currently asserts that host is present).
 
 ## 6. Edge cases & decisions

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeChrome } from './helpers/chrome-mock.js';
 import { makeFetch, aladhanPayload } from './helpers/fetch-mock.js';
+import { simulateStaleTzData } from './helpers/stale-icu.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BODY = readFileSync(join(ROOT, 'welcome.html'), 'utf8').match(/<body[^>]*>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -369,5 +370,287 @@ describe('onboarding search in the page language', () => {
     await settle();
     const [saved] = await finish();
     expect(saved).toMatchObject({ city: 'Casablanca', country: 'Morocco', placeLabel: null });
+  });
+});
+
+// "Test prayer pause (10s)" on the last step. It was always "Maghrib" — "06:45 PM"
+// on this page, and the stored schedule's clock in the tabs, which before setup is
+// the install default's (Sunnyvale): a user who picked London read "Maghrib 02:39 AM".
+// The chime played here and in the worker at once.
+describe('the pause demo', () => {
+  // Casablanca's previewed times (aladhanPayload): Fajr 04:27, Dhuhr 13:05, Asr 16:56,
+  // Maghrib 20:17, Isha 21:43, at the UTC offset the mock gives them from this Node's
+  // tz data — +00 (Morocco's rules since 2026-09-20) or, with older data, +01. The
+  // moments are an hour clear of each prayer, so the answer stands either way.
+  const AFTERNOON = Date.parse('2026-10-22T14:30:00Z');
+  const NIGHT = Date.parse('2026-10-22T22:30:00Z');
+  // What the worker stored on install: Sunnyvale's day, and its next prayer.
+  const SUNNYVALE = {
+    schedule: { tz: 'America/Los_Angeles', prayers: [{ name: 'Fajr', time: '05:49 AM', ts: AFTERNOON - 3 * 3600e3 }, { name: 'Maghrib', time: '06:24 PM', ts: AFTERNOON + 9 * 3600e3 }] },
+    nextPrayer: { name: 'Maghrib', time: '06:24 PM', ts: AFTERNOON + 9 * 3600e3 },
+  };
+  const demos = () => chrome.__.sent.filter((m) => m.type === 'TEST_PAUSE_DEMO');
+  const shown = () => [document.getElementById('demoPrayerName').textContent, document.getElementById('demoPrayerTime').textContent];
+  let realAudio;
+  let made;
+  beforeEach(() => {
+    realAudio = window.Audio;
+    made = jest.fn(function () {
+      return { play: () => Promise.resolve() };
+    });
+    window.Audio = made;
+  });
+  afterEach(() => {
+    window.Audio = realAudio;
+  });
+  const runDemo = async () => {
+    document.getElementById('simPauseBtn').click();
+    await settle();
+  };
+
+  it("names the picked place's next prayer and its time, here and in every tab", async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: SUNNYVALE });
+    await pickCasablanca();
+    await runDemo();
+    expect(demos()).toEqual([{ type: 'TEST_PAUSE_DEMO', seconds: 10, chime: true, prayer: 'Asr', time: '04:56 PM' }]);
+    expect(document.getElementById('welcomeFocusOverlay').hidden).toBe(false);
+    expect(shown()).toEqual([cat('en').prayer_Asr, '04:56 PM']);
+    expect(made).not.toHaveBeenCalled(); // the worker's chime only
+  });
+
+  it("after the place's Isha it is the next day's Fajr, in the page language", async () => {
+    jest.setSystemTime(NIGHT);
+    await load({ storage: SUNNYVALE });
+    await pickCasablanca();
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ prayer: 'Fajr', time: '04:27 AM' })]);
+    document.querySelector('.lang-chip[data-lang="fr"]').click();
+    await settle();
+    expect(shown()).toEqual([cat('fr').prayer_Fajr, '04:27 AM']);
+  });
+
+  it('asks the worker for the chime as chosen on this page', async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: SUNNYVALE });
+    await pickCasablanca();
+    const chime = document.getElementById('welcomeChime');
+    chime.checked = false;
+    chime.dispatchEvent(new Event('change'));
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ chime: false, prayer: 'Asr' })]);
+    expect(made).not.toHaveBeenCalled();
+  });
+
+  // Step 1's Next does not wait for a pick, and until setup is done the worker's next
+  // prayer is the install default's: a test run then read "Asr 03:56 PM" (Sunnyvale's)
+  // to a user in London, on this page and in every tab.
+  it('with no place picked yet, waits for one rather than show the install default\'s prayer', async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: SUNNYVALE });
+    const btn = document.getElementById('simPauseBtn');
+    const hint = document.getElementById('simHint');
+    expect(btn.disabled).toBe(true);
+    expect([hint.hidden, hint.textContent]).toEqual([false, cat('en').sim_pick_city_first]);
+    await runDemo();
+    expect(demos()).toEqual([]);
+    expect(document.getElementById('welcomeFocusOverlay').hidden).toBe(true);
+    // In the page language.
+    document.querySelector('.lang-chip[data-lang="fr"]').click();
+    await settle();
+    expect(hint.textContent).toBe(cat('fr').sim_pick_city_first);
+    // A place's times shown: on, for that place's next prayer.
+    await pickCasablanca();
+    expect([btn.disabled, hint.hidden]).toEqual([false, true]);
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ prayer: 'Asr', time: '04:56 PM' })]);
+  });
+
+  // Detected as BigDataCloud really answers: float32's widened, whose ten digits in a
+  // row the outbound guard reads as a phone number. The preview was blocked before it
+  // was asked for, and the test stayed off, asking for the city the field showed.
+  const SAN_FRANCISCO = ['reverse-geocode-client', { latitude: 37.790000915527344, longitude: -122.4000015258789, city: 'San Francisco', principalSubdivision: 'California', countryName: 'United States of America' }];
+  // Each place's day by its coordinates (to 4 decimals): San Francisco's in Los
+  // Angeles' zone (at AFTERNOON, 07:30 there: Dhuhr 01:05 PM is next), Casablanca's
+  // as in load(). `casablanca` answers for Casablanca instead when given.
+  const byPlace = (casablanca = aladhanPayload({ meta: { timezone: 'Africa/Casablanca' } })) => [
+    'api.aladhan.com',
+    (url) => (url.includes('latitude=37.79&longitude=-122.4&') ? aladhanPayload({ meta: { timezone: 'America/Los_Angeles' } }) : typeof casablanca === 'function' ? casablanca(url) : casablanca),
+  ];
+  const aladhanCalls = () => globalThis.fetch.calls.filter((u) => u.includes('api.aladhan.com'));
+
+  it("a detected place's times load, and the test names its next prayer", async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: SUNNYVALE, routes: [SAN_FRANCISCO, byPlace()] });
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    expect(document.getElementById('welcomeCity').value).toBe('San Francisco, California, United States of America');
+    expect(aladhanCalls()).toEqual([expect.stringContaining('?latitude=37.79&longitude=-122.4&')]);
+    expect(document.getElementById('ppDhuhr').textContent).toBe('01:05 PM');
+    expect([document.getElementById('simPauseBtn').disabled, document.getElementById('simHint').hidden]).toEqual([false, true]);
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ prayer: 'Dhuhr', time: '01:05 PM' })]);
+    expect(shown()).toEqual([cat('en').prayer_Dhuhr, '01:05 PM']);
+    // Saved as rounded, so the worker's own requests by them pass the guard too.
+    document.getElementById('finishBtn').click();
+    await settle();
+    expect(chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS').settings).toMatchObject({ city: 'San Francisco', lat: 37.79, lon: -122.4 });
+  });
+
+  it('a picked place whose times cannot be had says so, rather than ask for a place', async () => {
+    jest.setSystemTime(AFTERNOON);
+    let down = true;
+    await load({ storage: SUNNYVALE, routes: [byPlace(() => (down ? { status: 503 } : aladhanPayload({ meta: { timezone: 'Africa/Casablanca' } })))] });
+    await pickCasablanca();
+    const btn = document.getElementById('simPauseBtn');
+    const hint = document.getElementById('simHint');
+    expect(btn.disabled).toBe(true);
+    expect([hint.hidden, hint.textContent]).toEqual([false, cat('en').sim_times_unavailable]);
+    await runDemo();
+    expect(demos()).toEqual([]);
+    document.querySelector('.lang-chip[data-lang="fr"]').click();
+    await settle();
+    expect(hint.textContent).toBe(cat('fr').sim_times_unavailable);
+    // Picked again once Aladhan answers: on, for its next prayer.
+    down = false;
+    await pickCasablanca();
+    expect([btn.disabled, hint.hidden]).toEqual([false, true]);
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ prayer: 'Asr', time: '04:56 PM' })]);
+  });
+
+  it("a later place whose times cannot be had never gets the earlier place's prayer", async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: SUNNYVALE, routes: [SAN_FRANCISCO, ['latitude=37.79&', { status: 503 }]] });
+    await pickCasablanca();
+    expect(document.getElementById('simPauseBtn').disabled).toBe(false);
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    expect(document.getElementById('simPauseBtn').disabled).toBe(true);
+    expect(document.getElementById('simHint').textContent).toBe(cat('en').sim_times_unavailable);
+    await runDemo();
+    expect(demos()).toEqual([]);
+  });
+
+  it("once set up, a new place whose times cannot be had does not get the saved place's prayer", async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: { ...SUNNYVALE, onboardingCompleted: true }, routes: [['api.aladhan.com', { status: 503 }]] });
+    expect(document.getElementById('simPauseBtn').disabled).toBe(false); // the saved place's day
+    await pickCasablanca();
+    expect(document.getElementById('simPauseBtn').disabled).toBe(true);
+    expect(document.getElementById('simHint').textContent).toBe(cat('en').sim_times_unavailable);
+    await runDemo();
+    expect(demos()).toEqual([]);
+  });
+
+  it("an earlier place's times, come late, are not the later place's", async () => {
+    jest.setSystemTime(AFTERNOON);
+    let answer;
+    await load({ storage: SUNNYVALE, routes: [SAN_FRANCISCO, byPlace(() => new Promise((r) => (answer = r)))] });
+    await pickCasablanca();
+    // On their way: off, with no word yet (it is neither unpicked nor failed).
+    expect([document.getElementById('simPauseBtn').disabled, document.getElementById('simHint').hidden]).toEqual([true, true]);
+    document.getElementById('detectLocBtn').click();
+    await settle();
+    answer(aladhanPayload({ meta: { timezone: 'Africa/Casablanca' } }));
+    await settle();
+    expect(document.getElementById('previewCityLabel').textContent).toBe('San Francisco, United States of America');
+    expect(document.getElementById('ppDhuhr').textContent).toBe('01:05 PM');
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ prayer: 'Dhuhr', time: '01:05 PM' })]);
+  });
+
+  it('set up, with no stored day to show, labels this page as the worker labels the tabs', async () => {
+    jest.setSystemTime(AFTERNOON);
+    let reply;
+    await load({
+      storage: { nextPrayer: SUNNYVALE.nextPrayer, onboardingCompleted: true },
+      send: (m) => (m.type === 'TEST_PAUSE_DEMO' ? new Promise((r) => (reply = r)) : { ok: true }),
+    });
+    expect(document.getElementById('simPauseBtn').disabled).toBe(false);
+    await runDemo();
+    expect(demos()).toEqual([{ type: 'TEST_PAUSE_DEMO', seconds: 10, chime: true }]); // its own stored next prayer
+    expect(shown()).toEqual(['', '']); // never a made-up prayer
+    reply({ ok: true, prayer: 'Maghrib', time: '06:24 PM' });
+    await settle();
+    expect(shown()).toEqual([cat('en').prayer_Maghrib, '06:24 PM']);
+    expect(made).not.toHaveBeenCalled();
+  });
+
+  it('during a real prayer pause the worker refuses: the page ends its demo and says why', async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: SUNNYVALE, send: (m) => (m.type === 'TEST_PAUSE_DEMO' ? { ok: false, error: 'prayer_in_progress' } : { ok: true }) });
+    await pickCasablanca();
+    await runDemo();
+    expect(document.getElementById('welcomeFocusOverlay').hidden).toBe(true);
+    const hint = document.getElementById('simHint');
+    expect([hint.hidden, hint.textContent]).toEqual([false, cat('en').sim_prayer_in_progress]);
+    // No Resume of its own for the tabs, nor a countdown that would send one.
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(chrome.__.sent.filter((m) => m.type === 'RESUME_DEMO')).toEqual([]);
+    // A later try asks again.
+    chrome.__.sent.length = 0;
+    await runDemo();
+    expect(demos()).toHaveLength(1);
+  });
+
+  it("takes each prayer's instant from Aladhan's offset, not this browser's out-of-date tz data", async () => {
+    // Aladhan says +00; a browser on tz data from before 2026-09-20 reads Casablanca as
+    // +01, so through it Asr (16:56) was past at 16:20Z and the demo named Maghrib.
+    const restore = simulateStaleTzData();
+    try {
+      jest.setSystemTime(Date.parse('2026-10-22T16:20:00Z'));
+      await load({ storage: SUNNYVALE, routes: [['api.aladhan.com', aladhanPayload({ meta: { timezone: 'Africa/Casablanca' }, isoOffset: '+00:00' })]] });
+      await pickCasablanca();
+      expect(globalThis.fetch.calls.find((u) => u.includes('api.aladhan.com'))).toMatch(/[?&]iso8601=true(&|$)/);
+      expect(document.getElementById('ppAsr').textContent).toBe('04:56 PM');
+      await runDemo();
+      expect(demos()).toEqual([expect.objectContaining({ prayer: 'Asr', time: '04:56 PM' })]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("once set up, names the saved place's next prayer", async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: { ...SUNNYVALE, onboardingCompleted: true } });
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ prayer: 'Maghrib', time: '06:24 PM' })]);
+    expect(shown()).toEqual([cat('en').prayer_Maghrib, '06:24 PM']);
+  });
+});
+
+describe('pin guidance for the browser in use', () => {
+  const UA = {
+    chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    edge: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+    opera: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0.0.0',
+    firefox: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0',
+  };
+  afterEach(() => {
+    delete window.navigator.userAgent; // back to jsdom's own
+  });
+
+  it.each([
+    // Opera's toolbar Extensions button is a cube; it was told to look for Chrome's puzzle piece.
+    ['opera', /^Click the Extensions icon \(the cube\) at the right end of the toolbar, then click the pin next to Adhan Focus\.$/],
+    ['edge', /"Show in toolbar"/],
+    ['firefox', /"Pin to Toolbar"/],
+    ['chrome', /puzzle icon 🧩 .* Pin icon next to Adhan Focus/],
+  ])('%s', async (browser, text) => {
+    Object.defineProperty(window.navigator, 'userAgent', { value: UA[browser], configurable: true });
+    await load();
+    expect(document.getElementById('browserPinGuidance').textContent).toMatch(text);
+    // The step's own line above it names no browser's icon: on Opera it said "the
+    // puzzle icon 🧩" right over the cube.
+    const lead = document.querySelector('#step3View .step-hero p');
+    expect(lead.getAttribute('data-i18n')).toBe('pin_extension_desc');
+    expect(lead.textContent).toBe(cat('en').pin_extension_desc);
+  });
+
+  it('that line (the popup guide and pin hint use it too) names no browser\'s icon, in any language', () => {
+    for (const code of ['en', 'ar', 'fr', 'id', 'tr', 'ur']) {
+      expect({ code, text: cat(code).pin_extension_desc }).toEqual({ code, text: expect.not.stringMatching(/🧩|puzzle|پزل/i) });
+    }
   });
 });

@@ -1257,6 +1257,53 @@ describe('in-popup onboarding & tutorial', () => {
     $('obPrevBtn').click();
     expect($('obSlide1').classList.contains('is-active')).toBe(true);
   });
+
+  // It only played the chime and showed "Auto-pause test running…" for 4 s: no
+  // media was paused anywhere.
+  it('"Test prayer pause (10s)" runs the real demo in every tab, its chime played by the worker', async () => {
+    await load({ initialStorage: { onboardingCompleted: false } });
+    const realAudio = window.Audio;
+    const made = jest.fn(function () {
+      return { play: () => Promise.resolve() };
+    });
+    window.Audio = made;
+    try {
+      $('obSimBtn').click();
+      await settle();
+      expect(chrome.__.sent.filter((m) => m.type === 'TEST_PAUSE_DEMO')).toEqual([{ type: 'TEST_PAUSE_DEMO', seconds: 10 }]);
+      expect(made).not.toHaveBeenCalled(); // no chime of its own
+      // Shown for the demo's 10 s.
+      expect($('obSimStatus').hidden).toBe(false);
+      expect([$('obSimRunning').hidden, $('obSimBusy').hidden]).toEqual([false, true]);
+      await jest.advanceTimersByTimeAsync(9999);
+      expect($('obSimStatus').hidden).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      expect($('obSimStatus').hidden).toBe(true);
+      // (The guide's chime preview still plays here.)
+      $('obChimePreviewBtn').click();
+      await settle();
+      expect(made).toHaveBeenCalledTimes(1);
+    } finally {
+      window.Audio = realAudio;
+    }
+  });
+
+  // The guide opens from Settings at any time: mid-prayer, the demo's RESUME would
+  // have ended the real pause in every tab, Strict Focus or not.
+  it('"Test prayer pause (10s)" during a prayer pause says the worker turned it down', async () => {
+    const paused = { ...defaultState(), paused: { active: true, prayer: 'Dhuhr', since: BASE, focus: true } };
+    await load({
+      initialStorage: { onboardingCompleted: false },
+      send: (m) => (m.type === 'GET_STATE' ? paused : m.type === 'TEST_PAUSE_DEMO' ? { ok: false, error: 'prayer_in_progress' } : { ok: true }),
+    });
+    $('obSimBtn').click();
+    await settle();
+    expect($('obSimStatus').hidden).toBe(false);
+    expect([$('obSimRunning').hidden, $('obSimBusy').hidden]).toEqual([true, false]);
+    expect($('obSimBusy').textContent).toBe(EN.sim_prayer_in_progress);
+    await jest.advanceTimersByTimeAsync(4000);
+    expect($('obSimStatus').hidden).toBe(true);
+  });
 });
 
 describe('detect location and clock keyboard shortcuts', () => {

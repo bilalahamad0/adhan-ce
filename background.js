@@ -9,6 +9,7 @@ import { emptyUsage, bump, prune } from './lib/usage.js';
 import { DEV } from './lib/buildinfo.js';
 import { playChime } from './lib/audio.js';
 import { sanitizeSettings, sanitizeLocationField, assertSafeOutboundUrl } from './lib/privacy-guard.js';
+import { roundCoord } from './lib/geocode.js';
 
 // Call Aladhan directly (CORS-open). Calculation method + Asr school come from
 // settings (defaults method=2 ISNA, school=0 Standard — unchanged from before);
@@ -204,7 +205,9 @@ async function fetchSchedule(settings, { day, tz, timeoutMs, byCoords = false } 
     }
   }
   if (byCoords) {
-    const url = `${ALADHAN_BY_COORDS}/${date}?latitude=${settings.lat}&longitude=${settings.lon}&${calc}&iso8601=true`;
+    // Rounded: a place detected before detection rounded them was saved with float32
+    // noise (37.790000915527344), which the outbound guard blocks as a phone number.
+    const url = `${ALADHAN_BY_COORDS}/${date}?latitude=${roundCoord(settings.lat)}&longitude=${roundCoord(settings.lon)}&${calc}&iso8601=true`;
     assertSafeOutboundUrl(url);
     res = await fetch(url, init);
   }
@@ -826,6 +829,11 @@ async function testAdhan(seconds = 30) {
   chrome.alarms.create(ALARM_PRAYER, { when: ts });
 }
 
+// A demo's label, as a page sends it: one of the five prayers, and a time as short
+// as the 'hh:mm AM' a real fire shows.
+const isPrayerName = (name) => PRAYER_ORDER.includes(name);
+const isShortText = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 16;
+
 // ---------- inject into already-open tabs (new installs) ----------
 async function injectExistingTabs() {
   const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
@@ -1022,23 +1030,52 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true });
         break;
       case 'TEST_PAUSE_DEMO': {
-        const prayer = msg.prayer || 'Maghrib';
+        // Never over a real prayer pause: the demo's RESUME would end it in every
+        // tab, Strict Focus or not, while storage still has it on.
+        if ((await getState()).paused.active) {
+          sendResponse({ ok: false, error: 'prayer_in_progress' });
+          break;
+        }
+        // Labelled as a real fire would be: a prayer and its 'hh:mm AM' time. The
+        // welcome page sends the next prayer of the place being set up (until setup
+        // is done the stored schedule is the install default's); else the stored
+        // next prayer, not a dev test fire's; else the location's clock now.
         const seconds = Math.min(60, Math.max(5, msg.seconds || 10));
-        const { schedule } = await chrome.storage.local.get('schedule');
         const since = Date.now();
-        const time = locationTime12h(schedule || null, since);
+        let prayer;
+        let time;
+        if (isPrayerName(msg.prayer) && isShortText(msg.time)) {
+          ({ prayer, time } = msg);
+        } else {
+          const { schedule, nextPrayer } = await chrome.storage.local.get(['schedule', 'nextPrayer']);
+          if (nextPrayer && !nextPrayer.test && isPrayerName(nextPrayer.name) && isShortText(nextPrayer.time)) {
+            ({ name: prayer, time } = nextPrayer);
+          } else {
+            prayer = isPrayerName(msg.prayer) ? msg.prayer : 'Maghrib';
+            time = locationTime12h(schedule || null, since);
+          }
+        }
         await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: true, since, isDemo: true });
-        const s = await getSettings();
-        if (s.adhanChime !== false) {
+        // The page's own choice when it has one (the welcome page's, not yet saved).
+        const chime = typeof msg.chime === 'boolean' ? msg.chime : (await getSettings()).adhanChime !== false;
+        if (chime) {
           try { await playChime(); } catch (_) {}
         }
         setTimeout(async () => {
+          // A prayer that fired meanwhile has taken the tabs over: it ends on its own.
+          if ((await getState()).paused.active) return;
           await broadcast({ type: 'RESUME', isDemo: true });
         }, seconds * 1000);
-        sendResponse({ ok: true });
+        // What the tabs show, for a page that sent no label of its own.
+        sendResponse({ ok: true, prayer, time });
         break;
       }
       case 'RESUME_DEMO': {
+        // The demo's Resume (the welcome page's, or a tab's), never a real pause's.
+        if ((await getState()).paused.active) {
+          sendResponse({ ok: false, error: 'prayer_in_progress' });
+          break;
+        }
         await broadcast({ type: 'RESUME', isDemo: true });
         sendResponse({ ok: true });
         break;

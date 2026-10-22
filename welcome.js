@@ -1,8 +1,9 @@
 // Adhan Focus — Welcome & Onboarding Controller
-import { searchPlaces, placeToSave, detectLocationByIp } from './lib/geocode.js';
+import { searchPlaces, placeToSave, detectLocationByIp, roundCoord } from './lib/geocode.js';
 
 import { initI18n, setLang, applyDir, getLang, placeDir, t as translate } from './lib/i18n.js';
 import { containsPii, assertSafeOutboundUrl } from './lib/privacy-guard.js';
+import { computeNext, parseTimeToday, parseAladhanIso, epochAtOffset, hhmmTo12h, PRAYER_ORDER } from './lib/schedule.js';
 
 
 let t = (k) => k;
@@ -16,6 +17,14 @@ let placeSaved = Promise.resolve(true);
 let saving = Promise.resolve();
 let handedOver = Promise.resolve();
 let simTimer = null;
+// The previewed place's five prayers ({name, time 'hh:mm AM', ts}): the pause demo
+// names the next of them. null until a place's times are shown, and again from the
+// next pick or detection until its own are: never an earlier place's.
+let previewPrayers = null;
+// Whether the picked place's times could not be had (offline, Aladhan down), and
+// the preview asked for last: an earlier pick's answer, come later, is dropped.
+let previewFailed = false;
+let previewAsk = 0;
 // Until onboarding is done, the stored city is the install default (Sunnyvale), not
 // the user's: the location field starts empty and no default-city preview is shown.
 let onboarded = false;
@@ -309,30 +318,50 @@ function wireGeolocation() {
 
 // Fetch preview timings for selected location
 async function fetchPreviewTimings(lat, lon, city, country) {
+  const ask = ++previewAsk;
+  previewPrayers = null;
+  previewFailed = false;
+  syncSimButton();
+  let prayers = null;
   try {
     const today = new Date();
     const d = String(today.getDate()).padStart(2, '0');
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const y = today.getFullYear();
-    const url = `https://api.aladhan.com/v1/timings/${d}-${m}-${y}?latitude=${lat}&longitude=${lon}&method=${state.settings.method || 2}`;
+    // Rounded (see roundCoord): a place saved before detection rounded them can carry
+    // float32 noise (37.790000915527344), which the outbound guard blocks.
+    const url = `https://api.aladhan.com/v1/timings/${d}-${m}-${y}?latitude=${roundCoord(Number(lat))}&longitude=${roundCoord(Number(lon))}&method=${state.settings.method || 2}&iso8601=true`;
     assertSafeOutboundUrl(url);
     const res = await fetch(url);
 
-    if (!res.ok) return;
+    if (!res.ok) throw new Error(`Aladhan ${res.status}`);
     const json = await res.json();
-    if (!json.data || !json.data.timings) return;
+    if (!json.data || !json.data.timings) throw new Error('Aladhan: malformed response');
 
     const tms = json.data.timings;
-    const prayers = [
-      { name: 'Fajr', time: formatTo12(tms.Fajr) },
-      { name: 'Dhuhr', time: formatTo12(tms.Dhuhr) },
-      { name: 'Asr', time: formatTo12(tms.Asr) },
-      { name: 'Maghrib', time: formatTo12(tms.Maghrib) },
-      { name: 'Isha', time: formatTo12(tms.Isha) },
-    ];
-    updatePrayerPreview(prayers, city, country);
+    // Each with its instant, for the pause demo: from the UTC offset Aladhan gives
+    // it, on the place's date now, as the worker reads them (this browser's tz data
+    // can lag, as Morocco's +00 did); an answer without offsets is read in the
+    // place's timezone.
+    const zone = (json.data.meta && json.data.meta.timezone) || null;
+    prayers = PRAYER_ORDER.map((name) => {
+      const iso = parseAladhanIso(tms[name]);
+      if (!iso) {
+        const time = formatTo12(tms[name]);
+        return { name, time, ts: parseTimeToday(time, today, zone) };
+      }
+      const day = new Date(today.getTime() + iso.offsetMin * 60000).toISOString().slice(0, 10);
+      return { name, time: hhmmTo12h(iso.hm), ts: epochAtOffset(day, iso.hm, iso.offsetMin) };
+    });
   } catch (err) {
     console.warn('Preview fetch error:', err);
+  }
+  if (ask !== previewAsk) return; // a later pick's are due
+  if (prayers) {
+    updatePrayerPreview(prayers, city, country);
+  } else {
+    previewFailed = true;
+    syncSimButton();
   }
 }
 
@@ -355,10 +384,12 @@ function updatePrayerPreview(prayers, city, country) {
     cityLabel.textContent = [city, country].filter(Boolean).join(', ');
   }
 
+  previewPrayers = prayers;
   prayers.forEach((p) => {
     const el = document.getElementById(`pp${p.name}`);
     if (el) el.textContent = p.time;
   });
+  syncSimButton();
 }
 
 // Preferences & Audio preview
@@ -410,17 +441,78 @@ function ensureDemoStars() {
   demoStarsPopulated = true;
 }
 
+// The previewed place's next prayer from now ({name, time}), as the worker would
+// fire it: after its Isha, the next day's Fajr. null with no place's times shown.
+function nextPreviewPrayer(now = Date.now()) {
+  const next = previewPrayers && computeNext(previewPrayers, now);
+  return next ? { name: next.name, time: next.time } : null;
+}
+
+// The demo overlay's prayer, in the page language (kept across a switch), and its
+// time; blank with none.
+function labelDemo(prayer) {
+  const nameEl = document.getElementById('demoPrayerName');
+  const timeEl = document.getElementById('demoPrayerTime');
+  if (nameEl) {
+    if (prayer) {
+      const key = `prayer_${prayer.name}`;
+      const msg = t(key);
+      nameEl.setAttribute('data-i18n', key);
+      nameEl.textContent = msg && msg !== key ? msg : prayer.name;
+    } else {
+      nameEl.removeAttribute('data-i18n');
+      nameEl.textContent = '';
+    }
+  }
+  if (timeEl) timeEl.textContent = (prayer && prayer.time) || '';
+}
+
+// The line under the Test button, in the page language: why it is off or was
+// refused. Hidden with none.
+function simHint(key) {
+  const hint = document.getElementById('simHint');
+  if (!hint) return;
+  hint.hidden = !key;
+  if (key) {
+    hint.setAttribute('data-i18n', key);
+    hint.textContent = t(key);
+  } else {
+    hint.removeAttribute('data-i18n');
+    hint.textContent = '';
+  }
+}
+
+// Until setup is done the worker's next prayer is the install default's
+// (Sunnyvale's), not the user's, and once it is, the saved place's, not one just
+// picked: the test waits for the picked place's times, so it never names another
+// place's prayer. With none picked yet it asks for one; with the picked place's
+// times not to be had, it says so; while they are on their way, nothing.
+function syncSimButton() {
+  const btn = document.getElementById('simPauseBtn');
+  if (!btn) return;
+  const ready = !!previewPrayers || (onboarded && !selectedPlace);
+  btn.disabled = !ready;
+  if (ready) simHint(null);
+  else if (previewFailed) simHint('sim_times_unavailable');
+  else simHint(selectedPlace ? null : 'sim_pick_city_first');
+}
+
 function wireSimulation() {
   const btn = document.getElementById('simPauseBtn');
   const overlay = document.getElementById('welcomeFocusOverlay');
   const countEl = document.getElementById('demoAutoResumeCount');
   const resumeBtn = document.getElementById('demoResumeBtn');
   if (!btn || !overlay || !countEl) return;
+  syncSimButton();
 
-  function dismissDemo() {
+  function stopDemo() {
     if (simTimer) clearInterval(simTimer);
     simTimer = null;
     overlay.hidden = true;
+  }
+
+  function dismissDemo() {
+    stopDemo();
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
       chrome.runtime.sendMessage({ type: 'RESUME_DEMO' }).catch(() => {});
     }
@@ -435,23 +527,32 @@ function wireSimulation() {
 
   btn.addEventListener('click', () => {
     if (simTimer) clearInterval(simTimer);
+    simHint(null);
     ensureDemoStars();
+    // The next prayer of the place being set up, as its preview shows it. With no
+    // place's times shown (set up already: see syncSimButton), the worker names its
+    // stored next prayer, the user's by then, and its reply labels this page.
+    const next = nextPreviewPrayer();
+    labelDemo(next);
     overlay.hidden = false;
 
-    // Trigger cross-tab actual media pause demo via background
+    // Trigger cross-tab actual media pause demo via background, which plays the
+    // chime too: as chosen on this page, not yet saved.
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-      chrome.runtime.sendMessage({
-        type: 'TEST_PAUSE_DEMO',
-        seconds: 10,
-        prayer: 'Maghrib',
-      }).catch(() => {});
-    }
-
-    // Play chime locally if enabled
-    if (state.settings.adhanChime) {
-      try {
-        new Audio('audio/chime.mp3').play().catch(() => {});
-      } catch (_) {}
+      const demo = { type: 'TEST_PAUSE_DEMO', seconds: 10, chime: state.settings.adhanChime !== false };
+      if (next) Object.assign(demo, { prayer: next.name, time: next.time });
+      Promise.resolve(chrome.runtime.sendMessage(demo))
+        .then((res) => {
+          // A prayer pause is on: the worker left the tabs to it, so this page's
+          // demo ends too, saying why.
+          if (res && res.ok === false) {
+            stopDemo();
+            simHint('sim_prayer_in_progress');
+            return;
+          }
+          if (!next && !overlay.hidden && res && PRAYER_ORDER.includes(res.prayer)) labelDemo({ name: res.prayer, time: res.time });
+        })
+        .catch(() => {});
     }
 
     let secondsLeft = 10;
@@ -477,6 +578,9 @@ function detectBrowserGuidance() {
     guideText.textContent = 'Click the Extensions puzzle icon 🧩 in your top-right browser bar, then click "Show in toolbar" next to Adhan Focus.';
   } else if (ua.includes('firefox')) {
     guideText.textContent = 'Click the Extensions puzzle icon 🧩 in your top-right browser bar, then click the gear ⚙️ icon and select "Pin to Toolbar".';
+  } else if (ua.includes('opr/')) {
+    // Opera's (and Opera GX's) toolbar Extensions button is a cube, not a puzzle piece.
+    guideText.textContent = 'Click the Extensions icon (the cube) at the right end of the toolbar, then click the pin next to Adhan Focus.';
   } else {
     guideText.textContent = 'Click the Extensions puzzle icon 🧩 in your top-right browser bar, then click the Pin icon next to Adhan Focus.';
   }

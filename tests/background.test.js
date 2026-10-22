@@ -572,6 +572,107 @@ describe('TEST_ADHAN dev gate', () => {
   });
 });
 
+// The welcome page's and the popup guide's "Test prayer pause (10s)". It was always
+// "Maghrib" at the stored schedule's clock — before setup is done the install
+// default's (Sunnyvale), so a user who picked London read "Maghrib 02:39 AM".
+describe('the pause demo (TEST_PAUSE_DEMO)', () => {
+  const NOW = Date.parse('2026-10-22T14:30:00Z');
+  const STORED_NEXT = { name: 'Asr', time: '04:56 PM', ts: NOW + 3 * 3600e3 };
+  const demo = (h, msg = {}) => h.sendRuntimeMessage({ type: 'TEST_PAUSE_DEMO', seconds: 10, ...msg });
+  const sentOf = (h, type) => h.broadcasts.map((b) => b.message).filter((m) => m.type === type);
+  const load = (storage = {}) => loadBackground({ storage: { settings: DEFAULTS, schedule: scheduleAround(NOW), nextPrayer: STORED_NEXT, ...storage } });
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW, doNotFake: ['Intl', 'nextTick', 'setImmediate', 'clearImmediate', 'queueMicrotask'] });
+  });
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it('names the prayer and time the page sends in every tab, as a real fire would, then resumes them', async () => {
+    const { h } = await load();
+    expect(await demo(h, { prayer: 'Isha', time: '07:52 PM' })).toEqual({ ok: true, prayer: 'Isha', time: '07:52 PM' });
+    expect(sentOf(h, 'PRAYER_NOW')).toEqual([1, 2].map(() => ({ type: 'PRAYER_NOW', prayer: 'Isha', time: '07:52 PM', focus: true, since: NOW, isDemo: true })));
+    expect(h.store.paused).toBeUndefined(); // shown, not recorded as a pause
+    await jest.advanceTimersByTimeAsync(9999);
+    expect(sentOf(h, 'RESUME')).toEqual([]);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(sentOf(h, 'RESUME')).toEqual([1, 2].map(() => ({ type: 'RESUME', isDemo: true })));
+  });
+
+  it("the welcome page's Resume (or Esc) resumes the tabs at once", async () => {
+    const { h } = await load();
+    await demo(h, { prayer: 'Isha', time: '07:52 PM' });
+    expect(await h.sendRuntimeMessage({ type: 'RESUME_DEMO' })).toEqual({ ok: true });
+    expect(sentOf(h, 'RESUME')).toEqual([1, 2].map(() => ({ type: 'RESUME', isDemo: true })));
+  });
+
+  // The popup guide runs it from Settings at any time. Mid-prayer, its RESUME ended
+  // the real pause in every tab 10 s later, Strict Focus or not, while storage still
+  // had it on.
+  it('during a real prayer pause (Strict Focus too) refuses, and leaves every tab to it', async () => {
+    const realPause = { active: true, prayer: 'Dhuhr', time: '01:05 PM', focus: true, since: NOW - 60e3 };
+    const { h } = await load({ settings: { ...DEFAULTS, strictFocus: true }, paused: realPause });
+    expect(await h.sendRuntimeMessage({ type: 'RESUME_NOW' })).toEqual({ ok: false, error: 'strict_focus_locked' });
+    expect(await demo(h, { prayer: 'Isha', time: '07:52 PM' })).toEqual({ ok: false, error: 'prayer_in_progress' });
+    expect(await h.sendRuntimeMessage({ type: 'RESUME_DEMO' })).toEqual({ ok: false, error: 'prayer_in_progress' });
+    await jest.advanceTimersByTimeAsync(60e3);
+    expect(sentOf(h, 'PRAYER_NOW')).toEqual([]);
+    expect(sentOf(h, 'RESUME')).toEqual([]);
+    expect(h.offscreenDoc ? h.offscreenDoc.url : null).toBe(null); // no chime either
+    expect(h.store.paused).toEqual(realPause);
+  });
+
+  it("a prayer that fires mid-demo keeps the tabs: the demo's RESUME is not sent", async () => {
+    const { h } = await load();
+    await demo(h, { prayer: 'Isha', time: '07:52 PM' });
+    // A tab's fallback (or the alarm) starts the real pause 3 s in.
+    await jest.advanceTimersByTimeAsync(3000);
+    await h.sendRuntimeMessage({ type: 'PRAYER_FALLBACK', prayer: 'Asr', time: '04:56 PM', focus: true });
+    expect(h.store.paused).toMatchObject({ active: true, prayer: 'Asr' });
+    await jest.advanceTimersByTimeAsync(7000);
+    expect(sentOf(h, 'RESUME')).toEqual([]);
+    expect(h.store.paused).toMatchObject({ active: true, prayer: 'Asr' });
+  });
+
+  it("with no label of the page's own, shows the stored next prayer, as the tabs' real fire will", async () => {
+    const { h } = await load();
+    expect(await demo(h)).toEqual({ ok: true, prayer: 'Asr', time: '04:56 PM' });
+    expect(sentOf(h, 'PRAYER_NOW').map((m) => [m.prayer, m.time])).toEqual([['Asr', '04:56 PM'], ['Asr', '04:56 PM']]);
+  });
+
+  it.each([
+    ['a name not one of the five', { prayer: 'Tahajjud', time: '07:52 PM' }],
+    ['markup for a name', { prayer: '<img src=x onerror=alert(1)>', time: '07:52 PM' }],
+    ['a prayer with no time', { prayer: 'Isha' }],
+    ['a time that is not text', { prayer: 'Isha', time: 1952 }],
+    ['an empty time', { prayer: 'Isha', time: '  ' }],
+    ['a time longer than a clock', { prayer: 'Isha', time: '07:52 PM'.padEnd(40, '!') }],
+  ])('refuses %s, and shows the stored next prayer instead', async (_label, msg) => {
+    const { h } = await load();
+    expect(await demo(h, msg)).toEqual({ ok: true, prayer: 'Asr', time: '04:56 PM' });
+    expect(sentOf(h, 'PRAYER_NOW').every((m) => m.prayer === 'Asr' && m.time === '04:56 PM')).toBe(true);
+  });
+
+  it("passes over a dev test fire's stored next prayer, for the location's clock now", async () => {
+    const { h } = await load({ nextPrayer: { name: 'Asr', time: '10:30 AM', ts: NOW + 30e3, test: true } });
+    // The stored schedule is America/Los_Angeles's: 14:30Z is 07:30 there.
+    expect(await demo(h)).toEqual({ ok: true, prayer: 'Maghrib', time: '07:30 AM' });
+  });
+
+  it.each([
+    ['the page asks for it, though off in Settings', false, true, true],
+    ['the page turned it off, though on in Settings', true, false, false],
+    ['as saved, when the page does not say (on)', true, undefined, true],
+    ['as saved, when the page does not say (off)', false, undefined, false],
+  ])('plays the chime once, in the worker: %s', async (_label, saved, chime, plays) => {
+    const { h } = await load({ settings: { ...DEFAULTS, adhanChime: saved } });
+    await demo(h, { prayer: 'Isha', time: '07:52 PM', ...(chime === undefined ? {} : { chime }) });
+    expect(h.offscreenDoc ? h.offscreenDoc.url : null).toEqual(plays ? expect.stringMatching(/^offscreen\.html\?play=audio%2Fchime\.mp3/) : null);
+  });
+});
+
 describe('prayer tracking', () => {
   it('onInstalled stamps installedAt once, never overwriting an existing one', async () => {
     const fresh = await loadBackground();
@@ -2326,7 +2427,7 @@ describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz
   it("the onboarding pause demo is labelled with the location's time", async () => {
     jest.useFakeTimers({ now: NOW, doNotFake: ['Intl', 'nextTick', 'setImmediate', 'clearImmediate', 'queueMicrotask'] });
     const { h } = await loadBackground({ storage: { settings: { ...DEFAULTS, adhanChime: false }, schedule: ktm() } });
-    expect(await h.sendRuntimeMessage({ type: 'TEST_PAUSE_DEMO', prayer: 'Asr', seconds: 5 })).toEqual({ ok: true });
+    expect(await h.sendRuntimeMessage({ type: 'TEST_PAUSE_DEMO', prayer: 'Asr', seconds: 5 })).toEqual({ ok: true, prayer: 'Asr', time: '04:43 PM' });
     const shown = h.broadcasts.map((b) => b.message).filter((m) => m.type === 'PRAYER_NOW');
     expect(shown.map((m) => m.time)).toEqual(['04:43 PM', '04:43 PM']); // 10:58Z + 5:45, to both tabs
     jest.clearAllTimers();
@@ -2552,6 +2653,16 @@ describe('when Aladhan cannot look the place up by name', () => {
     expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
     expect(aladhanCalls(fetch).every((u) => u.includes('/v1/timings/') && u.includes('latitude=23.68477&longitude=-15.95798'))).toBe(true);
     expect(h.store.schedule.tz).toBe('Africa/El_Aaiun');
+  });
+
+  // Detected before detection rounded them: float32 noise, ten digits in a row, which
+  // the outbound guard blocks as a phone number.
+  it("asks by a detected place's coordinates rounded, which the outbound guard lets through", async () => {
+    const DETECTED = { ...DEFAULTS, city: 'San Francisco', state: 'California', country: 'United States of America', lat: 37.790000915527344, lon: -122.4000015258789 };
+    const { h, fetch } = await loadBackground({ storage: { settings: DETECTED, schedule: CAIRO_DAY }, fetchRoutes: [byName(503), byCoords('America/Los_Angeles', '-07:00')] });
+    expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
+    expect(aladhanCalls(fetch).some((u) => u.includes('/v1/timings/') && u.includes('latitude=37.79&longitude=-122.4&'))).toBe(true);
+    expect(h.store.schedule.tz).toBe('America/Los_Angeles');
   });
 
   it('asks a place found by name by name only, as always', async () => {

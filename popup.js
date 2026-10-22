@@ -1210,15 +1210,24 @@ function wireOnboarding() {
     playChime().catch(() => {});
   });
 
-  $('obSimBtn')?.addEventListener('click', () => {
+  // The welcome page's real demo: the worker pauses media in every tab for 10 s,
+  // labelled with the next prayer, and plays the chime itself (as saved). During a
+  // real prayer pause it refuses, which is said here instead.
+  $('obSimBtn')?.addEventListener('click', async () => {
     const status = $('obSimStatus');
     if (!status) return;
-    status.hidden = false;
-    if (obSimTimer) clearTimeout(obSimTimer);
-    playChime().catch(() => {});
-    obSimTimer = setTimeout(() => {
-      status.hidden = true;
-    }, 4000);
+    const show = (busy) => {
+      if ($('obSimRunning')) $('obSimRunning').hidden = busy;
+      if ($('obSimBusy')) $('obSimBusy').hidden = !busy;
+      status.hidden = false;
+      if (obSimTimer) clearTimeout(obSimTimer);
+      obSimTimer = setTimeout(() => {
+        status.hidden = true;
+      }, busy ? 4000 : 10000);
+    };
+    show(false);
+    const res = await send({ type: 'TEST_PAUSE_DEMO', seconds: 10 }).catch(() => null);
+    if (res && res.ok === false) show(true);
   });
 
   $('obDetectBtn')?.addEventListener('click', async () => {

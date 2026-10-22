@@ -132,6 +132,71 @@ describe('per-tab fallback pause (background alarm delayed)', () => {
   });
 });
 
+// "Test prayer pause (10s)" (the welcome page's, and the popup guide's from
+// Settings at any time): the worker broadcasts PRAYER_NOW and RESUME with isDemo.
+// Every tab took them for the real next prayer's handling, which turned its
+// fallback off for that prayer, and a real pause gave way to them.
+describe('the pause demo (isDemo)', () => {
+  const fname = () => focusHost().shadowRoot.querySelector('.fname').textContent;
+
+  it('leaves the per-tab fallback armed for the real prayer', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 60e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, isDemo: true });
+    expect(v.paused).toBe(true);
+    jest.advanceTimersByTime(10e3);
+    dispatch({ type: 'RESUME', isDemo: true });
+    expect(v.paused).toBe(false);
+    expect(sent('PRAYER_FALLBACK')).toHaveLength(0);
+    // Asr comes and the worker's alarm is late: this tab still pauses for it.
+    jest.advanceTimersByTime(51e3);
+    expect(v.paused).toBe(true);
+    expect(sent('PRAYER_FALLBACK')).toEqual([expect.objectContaining({ type: 'PRAYER_FALLBACK', prayer: 'Asr' })]);
+  });
+
+  it("never takes over the tab's real prayer pause, nor ends it", async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Dhuhr', time: '1:05 PM', focus: true, since: BASE });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Isha', time: '9:43 PM', focus: true, since: BASE, isDemo: true });
+    expect(fname()).toBe(EN.prayer_Dhuhr);
+    dispatch({ type: 'RESUME', isDemo: true });
+    expect(v.play).not.toHaveBeenCalled();
+    expect(v.paused).toBe(true);
+    expect(focusHost().shadowRoot.querySelector('.scrim').classList.contains('show')).toBe(true);
+    // Its own end still comes.
+    dispatch({ type: 'RESUME' });
+    expect(v.paused).toBe(false);
+  });
+
+  it.each([
+    ['Resume on the overlay', () => focusHost().shadowRoot.querySelector('.fresume').click()],
+    ['Esc', () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }))],
+  ])("%s ends the demo in every tab, not as a real Resume (which counts the prayer handled everywhere)", async (_label, act) => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 60e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, isDemo: true });
+    act();
+    expect(v.paused).toBe(false);
+    expect(sent('RESUME_DEMO')).toHaveLength(1);
+    expect(sent('RESUME_NOW')).toHaveLength(0);
+    jest.advanceTimersByTime(61e3);
+    expect(sent('PRAYER_FALLBACK')).toHaveLength(1); // still armed here
+  });
+
+  it('one whose end never reached the tab self-resumes as a demo, the fallback still armed', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ autoResumeMinutes: 1 }), nextPrayer: { name: 'Asr', ts: BASE + 120e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: false, since: BASE, isDemo: true });
+    jest.advanceTimersByTime(61e3); // past its 1-minute auto-resume window
+    expect(v.paused).toBe(false);
+    expect([sent('RESUME_DEMO').length, sent('RESUME_NOW').length]).toEqual([1, 0]);
+    jest.advanceTimersByTime(60e3);
+    expect(v.paused).toBe(true);
+    expect(sent('PRAYER_FALLBACK')).toHaveLength(1);
+  });
+});
+
 describe('client-side auto-resume safety net', () => {
   it('self-resumes and tells the background when the window has elapsed', async () => {
     const v = addVideo();

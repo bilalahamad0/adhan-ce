@@ -180,7 +180,7 @@
                     <span class="pin-ico" aria-hidden="true">📌</span>
                     <div class="pin-text">
                       <strong data-i18n="pin_extension_title">Pin to browser toolbar</strong>
-                      <p data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
+                      <p data-i18n="pin_extension_desc">Click the Extensions icon in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
                     </div>
                   </div>
                   <div class="badge-saved" id="badgeSaved" aria-live="polite">✓ Saved</div>
@@ -466,10 +466,11 @@
             <div class="ob-slide" id="obSlide4">
               <div class="ob-icon" aria-hidden="true">📌</div>
               <h2 class="ob-title" data-i18n="onboarding_step_pin">Pin Extension</h2>
-              <p class="ob-sub" data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
+              <p class="ob-sub" data-i18n="pin_extension_desc">Click the Extensions icon in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
               <button type="button" id="obSimBtn" class="btn-ghost ob-sim-btn" data-i18n="simulate_pause">Test prayer pause (10s)</button>
               <div id="obSimStatus" class="ob-sim-status" hidden>
-                <span>⏸️ Auto-pause test running…</span>
+                <span id="obSimRunning">⏸️ <span data-i18n="simulating_pause">Testing pause…</span></span>
+                <span id="obSimBusy" data-i18n="sim_prayer_in_progress" hidden>A prayer pause is on now. Try the test once it ends.</span>
               </div>
             </div>
           </div>

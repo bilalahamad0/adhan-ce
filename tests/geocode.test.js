@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import { parseGeoResults, searchPlaces, mergeByLang, placeToSave, detectLocationByIp } from '../lib/geocode.js';
+import { assertSafeOutboundUrl } from '../lib/privacy-guard.js';
 
 const sample = {
   results: [
@@ -294,6 +295,29 @@ describe('detectLocationByIp', () => {
       lon: -0.12,
       label: 'London, England, United Kingdom',
     });
+  });
+
+  // BigDataCloud answers float32's widened (37.790000915527344): ten digits in a row,
+  // which the outbound guard reads as a phone number, so every Aladhan request by
+  // them (the welcome preview's, the worker's by coordinates) was blocked.
+  it('rounds the coordinates to 5 decimals (about 1 m), which the outbound guard lets through', async () => {
+    const aladhan = (lat, lon) => `https://api.aladhan.com/v1/timings/22-10-2026?latitude=${lat}&longitude=${lon}&method=2&iso8601=true`;
+    global.fetch = async (url) =>
+      url.includes('bigdatacloud')
+        ? { ok: true, json: async () => ({ latitude: 37.790000915527344, longitude: -122.4000015258789, city: 'San Francisco', principalSubdivision: 'California', countryName: 'United States of America' }) }
+        : { ok: false };
+    const place = await detectLocationByIp();
+    expect([place.lat, place.lon]).toEqual([37.79, -122.4]);
+    expect(() => assertSafeOutboundUrl(aladhan(37.790000915527344, -122.4000015258789))).toThrow(/PII/);
+    expect(() => assertSafeOutboundUrl(aladhan(place.lat, place.lon))).not.toThrow();
+
+    global.fetch = async (url) =>
+      url.includes('ipapi.co')
+        ? { ok: true, json: async () => ({ latitude: 51.507400665283203, longitude: -0.12779999524354935, city: 'London', region: 'England', country_name: 'United Kingdom' }) }
+        : { ok: false };
+    const london = await detectLocationByIp();
+    expect([london.lat, london.lon]).toEqual([51.5074, -0.1278]);
+    expect(() => assertSafeOutboundUrl(aladhan(london.lat, london.lon))).not.toThrow();
   });
 
   it('returns null safely without throwing if all services fail', async () => {
