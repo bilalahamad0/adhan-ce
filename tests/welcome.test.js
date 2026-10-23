@@ -430,6 +430,41 @@ describe('the pause demo', () => {
     expect(shown()).toEqual([cat('fr').prayer_Fajr, '04:27 AM']);
   });
 
+  // It asked for this browser's date: on a Los Angeles evening London is already on
+  // the next day, whose Fajr is a minute or two later, so the demo named the earlier
+  // day's time (the worker asks again for the place's day).
+  it("names the time of the place's own day when it is another day there", async () => {
+    const now = Date.parse('2026-10-22T12:00:00Z');
+    jest.setSystemTime(now);
+    const pad = (n) => String(n).padStart(2, '0');
+    const local = new Date(now);
+    const asked = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+    const utcDay = (t) => new Date(t).toISOString().slice(0, 10);
+    // An offset that has the place at 01:00 on another day than this browser's.
+    const offsetH = [13, -11].find((h) => utcDay(now + h * 3600e3) !== asked);
+    const placeDay = utcDay(now + offsetH * 3600e3);
+    const dmy = (ymd) => ymd.split('-').reverse().join('-');
+    const isoOffset = `${offsetH < 0 ? '-' : '+'}${pad(Math.abs(offsetH))}:00`;
+    const theDay = (url) => aladhanPayload({ isoOffset, timings: url.includes(`/${dmy(placeDay)}?`) ? { Fajr: '04:29' } : {} });
+    await load({ storage: SUNNYVALE, routes: [['api.aladhan.com', theDay]] });
+    await pickCasablanca();
+    const asks = globalThis.fetch.calls.filter((u) => u.includes('api.aladhan.com'));
+    expect(asks.map((u) => u.match(/timings\/([\d-]+)\?/)[1])).toEqual([dmy(asked), dmy(placeDay)]);
+    expect(document.getElementById('ppFajr').textContent).toBe('04:29 AM');
+    await runDemo();
+    expect(demos()).toEqual([expect.objectContaining({ prayer: 'Fajr', time: '04:29 AM' })]);
+  });
+
+  it('previews with the saved calculation method and Asr school, as the worker fetches', async () => {
+    jest.setSystemTime(AFTERNOON);
+    await load({ storage: { ...SUNNYVALE, settings: { ...INSTALLED, method: 0, school: 1 } } });
+    await pickCasablanca();
+    const asks = globalThis.fetch.calls.filter((u) => u.includes('api.aladhan.com'));
+    // Once, or twice where this browser is already on another day than the place.
+    expect(asks.length).toBeGreaterThan(0);
+    expect(asks.every((u) => u.includes('&method=0&school=1&iso8601=true'))).toBe(true);
+  });
+
   it('asks the worker for the chime as chosen on this page', async () => {
     jest.setSystemTime(AFTERNOON);
     await load({ storage: SUNNYVALE });
@@ -470,7 +505,7 @@ describe('the pause demo', () => {
   // row the outbound guard reads as a phone number. The preview was blocked before it
   // was asked for, and the test stayed off, asking for the city the field showed.
   const SAN_FRANCISCO = ['reverse-geocode-client', { latitude: 37.790000915527344, longitude: -122.4000015258789, city: 'San Francisco', principalSubdivision: 'California', countryName: 'United States of America' }];
-  // Each place's day by its coordinates (to 4 decimals): San Francisco's in Los
+  // Each place's day by its coordinates (to 5 decimals): San Francisco's in Los
   // Angeles' zone (at AFTERNOON, 07:30 there: Dhuhr 01:05 PM is next), Casablanca's
   // as in load(). `casablanca` answers for Casablanca instead when given.
   const byPlace = (casablanca = aladhanPayload({ meta: { timezone: 'Africa/Casablanca' } })) => [
@@ -485,7 +520,9 @@ describe('the pause demo', () => {
     document.getElementById('detectLocBtn').click();
     await settle();
     expect(document.getElementById('welcomeCity').value).toBe('San Francisco, California, United States of America');
-    expect(aladhanCalls()).toEqual([expect.stringContaining('?latitude=37.79&longitude=-122.4&')]);
+    // Once, or twice where this browser is already on another day than the place.
+    expect(aladhanCalls().length).toBeGreaterThan(0);
+    expect(aladhanCalls().every((u) => u.includes('?latitude=37.79&longitude=-122.4&'))).toBe(true);
     expect(document.getElementById('ppDhuhr').textContent).toBe('01:05 PM');
     expect([document.getElementById('simPauseBtn').disabled, document.getElementById('simHint').hidden]).toEqual([false, true]);
     await runDemo();

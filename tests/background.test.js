@@ -593,7 +593,7 @@ describe('the pause demo (TEST_PAUSE_DEMO)', () => {
   it('names the prayer and time the page sends in every tab, as a real fire would, then resumes them', async () => {
     const { h } = await load();
     expect(await demo(h, { prayer: 'Isha', time: '07:52 PM' })).toEqual({ ok: true, prayer: 'Isha', time: '07:52 PM' });
-    expect(sentOf(h, 'PRAYER_NOW')).toEqual([1, 2].map(() => ({ type: 'PRAYER_NOW', prayer: 'Isha', time: '07:52 PM', focus: true, since: NOW, isDemo: true })));
+    expect(sentOf(h, 'PRAYER_NOW')).toEqual([1, 2].map(() => ({ type: 'PRAYER_NOW', prayer: 'Isha', time: '07:52 PM', focus: true, since: NOW, until: NOW + 10000, isDemo: true })));
     expect(h.store.paused).toBeUndefined(); // shown, not recorded as a pause
     await jest.advanceTimersByTimeAsync(9999);
     expect(sentOf(h, 'RESUME')).toEqual([]);
@@ -622,6 +622,20 @@ describe('the pause demo (TEST_PAUSE_DEMO)', () => {
     expect(sentOf(h, 'RESUME')).toEqual([]);
     expect(h.offscreenDoc ? h.offscreenDoc.url : null).toBe(null); // no chime either
     expect(h.store.paused).toEqual(realPause);
+  });
+
+  // The popup's Test stays clickable while a demo runs: each demo's timer used to
+  // send RESUME, so the first one ended the second 4 s in.
+  it('a demo started during another runs its full 10 s: the earlier timer does not end it', async () => {
+    const { h } = await load();
+    await demo(h, { prayer: 'Isha', time: '07:52 PM' });
+    await jest.advanceTimersByTimeAsync(6000);
+    await demo(h, { prayer: 'Isha', time: '07:52 PM' });
+    expect(sentOf(h, 'PRAYER_NOW').at(-1)).toMatchObject({ since: NOW + 6000, until: NOW + 16000 });
+    await jest.advanceTimersByTimeAsync(4000); // the first demo's end
+    expect(sentOf(h, 'RESUME')).toEqual([]);
+    await jest.advanceTimersByTimeAsync(6000); // the second's
+    expect(sentOf(h, 'RESUME')).toEqual([1, 2].map(() => ({ type: 'RESUME', isDemo: true })));
   });
 
   it("a prayer that fires mid-demo keeps the tabs: the demo's RESUME is not sent", async () => {

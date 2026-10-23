@@ -833,6 +833,9 @@ async function testAdhan(seconds = 30) {
 // as the 'hh:mm AM' a real fire shows.
 const isPrayerName = (name) => PRAYER_ORDER.includes(name);
 const isShortText = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 16;
+// The latest demo: only its own timer ends it, never an earlier one's (the popup's
+// Test can be clicked again while a demo runs).
+let demoSeq = 0;
 
 // ---------- inject into already-open tabs (new installs) ----------
 async function injectExistingTabs() {
@@ -1055,15 +1058,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             time = locationTime12h(schedule || null, since);
           }
         }
-        await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: true, since, isDemo: true });
+        const demoId = ++demoSeq;
+        // `until`: the tabs count down to the demo's end, not the auto-resume window.
+        await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: true, since, until: since + seconds * 1000, isDemo: true });
         // The page's own choice when it has one (the welcome page's, not yet saved).
         const chime = typeof msg.chime === 'boolean' ? msg.chime : (await getSettings()).adhanChime !== false;
         if (chime) {
           try { await playChime(); } catch (_) {}
         }
         setTimeout(async () => {
+          if (demoId !== demoSeq) return; // a later demo has the tabs: its timer ends it
           // A prayer that fired meanwhile has taken the tabs over: it ends on its own.
-          if ((await getState()).paused.active) return;
+          if ((await getState()).paused.active || demoId !== demoSeq) return;
           await broadcast({ type: 'RESUME', isDemo: true });
         }, seconds * 1000);
         // What the tabs show, for a page that sent no label of its own.

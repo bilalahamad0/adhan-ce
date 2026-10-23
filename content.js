@@ -153,6 +153,15 @@
     return typeof m === 'number' && m >= 0 ? m : DEFAULT_AUTO_RESUME_MIN;
   }
 
+  // When this tab's pause ends on its own: a demo's at its end (`until`), else the
+  // auto-resume window after the pause began; null with no start known.
+  function pauseDueAt() {
+    const p = state.paused;
+    if (p && p.isDemo && Number.isFinite(p.until)) return p.until;
+    const since = (p && p.since) || pauseObservedAt;
+    return since ? since + effectiveResumeMins() * 60000 : null;
+  }
+
   // Freeze page scrolling while the focus overlay is up.
   function lockScroll(on) {
     if (on === focusLocked) return;
@@ -417,9 +426,8 @@
       fels.fhint.style.display = isStrict ? 'none' : '';
       fels.fname.textContent = prayerLabel((state.paused && state.paused.prayer) || (np && np.name));
       fels.ftime.textContent = (state.paused && state.paused.time) || '';
-      const mins = effectiveResumeMins();
-      const since = (state.paused && state.paused.since) || pauseObservedAt;
-      const rem = since ? since + mins * 60000 - now : -1;
+      const due = pauseDueAt();
+      const rem = due ? due - now : -1;
       fels.fauto.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : '';
       fels.scrim.classList.add('show');
       lockScroll(true);
@@ -435,9 +443,8 @@
 
     if (mode === 'paused') {
       const name = prayerLabel(currentPrayer || (state.paused && state.paused.prayer) || (np && np.name));
-      const mins = effectiveResumeMins();
-      const since = (state.paused && state.paused.since) || pauseObservedAt;
-      const rem = since ? since + mins * 60000 - now : -1;
+      const due = pauseDueAt();
+      const rem = due ? due - now : -1;
       els.card.classList.add('paused');
       els.title.textContent = name;
       els.sub.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : ti('adhan_paused');
@@ -586,9 +593,7 @@
       // Isha bug). Falling back to a default window measured from `pauseObservedAt`
       // guarantees every tab eventually resumes on its own.
       if (!pauseObservedAt) pauseObservedAt = now;
-      const mins = effectiveResumeMins();
-      const since = (state.paused && state.paused.since) || pauseObservedAt;
-      const dueAt = since + mins * 60000;
+      const dueAt = pauseDueAt();
       // Arm the wall-clock backstop so the pause still clears if this interval is
       // later throttled/frozen or the context dies before teardown runs.
       armResumeBackstop(dueAt);
@@ -673,6 +678,7 @@
       pauseMediaFor(msg.prayer);
       state.paused = { active: true, prayer: msg.prayer, time: msg.time, focus: !!msg.focus, since: msg.since };
       if (msg.isDemo) state.paused.isDemo = true;
+      if (msg.isDemo && Number.isFinite(msg.until)) state.paused.until = msg.until;
       // Treat the broadcast as authoritative handling of this prayer so the
       // 90-second fallback in tick() can't re-fire on tabs that didn't trigger
       // the fallback themselves. A demo handles no prayer.

@@ -184,6 +184,27 @@ describe('the pause demo (isDemo)', () => {
     expect(sent('PRAYER_FALLBACK')).toHaveLength(1); // still armed here
   });
 
+  // It counted down the 5-minute auto-resume window ("Auto-resumes in 4:58") while
+  // the demo ends after 10 s.
+  it('counts down to its own end (`until`), and ends there if the worker does not', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, until: BASE + 10e3, isDemo: true });
+    jest.advanceTimersByTime(1000);
+    expect(focusHost().shadowRoot.querySelector('.fauto').textContent).toBe(EN.auto_resumes_in.replace('{time}', '0:09'));
+    jest.advanceTimersByTime(9000); // its end; the worker's RESUME never came
+    expect(v.paused).toBe(false);
+    expect([sent('RESUME_DEMO').length, sent('RESUME_NOW').length]).toEqual([1, 0]);
+  });
+
+  it('counts down to its own end on the corner card too', async () => {
+    addVideo();
+    await load({ storage: { settings: settings({ focusMode: false }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: false, since: BASE, until: BASE + 10e3, isDemo: true });
+    jest.advanceTimersByTime(1000);
+    expect(host().shadowRoot.querySelector('.sub').textContent).toBe(EN.auto_resumes_in.replace('{time}', '0:09'));
+  });
+
   it('one whose end never reached the tab self-resumes as a demo, the fallback still armed', async () => {
     const v = addVideo();
     await load({ storage: { settings: settings({ autoResumeMinutes: 1 }), nextPrayer: { name: 'Asr', ts: BASE + 120e3 }, paused: { active: false } } });

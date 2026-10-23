@@ -325,25 +325,35 @@ async function fetchPreviewTimings(lat, lon, city, country) {
   let prayers = null;
   try {
     const today = new Date();
-    const d = String(today.getDate()).padStart(2, '0');
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const y = today.getFullYear();
-    // Rounded (see roundCoord): a place saved before detection rounded them can carry
-    // float32 noise (37.790000915527344), which the outbound guard blocks.
-    const url = `https://api.aladhan.com/v1/timings/${d}-${m}-${y}?latitude=${roundCoord(Number(lat))}&longitude=${roundCoord(Number(lon))}&method=${state.settings.method || 2}&iso8601=true`;
-    assertSafeOutboundUrl(url);
-    const res = await fetch(url);
+    const pad = (n) => String(n).padStart(2, '0');
+    // A day's timings ('YYYY-MM-DD'), with the saved method and Asr school, as the
+    // worker asks for them. Rounded (see roundCoord): a place saved before detection
+    // rounded them can carry float32 noise (37.790000915527344), which the outbound
+    // guard blocks.
+    const timingsFor = async (ymd) => {
+      const [y, m, d] = ymd.split('-');
+      const url = `https://api.aladhan.com/v1/timings/${d}-${m}-${y}?latitude=${roundCoord(Number(lat))}&longitude=${roundCoord(Number(lon))}&method=${state.settings.method ?? 2}&school=${state.settings.school ?? 0}&iso8601=true`;
+      assertSafeOutboundUrl(url);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Aladhan ${res.status}`);
+      const json = await res.json();
+      if (!json.data || !json.data.timings) throw new Error('Aladhan: malformed response');
+      return json.data;
+    };
+    const asked = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    let data = await timingsFor(asked);
+    // This browser's date was asked for, and it is another day at the place (London
+    // picked on a Los Angeles evening): ask for that day's own times, as the worker does.
+    const first = parseAladhanIso(data.timings.Fajr);
+    const placeDay = first && new Date(today.getTime() + first.offsetMin * 60000).toISOString().slice(0, 10);
+    if (placeDay && placeDay !== asked) data = await timingsFor(placeDay);
 
-    if (!res.ok) throw new Error(`Aladhan ${res.status}`);
-    const json = await res.json();
-    if (!json.data || !json.data.timings) throw new Error('Aladhan: malformed response');
-
-    const tms = json.data.timings;
+    const tms = data.timings;
     // Each with its instant, for the pause demo: from the UTC offset Aladhan gives
     // it, on the place's date now, as the worker reads them (this browser's tz data
     // can lag, as Morocco's +00 did); an answer without offsets is read in the
     // place's timezone.
-    const zone = (json.data.meta && json.data.meta.timezone) || null;
+    const zone = (data.meta && data.meta.timezone) || null;
     prayers = PRAYER_ORDER.map((name) => {
       const iso = parseAladhanIso(tms[name]);
       if (!iso) {
