@@ -91,6 +91,7 @@ async function getState() {
     'prayerLog',
     'installedAt',
     'usage',
+    'locationConfirmed',
   ]);
   return {
     settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
@@ -100,6 +101,10 @@ async function getState() {
     prayerLog: data.prayerLog || {},
     installedAt: data.installedAt || null,
     usage: data.usage || null,
+    // Whether the user chose the place prayer alerts are for. Until then the stored
+    // place is the install default's and no prayer is alerted: its times are shown,
+    // nothing more. A missing key (an install from before it) counts as chosen.
+    locationConfirmed: data.locationConfirmed !== false,
   };
 }
 
@@ -124,9 +129,12 @@ function recordUsage(event) {
 }
 
 // ---------- schedule fetch ----------
+// The settings that name the place: a save carrying any of them chooses it (see
+// locationConfirmed in getState).
+const PLACE_KEYS = ['city', 'country', 'state', 'lat', 'lon'];
 // The settings that make up the Aladhan request, plus the minute adjustments
 // applied to its answer. A fetched schedule belongs to these.
-const REQUEST_KEYS = ['city', 'country', 'state', 'lat', 'lon', 'method', 'school']; // lat/lon: see fetchSchedule's fallback
+const REQUEST_KEYS = [...PLACE_KEYS, 'method', 'school']; // lat/lon: see fetchSchedule's fallback
 const adjustKey = (s) => Object.values(prayerAdjustments(s && s.adjustMinutes)).join(',');
 function sameRequest(a, b) {
   return REQUEST_KEYS.every((k) => (a && a[k]) === (b && b[k])) && adjustKey(a) === adjustKey(b);
@@ -436,7 +444,7 @@ let rolloverInFlight = null;
 // carries it as `revalidation` (a promise that never rejects). `retry` marks the
 // call made by the retry alarm, which does not arm another retry.
 async function refreshNext({ background = false, retry = false } = {}) {
-  const data = await chrome.storage.local.get(['settings', 'schedule', 'nextPrayer', 'paused', 'revalidateAttemptAt', 'scheduleRefetch']);
+  const data = await chrome.storage.local.get(['settings', 'schedule', 'nextPrayer', 'paused', 'revalidateAttemptAt', 'scheduleRefetch', 'locationConfirmed']);
   const schedule = data.schedule || null;
   // Rolled over to a new day *at the location* (see isNewDay), or a day fetch is
   // still owed (an update's or a settings save's failed) → fetch the day.
@@ -458,7 +466,9 @@ async function refreshNext({ background = false, retry = false } = {}) {
     return background ? { schedule, nextPrayer, revalidation: revalidationInFlight } : revalidationInFlight;
   }
   const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
-  const enabled = settings.enabled !== false; // a disabled install never re-fetches
+  // A disabled install never re-fetches, nor one whose place is not chosen yet: it
+  // alerts no prayer (see armAlarms).
+  const enabled = settings.enabled !== false && data.locationConfirmed !== false;
   // A pending dev test fire blocks it (isRevalidationDue rejects test fires).
   // Attempts are spaced REVALIDATE_MIN_GAP_MS apart, so a failure isn't retried on
   // every popup open.
@@ -476,9 +486,15 @@ async function refreshNext({ background = false, retry = false } = {}) {
     !(sinceAttempt >= 0 && sinceAttempt < REVALIDATE_MIN_GAP_MS);
   if (!due) {
     // (A T-45 check held by the quiet period after a prayer is tried again at T-35:
-    // armAlarms arms ALARM_REVALIDATE for it — see revalidationAlarmAt.)
-    await chrome.storage.local.set({ nextPrayer });
-    return { schedule, nextPrayer };
+    // armAlarms arms ALARM_REVALIDATE for it — see revalidationAlarmAt.) Stored in
+    // the commits' queue, and only over the day it came from: a save that dropped
+    // that day (another place) or a fetch that replaced it may have landed since.
+    return commitSchedule(async () => {
+      const cur = (await chrome.storage.local.get('schedule')).schedule;
+      if (!cur || cur.date !== schedule.date || cur.fetchedAt !== schedule.fetchedAt) return storedScheduleState();
+      await chrome.storage.local.set({ nextPrayer });
+      return { schedule, nextPrayer };
+    });
   }
   const run = runRevalidation(schedule, pending, { nextPrayer, now, paused: data.paused || { active: false }, retry });
   const done = () => {
@@ -491,9 +507,12 @@ async function refreshNext({ background = false, retry = false } = {}) {
 
 // ---------- alarms ----------
 async function armAlarms() {
-  const { settings, nextPrayer, schedule } = await getState();
+  const { settings, nextPrayer, schedule, locationConfirmed } = await getState();
+  // Until the user chooses a place, no prayer is alerted: nothing prayer-related is
+  // armed, only the tick (a save that chooses one re-arms). A dev test fire is its own.
+  const alerts = settings.enabled && locationConfirmed;
   await chrome.alarms.clear(ALARM_PRAYER);
-  if (settings.enabled && nextPrayer) {
+  if (settings.enabled && nextPrayer && (locationConfirmed || nextPrayer.test)) {
     chrome.alarms.create(ALARM_PRAYER, { when: Math.max(Date.now() + 500, nextPrayer.ts) });
   }
   // Pre-prayer revalidation timer for the next prayer: T-45 whenever that moment is
@@ -502,11 +521,11 @@ async function armAlarms() {
   // gets the one retry. The tick, startup and popup catch up on a missed one.
   await chrome.alarms.clear(ALARM_REVALIDATE);
   const { revalidateAttemptAt } = await chrome.storage.local.get('revalidateAttemptAt');
-  const revalidateAt = settings.enabled ? revalidationAlarmAt(schedule, nextPrayer, Date.now(), revalidateAttemptAt) : null;
+  const revalidateAt = alerts ? revalidationAlarmAt(schedule, nextPrayer, Date.now(), revalidateAttemptAt) : null;
   if (revalidateAt) chrome.alarms.create(ALARM_REVALIDATE, { when: revalidateAt });
-  if (!settings.enabled) await chrome.alarms.clear(ALARM_REVALIDATE_RETRY);
+  if (!alerts) await chrome.alarms.clear(ALARM_REVALIDATE_RETRY);
   await chrome.alarms.clear(ALARM_BADGE);
-  if (settings.enabled && settings.badgeCountdown !== false && nextPrayer) {
+  if (alerts && settings.badgeCountdown !== false && nextPrayer) {
     chrome.alarms.create(ALARM_BADGE, {
       when: Math.ceil(Date.now() / 60000) * 60000,
       periodInMinutes: 1,
@@ -547,7 +566,15 @@ async function broadcast(message) {
 
 async function updateBadge(providedState) {
   try {
-    const { settings, nextPrayer, paused } = providedState || (await getState());
+    const { settings, nextPrayer, paused, locationConfirmed } = providedState || (await getState());
+    // No place chosen yet: no countdown to a prayer that will not be alerted, and the
+    // tooltip (in the UI language) says how to turn alerts on.
+    if (settings.enabled && locationConfirmed === false && !(paused && paused.active)) {
+      const M = await getCatalog(await uiLang());
+      await chrome.action.setBadgeText({ text: '' });
+      await chrome.action.setTitle({ title: M.alerts_off_tooltip });
+      return;
+    }
     if (!settings.enabled || settings.badgeCountdown === false) {
       await chrome.action.setBadgeText({ text: '' });
       await chrome.action.setTitle({ title: 'Adhan Focus — Muslim Prayer Times' });
@@ -623,8 +650,12 @@ async function setPausedBadge(on) {
 
 // ---------- prayer / resume handlers ----------
 async function handlePrayerFire() {
-  const { settings, nextPrayer } = await getState();
+  const { settings, nextPrayer, locationConfirmed } = await getState();
   if (!settings.enabled || !nextPrayer) return;
+  // The install default's prayer, not the user's: no pause, notification or chime
+  // until a place is chosen (armAlarms arms none; this is a late one). A dev test
+  // fire still runs.
+  if (!locationConfirmed && !nextPrayer.test) return;
 
   const firedTs = nextPrayer.ts;
 
@@ -723,8 +754,9 @@ async function handlePrayerFire() {
 // — a no-op if a pause is already active, so the normal alarm path still owns
 // the notification and prayer-advance.
 async function handleFallbackPause({ prayer, time, focus }) {
-  const { settings, paused, nextPrayer } = await getState();
-  if (!settings.enabled || paused.active) return;
+  const { settings, paused, nextPrayer, locationConfirmed } = await getState();
+  // Until a place is chosen, the install default's prayer: ignored, as in handlePrayerFire.
+  if (!settings.enabled || !locationConfirmed || paused.active) return;
   const since = Date.now();
   await chrome.storage.local.set({ paused: { active: true, prayer, time, since, focus: !!focus } });
   await broadcast({ type: 'PRAYER_NOW', prayer, time, focus: !!focus, since });
@@ -854,12 +886,21 @@ async function injectExistingTabs() {
 // ---------- event wiring ----------
 chrome.runtime.onInstalled.addListener(async (details) => {
   const isFreshInstall = details && details.reason === 'install';
-  const stored = await chrome.storage.local.get(['settings', 'paused', 'installedAt', 'onboardingCompleted', 'schedule']);
+  const stored = await chrome.storage.local.get(['settings', 'paused', 'installedAt', 'onboardingCompleted', 'schedule', 'locationConfirmed']);
   if (!stored.settings) await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
   if (!stored.paused) await chrome.storage.local.set({ paused: { active: false } });
   // Anchor the prayer-tracking history. For an existing user updating into this
   // version we can't know the true install date, so "since installation" starts now.
   if (!stored.installedAt) await chrome.storage.local.set({ installedAt: Date.now() });
+  // Whether the place is the user's (see getState), from what was stored before this
+  // run: not on a new install, whose place is the default; on an update, yes once
+  // setup was finished (or predates setup) or a place was picked or detected (the
+  // old placeholder's coordinates are neither). An update that never finished setup
+  // keeps no default unasked.
+  if (stored.locationConfirmed === undefined) {
+    const chosen = !isFreshInstall && (stored.onboardingCompleted !== false || (!!stored.settings && hasCoords(stored.settings)));
+    await chrome.storage.local.set({ locationConfirmed: chosen });
+  }
   if (stored.onboardingCompleted === undefined) {
     await chrome.storage.local.set({ onboardingCompleted: !isFreshInstall });
   }
@@ -1050,7 +1091,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (isPrayerName(msg.prayer) && isShortText(msg.time)) {
           ({ prayer, time } = msg);
         } else {
-          const { schedule, nextPrayer } = await chrome.storage.local.get(['schedule', 'nextPrayer']);
+          const { schedule, nextPrayer, locationConfirmed } = await chrome.storage.local.get(['schedule', 'nextPrayer', 'locationConfirmed']);
+          // Before a place is chosen both are the install default's: its prayer and
+          // time would be named to a user elsewhere (the popup guide's Test).
+          if (locationConfirmed === false) {
+            sendResponse({ ok: false, error: 'no_place' });
+            break;
+          }
           if (nextPrayer && !nextPrayer.test && isPrayerName(nextPrayer.name) && isShortText(nextPrayer.time)) {
             ({ name: prayer, time } = nextPrayer);
           } else {
@@ -1100,12 +1147,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         if (incoming.adjustMinutes !== undefined) incoming.adjustMinutes = prayerAdjustments(incoming.adjustMinutes);
         const settings = { ...current, ...incoming };
-        await chrome.storage.local.set({ settings });
-
-        const { schedule } = await chrome.storage.local.get('schedule');
         // The coordinates too: two places can share a name, and fetchSchedule's
         // fallback asks by them.
-        const locationChanged = ['city', 'country', 'state', 'lat', 'lon'].some((k) => settings[k] !== current[k]);
+        const locationChanged = PLACE_KEYS.some((k) => settings[k] !== current[k]);
+        // A place sent is the user's choice (the popup's Save and Detect, setup with a
+        // picked or detected place; a toggle's autosave sends none): prayer alerts are
+        // on from here. One that passed while they were off is not caught up now.
+        // Another place than the default drops the default's day with it: nothing of
+        // it is armed, shown to tabs or recomputed (a tick, a popup open) before the
+        // chosen place's own lands, nor after a failed fetch, which the next one owes.
+        // In the commits' queue, so a tick or popup open that read the default's day
+        // before this write can't store its next prayer after it (see refreshNext).
+        const { schedule } = await commitSchedule(async () => {
+          const { schedule, locationConfirmed } = await chrome.storage.local.get(['schedule', 'locationConfirmed']);
+          const update = { settings };
+          if (PLACE_KEYS.some((k) => k in incoming)) {
+            update.locationConfirmed = true;
+            if (locationConfirmed === false) {
+              if (schedule && !locationChanged) update.nextPrayer = computeNext(schedule.prayers, Date.now());
+              else Object.assign(update, { schedule: null, nextPrayer: null });
+            }
+          }
+          await chrome.storage.local.set(update);
+          return { schedule };
+        });
+
         const locationOrCalcChanged =
           !schedule ||
           locationChanged ||

@@ -1304,6 +1304,21 @@ describe('in-popup onboarding & tutorial', () => {
     await jest.advanceTimersByTimeAsync(4000);
     expect($('obSimStatus').hidden).toBe(true);
   });
+
+  // Before a place is chosen the worker's next prayer is the install default's: it
+  // turns the unlabelled demo down rather than name that prayer to a user elsewhere.
+  it('"Test prayer pause (10s)" before a city is chosen asks for one first', async () => {
+    await load({
+      initialStorage: { onboardingCompleted: false, locationConfirmed: false },
+      send: (m) => (m.type === 'GET_STATE' ? defaultState() : m.type === 'TEST_PAUSE_DEMO' ? { ok: false, error: 'no_place' } : { ok: true }),
+    });
+    $('obSimBtn').click();
+    await settle();
+    expect([$('obSimRunning').hidden, $('obSimBusy').hidden]).toEqual([true, false]);
+    expect($('obSimBusy').textContent).toBe(EN.sim_choose_city_first);
+    await jest.advanceTimersByTimeAsync(4000);
+    expect($('obSimStatus').hidden).toBe(true);
+  });
 });
 
 describe('detect location and clock keyboard shortcuts', () => {
@@ -1498,5 +1513,101 @@ describe('per-prayer minute adjustments (±5)', () => {
     expect($(group.getAttribute('aria-describedby')).textContent).toBe(EN.adjust_times_desc);
     // Each select is named by the prayer its <label> wraps.
     expect($('adjust-Maghrib').closest('label').textContent).toContain(EN.prayer_Maghrib);
+  });
+});
+
+// Setup skipped, or closed before a place was picked: the popup showed the install
+// default's (Sunnyvale's) times as the user's, with no word that none of them would
+// be alerted, nor where to choose a place.
+describe('no place chosen yet (locationConfirmed false)', () => {
+  const unchosen = () => ({ ...defaultState(), locationConfirmed: false });
+  const notice = () => $('alertsOff');
+
+  it('Home says prayer alerts are off, above the prayer list, in the UI language', async () => {
+    await load({ state: unchosen() });
+    expect(notice().hidden).toBe(false);
+    expect($('alertsOffText').textContent).toBe(EN.alerts_off_notice);
+    expect($('chooseCityBtn').textContent).toBe(EN.choose_city);
+    expect(notice().nextElementSibling).toBe($('list'));
+    $('lang').value = 'fr';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    expect($('alertsOffText').textContent).toBe(cat('fr').alerts_off_notice);
+    expect(notice().hidden).toBe(false);
+  });
+
+  it('says nothing once a place is chosen, or for an install from before the flag', async () => {
+    await load({ state: { ...defaultState(), locationConfirmed: true } });
+    expect(notice().hidden).toBe(true);
+    await load(); // GET_STATE without it
+    expect(notice().hidden).toBe(true);
+  });
+
+  it('"Choose city" opens Settings at the location search', async () => {
+    await load({ state: unchosen() });
+    $('chooseCityBtn').click();
+    expect($('view-settings').classList.contains('is-active')).toBe(true);
+    expect($('view-home').classList.contains('is-active')).toBe(false);
+    expect(document.activeElement).toBe($('city'));
+  });
+
+  it('goes as soon as a place is chosen (here or on the welcome page), and comes back if unset', async () => {
+    await load({ state: unchosen() });
+    await chrome.__.fireStorageChange({ locationConfirmed: { oldValue: false, newValue: true } });
+    expect(notice().hidden).toBe(true);
+    await chrome.__.fireStorageChange({ locationConfirmed: { oldValue: true, newValue: false } });
+    expect(notice().hidden).toBe(false);
+    await chrome.__.fireStorageChange({ locationConfirmed: { oldValue: false } }); // removed: an older install's reading
+    expect(notice().hidden).toBe(true);
+  });
+
+  // Settings showed the default place in the search, so saving any other setting
+  // (a calculation method) sent it, which the worker takes as the user's choice.
+  it('the search starts empty, so a Save asks for a pick rather than send the default place', async () => {
+    await load({ state: unchosen() });
+    expect($('locLabel').textContent).toBe('Sunnyvale, California, United States'); // the times shown are its
+    expect($('city').value).toBe('');
+    $('method').value = '3';
+    $('save').click();
+    await settle();
+    expect(sentTypes()).not.toContain('SAVE_SETTINGS');
+    expect($('saveMsg').textContent).toBe(EN.pick_location);
+  });
+
+  it("a toggle's autosave sends no place; Save sends the one picked", async () => {
+    await load({ state: unchosen() });
+    $('chimeTile').querySelector('[data-val="off"]').click();
+    await settle();
+    const [toggle] = chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').map((m) => m.settings);
+    for (const k of ['city', 'state', 'country', 'lat', 'lon']) expect(toggle).not.toHaveProperty(k);
+    $('city').value = 'London';
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    $('cityResults').children[0].dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').pop().settings;
+    expect(saved).toMatchObject({ city: 'London', country: 'United Kingdom', lat: 51.5, lon: -0.12 });
+  });
+
+  it('a place chosen elsewhere (the welcome page) fills the search', async () => {
+    await load({ state: unchosen() });
+    const CAIRO = { ...defaultState().settings, city: 'Cairo', state: 'Cairo Governorate', country: 'Egypt', lat: 30.06, lon: 31.25 };
+    await chrome.__.fireStorageChange({ settings: { newValue: CAIRO }, locationConfirmed: { oldValue: false, newValue: true } });
+    expect($('city').value).toBe('Cairo, Cairo Governorate, Egypt');
+    expect($('locLabel').textContent).toBe('Cairo, Cairo Governorate, Egypt');
+    expect($('alertsOff').hidden).toBe(true);
+  });
+
+  it("the guide's location slide says none is chosen yet, not the default city", async () => {
+    await load({ state: unchosen(), initialStorage: { onboardingCompleted: false } });
+    expect($('onboardingModal').hidden).toBe(false);
+    expect($('obCurrentLoc').textContent).toBe(EN.location_not_chosen);
+  });
+
+  it("the guide's location slide names a chosen place", async () => {
+    await load({ state: { ...defaultState(), locationConfirmed: true }, initialStorage: { onboardingCompleted: false } });
+    expect($('obCurrentLoc').textContent).toBe('Sunnyvale, California, United States');
   });
 });

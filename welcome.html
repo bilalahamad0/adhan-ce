@@ -198,12 +198,15 @@
         <section class="step-view" id="stepSuccessView" hidden>
           <div style="padding: 48px 32px; text-align: center;">
             <div class="success-sparkle-ico" aria-hidden="true">✨</div>
-            <h1 style="font-size: 26px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px;">You're All Set!</h1>
+            <h1 style="font-size: 26px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px;" id="successTitle" data-i18n="success_title">You're All Set!</h1>
             <p style="font-size: 14.5px; color: var(--muted); max-width: 440px; margin: 0 auto 26px; line-height: 1.5;">
-              Adhan Focus is now active and watching for prayer times in <b id="completionCity">your location</b>.
-              Click the extension icon in your toolbar anytime to see your prayer schedule and tracker.
+              <!-- One of the two, set by welcome.js: the place picked or detected (its
+                   name inside the sentence), or, with none, that alerts wait for one. -->
+              <span id="successWatching"></span>
+              <span id="successAlertsOff" data-i18n="success_alerts_off" hidden>Prayer alerts are off until you choose your city. To choose it, open Adhan Focus from your browser toolbar, then go to Settings › Location.</span>
+              <span data-i18n="success_tip">Click the extension icon in your toolbar anytime to see your prayer schedule and tracker.</span>
             </p>
-            <button type="button" id="closeWelcomeBtn" class="btn-primary" style="margin: 0 auto;">Close This Tab</button>
+            <button type="button" id="closeWelcomeBtn" class="btn-primary" style="margin: 0 auto;" data-i18n="close_tab">Close This Tab</button>
           </div>
         </section>
       </div>

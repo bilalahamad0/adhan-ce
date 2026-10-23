@@ -2386,21 +2386,26 @@ describe("prayer instants come from Aladhan's UTC offsets, not this browser's tz
     expect(aladhanCalls(fetch)).toHaveLength(2);
   });
 
-  it('a new city whose fetch failed is fetched on the next tick, not the next day', async () => {
+  // [whose place it was, the day kept meanwhile]
+  it.each([
+    ['a city change', 'update', 'America/Los_Angeles'],
+    // The install default's day is no other place's (see locationConfirmed).
+    ['setup choosing the first', 'install', null],
+  ])('a new city whose fetch failed is fetched on the next tick, not the next day: %s', async (_, reason, keptTz) => {
     let down = false;
     const route = [
       'api.aladhan.com',
       (url) => (down ? { status: 503 } : url.includes('city=Casablanca') ? casaAnswer[1](url) : aladhanPayload({ data: requestedDay(url) })),
     ];
     const { h } = await loadBackground({ storage: { settings: DEFAULTS }, fetchRoutes: [route] });
-    await h.fireInstalled({ reason: 'install' });
+    await h.fireInstalled({ reason });
     await flush();
     expect(h.store.schedule.tz).toBe('America/Los_Angeles');
-    // Onboarding picks Casablanca while Aladhan is down…
+    // Casablanca is picked while Aladhan is down…
     down = true;
     expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CASA_SETTINGS })).toMatchObject({ ok: false });
     expect(h.store.settings).toMatchObject({ city: 'Casablanca' });
-    expect(h.store.schedule.tz).toBe('America/Los_Angeles');
+    expect(h.store.schedule && h.store.schedule.tz).toBe(keptTz);
     // …and it is back for the next tick.
     down = false;
     await h.fireAlarm(ALARM_TICK);
@@ -2710,5 +2715,248 @@ describe('when Aladhan cannot look the place up by name', () => {
     const before = aladhanCalls(fetch).length;
     expect(await h.sendRuntimeMessage({ type: 'REFRESH' })).toEqual({ ok: true });
     expect(aladhanCalls(fetch).slice(before).map((u) => u.includes('/v1/timingsByCity/'))).toEqual([true]);
+  });
+});
+
+// On a new install the worker stores its default place (Sunnyvale) and fetches its
+// day. Nothing asked the user: at Sunnyvale's prayer times every tab's media paused,
+// the chime played and the full-screen overlay came up, while the welcome page was
+// still open, or after it was skipped or closed. Prayer alerts now wait for a place
+// the user chose (`locationConfirmed`); a missing key (an older install) counts as
+// chosen, so the suites above run as before.
+describe('until the user chooses a place (locationConfirmed)', () => {
+  const EN = JSON.parse(readFileSync(join(ROOT, 'locales', 'en.json'), 'utf8'));
+  const AR = JSON.parse(readFileSync(join(ROOT, 'locales', 'ar.json'), 'utf8'));
+  const PRAYER_ALARMS = [ALARM_PRAYER, ALARM_REVALIDATE, ALARM_REVALIDATE_RETRY, ALARM_BADGE];
+  const armed = (h) => PRAYER_ALARMS.filter((name) => h.alarms.has(name));
+  const CASABLANCA = { city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.62 };
+  // Sunnyvale's day with its Dhuhr just reached and its Asr 3 h away, alerts off.
+  async function unchosen({ storage = {}, uiLang, fetchRoutes } = {}) {
+    const now = Date.now();
+    const schedule = scheduleAround(now);
+    return loadBackground({
+      uiLang,
+      fetchRoutes,
+      storage: { settings: DEFAULTS, schedule, nextPrayer: { name: 'Dhuhr', time: '01:05 PM', ts: now - 1000 }, paused: { active: false }, locationConfirmed: false, lang: 'en', ...storage },
+    });
+  }
+
+  // The popup guide's Test sends no label: the stored next prayer is the default's.
+  it("turns down an unlabelled demo (the default's prayer), and runs the welcome page's labelled one", async () => {
+    const { h } = await unchosen();
+    expect(await h.sendRuntimeMessage({ type: 'TEST_PAUSE_DEMO', seconds: 10 })).toEqual({ ok: false, error: 'no_place' });
+    expect(h.broadcasts.filter((b) => b.message.type === 'PRAYER_NOW')).toEqual([]);
+    expect(await h.sendRuntimeMessage({ type: 'TEST_PAUSE_DEMO', seconds: 10, prayer: 'Isha', time: '07:52 PM' })).toMatchObject({ ok: true, prayer: 'Isha' });
+    expect(h.broadcasts.filter((b) => b.message.type === 'PRAYER_NOW').length).toBeGreaterThan(0);
+  });
+
+  describe('install and update', () => {
+    it('a new install has no place chosen: it fetches the default day but arms no prayer alarm', async () => {
+      const { h, fetch } = await loadBackground();
+      await h.fireInstalled({ reason: 'install' });
+      await flush();
+      expect(h.store.locationConfirmed).toBe(false);
+      expect(h.store.onboardingCompleted).toBe(false);
+      expect(fetch.calls.some((u) => u.includes('city=Sunnyvale'))).toBe(true); // shown, as before
+      expect(h.store.nextPrayer).toBeTruthy();
+      expect(armed(h)).toEqual([]);
+      expect(h.alarms.has(ALARM_TICK)).toBe(true);
+      expect(h.badge.text).toBe('');
+      expect(h.title).toBe(EN.alerts_off_tooltip);
+    });
+
+    // [what the update finds stored, chosen]
+    it.each([
+      ['setup finished', { onboardingCompleted: true }, true],
+      ['an install from before setup existed', {}, true],
+      ['setup never finished, no place picked', { onboardingCompleted: false }, false],
+      ["setup never finished, the old placeholder's coordinates", { onboardingCompleted: false, settings: { ...DEFAULTS, lat: 21.42, lon: 39.83 } }, false],
+      ['setup never finished, a place picked in Settings', { onboardingCompleted: false, settings: { ...DEFAULTS, ...CASABLANCA } }, true],
+    ])('an update: %s', async (_, stored, chosen) => {
+      const { h } = await loadBackground({ storage: { settings: DEFAULTS, paused: { active: false }, installedAt: 1, ...stored } });
+      await h.fireInstalled({ reason: 'update', previousVersion: '2.1.4' });
+      await flush();
+      expect(h.store.locationConfirmed).toBe(chosen);
+      expect(h.alarms.has(ALARM_PRAYER)).toBe(chosen);
+    });
+
+    it.each([true, false])('an update keeps a stored answer (%s)', async (kept) => {
+      const { h } = await loadBackground({ storage: { settings: DEFAULTS, onboardingCompleted: !kept, locationConfirmed: kept } });
+      await h.fireInstalled({ reason: 'update', previousVersion: '2.1.5' });
+      await flush();
+      expect(h.store.locationConfirmed).toBe(kept);
+    });
+  });
+
+  describe('nothing fires for the default place', () => {
+    it('a tick clears every prayer alarm and keeps only itself', async () => {
+      const { h } = await unchosen();
+      for (const name of PRAYER_ALARMS) h.alarms.set(name, { when: Date.now() + 60e3 });
+      await h.fireAlarm(ALARM_TICK);
+      await flush();
+      expect(armed(h)).toEqual([]);
+      expect(h.alarms.has(ALARM_TICK)).toBe(true);
+    });
+
+    it('a prayer alarm that still fires pauses nothing, notifies nothing, plays nothing', async () => {
+      const { h } = await unchosen();
+      await h.fireAlarm(ALARM_PRAYER);
+      await flush();
+      expect(h.store.paused).toEqual({ active: false });
+      expect(h.notifications).toEqual([]);
+      expect(h.broadcasts).toEqual([]);
+      expect(h.offscreenDoc).toBeNull(); // no chime
+      expect(h.alarms.has(ALARM_RESUME)).toBe(false);
+    });
+
+    it("a tab's fallback pause is ignored: nothing stored, nothing broadcast", async () => {
+      const { h } = await unchosen();
+      expect(await h.sendRuntimeMessage({ type: 'PRAYER_FALLBACK', prayer: 'Dhuhr', time: '01:05 PM', focus: true })).toEqual({ ok: true });
+      await flush();
+      expect(h.store.paused).toEqual({ active: false });
+      expect(h.broadcasts).toEqual([]);
+      expect(h.alarms.has(ALARM_RESUME)).toBe(false);
+    });
+
+    it('a dev test fire still runs', async () => {
+      const { h } = await unchosen();
+      await h.sendRuntimeMessage({ type: 'TEST_ADHAN', seconds: 30 });
+      expect(h.alarms.has(ALARM_PRAYER)).toBe(true);
+      await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { adhanChime: false } }); // re-arms in between
+      expect(h.alarms.has(ALARM_PRAYER)).toBe(true);
+      h.store.nextPrayer.ts = Date.now();
+      await h.fireAlarm(ALARM_PRAYER);
+      await flush();
+      expect(h.store.paused.active).toBe(true);
+    });
+
+    it('the badge shows no countdown, and the tooltip says how to turn alerts on, in the UI language', async () => {
+      const { h } = await unchosen({ storage: { lang: 'ar' } });
+      await h.fireAlarm(ALARM_BADGE);
+      await flush();
+      expect(h.badge.text).toBe('');
+      expect(h.title).toBe(AR.alerts_off_tooltip);
+    });
+
+    it('GET_STATE says so', async () => {
+      const { h } = await unchosen();
+      expect(await h.sendRuntimeMessage({ type: 'GET_STATE' })).toMatchObject({ locationConfirmed: false });
+      delete h.store.locationConfirmed; // an older install's
+      expect(await h.sendRuntimeMessage({ type: 'GET_STATE' })).toMatchObject({ locationConfirmed: true });
+    });
+
+    it("no pre-prayer check in the window: the default place's times are not alerted", async () => {
+      // Asr at T-40, Dhuhr 2 h ago (past its quiet period), the day fetched this morning.
+      const now = Date.now();
+      const schedule = scheduleAround(now);
+      schedule.prayers[1].ts = now - 2 * 3600e3;
+      schedule.prayers[2].ts = now + 40 * 60e3;
+      schedule.fetchedAt = now - 8 * 3600e3;
+      const { h, fetch } = await unchosen({ storage: { schedule, nextPrayer: { name: 'Asr', time: '04:56 PM', ts: now + 40 * 60e3 } } });
+      await h.fireAlarm(ALARM_TICK);
+      await flush();
+      expect(fetch.calls.filter((u) => u.includes('api.aladhan.com'))).toEqual([]);
+      expect(h.store.revalidateAttemptAt).toBeUndefined();
+    });
+  });
+
+  describe('choosing a place turns alerts on', () => {
+    it('a save with a place chooses it, fetches its day and arms its alarms', async () => {
+      const { h } = await unchosen();
+      expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { ...CASABLANCA, adhanChime: true } })).toEqual({ ok: true });
+      await flush();
+      expect(h.store.locationConfirmed).toBe(true);
+      expect(h.store.settings).toMatchObject({ city: 'Casablanca' });
+      expect(h.alarms.get(ALARM_PRAYER)).toEqual({ when: h.store.nextPrayer.ts });
+      expect(h.alarms.has(ALARM_BADGE)).toBe(true);
+      expect(h.title).not.toBe(EN.alerts_off_tooltip);
+    });
+
+    it.each(['SAVE_SETTINGS', 'PATCH_SETTINGS'])('%s without a place (a toggle) chooses nothing', async (type) => {
+      const { h } = await unchosen();
+      expect(await h.sendRuntimeMessage({ type, settings: { adhanChime: false, focusMode: false } })).toEqual({ ok: true });
+      await flush();
+      expect(h.store.settings.adhanChime).toBe(false);
+      expect(h.store.locationConfirmed).toBe(false);
+      expect(armed(h)).toEqual([]);
+    });
+
+    it('choosing the default place itself catches up no prayer that passed while alerts were off', async () => {
+      // Its day is kept (nothing to fetch): Dhuhr, a second ago, is not fired.
+      const { h, fetch } = await unchosen();
+      const { city, state, country } = DEFAULTS;
+      expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { city, state, country } })).toEqual({ ok: true });
+      await flush();
+      expect(fetch.calls.filter((u) => u.includes('api.aladhan.com'))).toEqual([]);
+      expect(h.store.locationConfirmed).toBe(true);
+      expect(h.store.nextPrayer.name).toBe('Asr');
+      expect(h.alarms.get(ALARM_PRAYER).when).toBe(h.store.nextPrayer.ts);
+    });
+
+    it("another place whose times can't be fetched yet: nothing armed for the default's, until its own land", async () => {
+      let down = true;
+      const { h } = await unchosen({
+        fetchRoutes: [['api.aladhan.com', (url) => (down ? { status: 503 } : aladhanPayload({ data: requestedDay(url), meta: { timezone: 'Africa/Casablanca' } }))]],
+      });
+      expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CASABLANCA })).toMatchObject({ ok: false });
+      await flush();
+      expect(h.store).toMatchObject({ locationConfirmed: true, scheduleRefetch: true, schedule: null, nextPrayer: null });
+      expect(armed(h)).toEqual([]);
+      down = false; // the owed fetch, on the next tick
+      await h.fireAlarm(ALARM_TICK);
+      await flush();
+      expect(h.store.scheduleRefetch).toBe(false);
+      expect(h.store.schedule.tz).toBe('Africa/Casablanca');
+      expect(h.alarms.get(ALARM_PRAYER)).toEqual({ when: h.store.nextPrayer.ts });
+      expect(h.alarms.has(ALARM_BADGE)).toBe(true);
+    });
+
+    it("a tick that read the default's day just before that save stores nothing of it after", async () => {
+      const { h } = await unchosen({ fetchRoutes: [['api.aladhan.com', () => ({ status: 503 })]] });
+      // The tick's read lands between the save's own read and its write.
+      const get = chrome.storage.local.get;
+      chrome.storage.local.get = (keys, cb) => {
+        const r = get(keys, cb);
+        if (Array.isArray(keys) && keys.join() === 'schedule,locationConfirmed') queueMicrotask(() => h.fireAlarm(ALARM_TICK));
+        return r;
+      };
+      expect(await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CASABLANCA })).toMatchObject({ ok: false });
+      await flush();
+      expect(h.store).toMatchObject({ locationConfirmed: true, schedule: null, nextPrayer: null });
+      expect(armed(h)).toEqual([]);
+    });
+
+    it("while that place's times are on their way, a tick or a popup open recomputes nothing from the default's", async () => {
+      // Then they fail: no Sunnyvale prayer is left for the tabs or the alarms.
+      let fail;
+      const held = new Promise((resolve) => (fail = () => resolve({ status: 503 })));
+      const { h } = await unchosen({ fetchRoutes: [['api.aladhan.com', () => held]] });
+      const saved = h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: CASABLANCA });
+      await flush();
+      const state = h.sendRuntimeMessage({ type: 'GET_STATE' });
+      await h.fireAlarm(ALARM_TICK);
+      await flush();
+      expect(h.store).toMatchObject({ locationConfirmed: true, schedule: null, nextPrayer: null });
+      fail();
+      expect(await saved).toMatchObject({ ok: false });
+      expect(await state).toMatchObject({ nextPrayer: null });
+      await flush();
+      expect(h.store.nextPrayer).toBeNull();
+      expect(armed(h)).toEqual([]);
+    });
+
+    it('the place on its way from setup, through the worker as the welcome page sends it', async () => {
+      const { h } = await loadBackground();
+      await h.fireInstalled({ reason: 'install' });
+      await flush();
+      expect(h.store.locationConfirmed).toBe(false);
+      const { city, state, country, lat, lon, ...prefs } = { ...DEFAULTS, ...CASABLANCA };
+      await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: prefs }); // Skip: no place
+      expect(h.store.locationConfirmed).toBe(false);
+      await h.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { ...prefs, city, state, country, lat, lon } });
+      await flush();
+      expect(h.store.locationConfirmed).toBe(true);
+      expect(h.alarms.has(ALARM_PRAYER)).toBe(true);
+    });
   });
 });

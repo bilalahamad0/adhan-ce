@@ -99,16 +99,16 @@ describe('onboarding location', () => {
     expect(chrome.__.store.onboardingCompleted).toBe(true);
   });
 
-  it('Skip saves no placeholder coordinates beside the default city', async () => {
+  it('Skip sends no place: neither the default city nor placeholder coordinates', async () => {
     // The page started from Makkah's 21.42/39.83, which a Skip saved with Sunnyvale:
-    // the worker's fallback by coordinates would then fetch Makkah's times.
+    // the worker's fallback by coordinates would then fetch Makkah's times. Any place
+    // sent the worker now takes as chosen (see 'no place chosen' below).
     await load();
     document.getElementById('skipWelcomeBtn').click();
     await settle();
     const [saved] = chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').map((m) => m.settings);
-    expect(saved).toMatchObject({ city: 'Sunnyvale', country: 'United States' });
-    expect(saved.lat).toBeUndefined();
-    expect(saved.lon).toBeUndefined();
+    expect(saved).toMatchObject({ adhanChime: true, focusMode: true });
+    for (const k of ['city', 'state', 'country', 'lat', 'lon', 'placeLabel']) expect(saved).not.toHaveProperty(k);
   });
 
   it('marks setup done only once the place is on its way to the worker', async () => {
@@ -689,5 +689,160 @@ describe('pin guidance for the browser in use', () => {
     for (const code of ['en', 'ar', 'fr', 'id', 'tr', 'ur']) {
       expect({ code, text: cat(code).pin_extension_desc }).toEqual({ code, text: expect.not.stringMatching(/🧩|puzzle|پزل/i) });
     }
+  });
+});
+
+// Skip, or Get Started with no place picked or detected, finished setup with the
+// install default (Sunnyvale) as if chosen, said "watching for prayer times in
+// Sunnyvale", and its prayers then paused every tab. Setup is still done (the
+// tutorial is), but prayer alerts wait for a place, and the page says so and where.
+describe('no place chosen', () => {
+  const FRESH = { onboardingCompleted: false, locationConfirmed: false };
+  const success = () => document.getElementById('stepSuccessView');
+  const watching = () => document.getElementById('successWatching');
+  const alertsOff = () => document.getElementById('successAlertsOff');
+  const finished = async (button) => {
+    document.getElementById(button).click();
+    await settle();
+    jest.advanceTimersByTime(400); // the success view
+  };
+  const saves = () => chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').map((m) => m.settings);
+  const PLACE = ['city', 'state', 'country', 'lat', 'lon', 'placeLabel'];
+
+  it.each(['skipWelcomeBtn', 'finishBtn'])('%s: setup is done, no place is sent, and alerts are said to be off until one is', async (button) => {
+    await load({ storage: FRESH });
+    const chime = document.getElementById('welcomeChime');
+    chime.checked = false;
+    chime.dispatchEvent(new Event('change'));
+    await finished(button);
+    expect(saves()).toHaveLength(1);
+    for (const k of PLACE) expect(saves()[0]).not.toHaveProperty(k);
+    expect(saves()[0].adhanChime).toBe(false); // the page's choices still saved
+    expect(chrome.__.store.onboardingCompleted).toBe(true);
+    expect(success().hidden).toBe(false);
+    expect([alertsOff().hidden, watching().hidden]).toEqual([false, true]);
+    expect(alertsOff().textContent).toBe(cat('en').success_alerts_off);
+    expect(success().textContent).not.toContain('Sunnyvale');
+    // Not "You're All Set!", and no confetti, while alerts are off.
+    expect(document.getElementById('successTitle').textContent).toBe(cat('en').success_title_off);
+    expect(document.getElementById('confettiCanvas').hidden).toBe(true);
+  });
+
+  it('says so in the page language, and follows a switch', async () => {
+    await load({ storage: FRESH, uiLang: 'ar' });
+    await finished('skipWelcomeBtn');
+    expect(alertsOff().textContent).toBe(cat('ar').success_alerts_off);
+    expect(success().querySelector('h1').textContent).toBe(cat('ar').success_title_off);
+    expect(document.getElementById('closeWelcomeBtn').textContent).toBe(cat('ar').close_tab);
+    document.querySelector('.lang-chip[data-lang="tr"]').click();
+    await settle();
+    expect(alertsOff().textContent).toBe(cat('tr').success_alerts_off);
+  });
+
+  it('with a place picked: sent, and named in the sentence, which follows a language switch', async () => {
+    await load({ storage: FRESH });
+    await pickCasablanca();
+    await finished('finishBtn');
+    expect(saves()[0]).toMatchObject({ city: 'Casablanca', country: 'Morocco', lat: 33.59, lon: -7.62 });
+    expect([alertsOff().hidden, watching().hidden]).toEqual([true, false]);
+    expect(watching().textContent).toBe(cat('en').success_watching.replace('{city}', 'Casablanca'));
+    expect(document.getElementById('successTitle').textContent).toBe(cat('en').success_title);
+    expect(document.getElementById('confettiCanvas').hidden).toBe(false); // celebrated
+    document.querySelector('.lang-chip[data-lang="fr"]').click();
+    await settle();
+    expect(watching().textContent).toBe(cat('fr').success_watching.replace('{city}', 'Casablanca'));
+    expect(document.getElementById('completionCity').textContent).toBe('Casablanca');
+  });
+
+  it('reopened after a Skip: the default city is still not the user\'s', async () => {
+    await load({ storage: { ...FRESH, onboardingCompleted: true, schedule: { prayers: [{ name: 'Fajr', time: '04:27 AM', ts: 1 }] } } });
+    expect(document.getElementById('welcomeCity').value).toBe('');
+    expect(document.getElementById('previewCityLabel').textContent).not.toContain('Sunnyvale');
+    expect(document.getElementById('simPauseBtn').disabled).toBe(true);
+    await finished('finishBtn');
+    expect(alertsOff().hidden).toBe(false);
+  });
+
+  it('reopened once a place was chosen: it is kept, and named', async () => {
+    await load({ storage: { onboardingCompleted: true, locationConfirmed: true } });
+    expect(document.getElementById('welcomeCity').value).toBe('Sunnyvale');
+    await finished('finishBtn');
+    for (const k of PLACE) expect(saves()[0]).not.toHaveProperty(k); // nothing to change
+    expect(watching().textContent).toBe(cat('en').success_watching.replace('{city}', 'Sunnyvale'));
+  });
+
+  // The popup's guide, open while this tab is, can choose one first (its Detect).
+  const SAN_FRANCISCO = { ...INSTALLED, city: 'San Francisco', lat: 37.79, lon: -122.4 };
+  it('a place chosen elsewhere since the page opened: named, not said to be missing', async () => {
+    await load({ storage: FRESH });
+    await chrome.storage.local.set({ locationConfirmed: true, settings: SAN_FRANCISCO });
+    await finished('skipWelcomeBtn');
+    await settle();
+    expect([alertsOff().hidden, watching().hidden]).toEqual([true, false]);
+    expect(watching().textContent).toBe(cat('en').success_watching.replace('{city}', 'San Francisco'));
+  });
+
+  it('one chosen as the off line advises, the page still open: the line follows', async () => {
+    await load({ storage: FRESH });
+    await finished('skipWelcomeBtn');
+    await settle();
+    expect(alertsOff().hidden).toBe(false);
+    await chrome.storage.local.set({ settings: { ...INSTALLED, adhanChime: false } }); // a toggle: no place
+    await settle();
+    expect(alertsOff().hidden).toBe(false);
+    await chrome.storage.local.set({ locationConfirmed: true, settings: SAN_FRANCISCO });
+    await settle();
+    expect([alertsOff().hidden, watching().hidden]).toEqual([true, false]);
+    expect(document.getElementById('completionCity').textContent).toBe('San Francisco');
+  });
+
+  // The page and the real worker together, from a new install.
+  describe('through the worker', () => {
+    const drain = async () => {
+      for (let i = 0; i < 12; i++) await settle();
+    };
+    const PRAYER_ALARM = 'adhan-prayer-fire';
+    async function installed() {
+      // The page's messages go to the worker's own listener.
+      await load({ send: (m) => chrome.__.sendRuntimeMessage(m), routes: [['/v1/timingsByCity/', (url) => aladhanPayload({ meta: { timezone: 'Africa/Casablanca' }, data: { date: { gregorian: { date: url.match(/\/(\d{2}-\d{2}-\d{4})\?/)[1] } } } })]] });
+      await import(`../background.js?t=${++counter}`);
+      await chrome.__.fireInstalled({ reason: 'install' });
+      await drain();
+      expect(chrome.__.store.locationConfirmed).toBe(false);
+      expect(chrome.__.alarms.has(PRAYER_ALARM)).toBe(false);
+    }
+
+    it('Skip leaves prayer alerts off', async () => {
+      await installed();
+      await finished('skipWelcomeBtn');
+      await drain();
+      expect(chrome.__.store).toMatchObject({ onboardingCompleted: true, locationConfirmed: false });
+      expect(chrome.__.store.settings.city).toBe('Sunnyvale'); // still the default, for the popup's preview
+      expect(chrome.__.alarms.has(PRAYER_ALARM)).toBe(false);
+    });
+
+    it('finishing with a picked place turns them on, for that place', async () => {
+      await installed();
+      await pickCasablanca();
+      await finished('finishBtn');
+      await drain();
+      expect(chrome.__.store).toMatchObject({ onboardingCompleted: true, locationConfirmed: true });
+      expect(chrome.__.store.settings).toMatchObject({ city: 'Casablanca', country: 'Morocco' });
+      expect(chrome.__.store.schedule.tz).toBe('Africa/Casablanca');
+      expect(chrome.__.alarms.get(PRAYER_ALARM)).toEqual({ when: chrome.__.store.nextPrayer.ts });
+    });
+
+    it('Skip after a place was chosen in the popup meanwhile: kept on, and named', async () => {
+      await installed();
+      await chrome.__.sendRuntimeMessage({ type: 'SAVE_SETTINGS', settings: { city: 'San Francisco', state: 'California', country: 'United States', lat: 37.79, lon: -122.4 } });
+      await drain();
+      await finished('skipWelcomeBtn');
+      await drain();
+      expect(chrome.__.store).toMatchObject({ onboardingCompleted: true, locationConfirmed: true });
+      expect(chrome.__.store.settings.city).toBe('San Francisco');
+      expect(chrome.__.alarms.has(PRAYER_ALARM)).toBe(true);
+      expect([alertsOff().hidden, watching().hidden]).toEqual([true, false]);
+      expect(document.getElementById('completionCity').textContent).toBe('San Francisco');
+    });
   });
 });

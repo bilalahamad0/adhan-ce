@@ -41,7 +41,7 @@
   const instanceId = `${Date.now()}.${Math.random()}`;
   window.__adhanCasterInstance = instanceId;
 
-  let state = { settings: null, nextPrayer: null, paused: { active: false } };
+  let state = { settings: null, nextPrayer: null, paused: { active: false }, locationConfirmed: undefined };
   let localPaused = false;
   let pausedEls = [];
   let currentPrayer = null;
@@ -385,6 +385,13 @@
     return { type: demoPaused() ? 'RESUME_DEMO' : 'RESUME_NOW' };
   }
 
+  // Until the user chooses a place (locationConfirmed false) the next prayer is the
+  // install default's, which is not alerted: no heads-up card, no fallback pause.
+  // A missing key (an install from before it) counts as chosen; a dev test fire runs.
+  function alertsOn(np) {
+    return state.locationConfirmed !== false || !!(np && np.test);
+  }
+
   function onFocusResume() {
     if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
     const request = resumeRequest();
@@ -412,7 +419,7 @@
       mode = 'focus';
     } else if (isPaused) {
       mode = 'paused';
-    } else if (np && np.ts - now <= windowMs && np.ts - now > -1500) {
+    } else if (np && alertsOn(np) && np.ts - now <= windowMs && np.ts - now > -1500) {
       mode = 'countdown';
       secs = Math.max(0, Math.ceil((np.ts - now) / 1000));
     }
@@ -619,7 +626,7 @@
     }
 
     // Second-accurate fallback in case the background alarm/message is delayed.
-    if (!alreadyPaused && np && now >= np.ts && now - np.ts < STALE_FIRE_MS && lastHandledTs !== np.ts) {
+    if (!alreadyPaused && np && alertsOn(np) && now >= np.ts && now - np.ts < STALE_FIRE_MS && lastHandledTs !== np.ts) {
       lastHandledTs = np.ts;
       pauseMediaFor(np.name);
       // Carry focus intent from settings so the full-screen focus takes over
@@ -640,10 +647,11 @@
   }
 
   function loadState() {
-    chrome.storage.local.get(['settings', 'nextPrayer', 'paused'], (data) => {
+    chrome.storage.local.get(['settings', 'nextPrayer', 'paused', 'locationConfirmed'], (data) => {
       state.settings = data.settings || null;
       state.nextPrayer = data.nextPrayer || null;
       state.paused = data.paused || { active: false };
+      state.locationConfirmed = data.locationConfirmed;
       render();
     });
   }
@@ -653,6 +661,7 @@
     if (changes.lang && isTop) loadI18n();
     if (changes.nextPrayer) state.nextPrayer = changes.nextPrayer.newValue || null;
     if (changes.settings) state.settings = changes.settings.newValue || null;
+    if (changes.locationConfirmed) state.locationConfirmed = changes.locationConfirmed.newValue;
     if (changes.paused) {
       const wasActive = changes.paused.oldValue && changes.paused.oldValue.active;
       state.paused = changes.paused.newValue || { active: false };

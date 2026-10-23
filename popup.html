@@ -56,6 +56,13 @@
               </div>
             </section>
 
+            <!-- Until a place is chosen (locationConfirmed) the times are the install
+                 default's and no prayer is alerted; shown by popup.js until then. -->
+            <section id="alertsOff" class="alerts-off" role="status" hidden>
+              <span id="alertsOffText" data-i18n="alerts_off_notice">Prayer alerts are off until you choose your city.</span>
+              <button type="button" id="chooseCityBtn" class="chip-btn choose-city-btn" data-i18n="choose_city">Choose city</button>
+            </section>
+
             <section id="list" class="list" aria-label="Today's prayer times"></section>
           </div>
         </section>
@@ -431,7 +438,8 @@
               <h2 class="ob-title" data-i18n="onboarding_step_location">Set Your Location</h2>
               <p class="ob-sub">Accurate prayer times calculated for your city.</p>
               <div class="ob-loc-box">
-                <div class="ob-current-loc" id="obCurrentLoc">Makkah, Saudi Arabia</div>
+                <!-- The chosen place, or that none is yet: set by popup.js. -->
+                <div class="ob-current-loc" id="obCurrentLoc">Not chosen yet</div>
                 <button type="button" id="obDetectBtn" class="btn-ghost ob-btn-detect">
                   <span aria-hidden="true">📍</span> <span id="obDetectText" data-i18n="detect_location">Detect location</span>
                 </button>

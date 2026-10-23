@@ -424,3 +424,62 @@ describe('single-instance lifecycle', () => {
     expect(host()).toBeNull();
   });
 });
+
+// Until the user chooses a place (locationConfirmed false) the next prayer is the
+// install default's (Sunnyvale's), which every tab counted down to and paused for
+// on its own, behind the welcome page or after it was skipped.
+describe('no place chosen yet (locationConfirmed false)', () => {
+  const card = () => host() && host().shadowRoot.querySelector('.card');
+  const shown = () => !!(card() && card().classList.contains('show'));
+
+  it('shows no heads-up card and does not pause at the default place\'s prayer', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 10e3 }, paused: { active: false }, locationConfirmed: false } });
+    jest.advanceTimersByTime(1000); // inside the lead window
+    expect(shown()).toBe(false);
+    jest.advanceTimersByTime(10e3); // past Asr
+    expect(v.pause).not.toHaveBeenCalled();
+    expect(sent('PRAYER_FALLBACK')).toEqual([]);
+    expect(focusHost()).toBeNull();
+  });
+
+  it('both come back once a place is chosen, for its next prayer', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 5e3 }, paused: { active: false }, locationConfirmed: false } });
+    jest.advanceTimersByTime(6e3);
+    expect(v.pause).not.toHaveBeenCalled();
+    // Chosen (the worker writes the place's next prayer with it).
+    await chrome.storage.local.set({ locationConfirmed: true, nextPrayer: { name: 'Maghrib', time: '8:17 PM', ts: BASE + 26e3 } });
+    jest.advanceTimersByTime(1000);
+    expect(shown()).toBe(true);
+    expect(card().querySelector('.title').textContent).toContain('Maghrib');
+    jest.advanceTimersByTime(20e3);
+    expect(v.paused).toBe(true);
+    expect(sent('PRAYER_FALLBACK')).toEqual([expect.objectContaining({ prayer: 'Maghrib' })]);
+  });
+
+  it('turned off again, the card goes', async () => {
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', ts: BASE + 20e3 }, paused: { active: false } } });
+    jest.advanceTimersByTime(1000);
+    expect(shown()).toBe(true);
+    await chrome.storage.local.set({ locationConfirmed: false });
+    expect(shown()).toBe(false);
+  });
+
+  it("still pauses for the worker's broadcast (a demo, or a dev test fire)", async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false }, locationConfirmed: false } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, until: BASE + 10e3, isDemo: true });
+    expect(v.paused).toBe(true);
+    expect(focusHost().shadowRoot.querySelector('.scrim').classList.contains('show')).toBe(true);
+  });
+
+  it('a dev test fire counts down and pauses as before', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 5e3, test: true }, paused: { active: false }, locationConfirmed: false } });
+    jest.advanceTimersByTime(1000);
+    expect(shown()).toBe(true);
+    jest.advanceTimersByTime(5e3);
+    expect(v.paused).toBe(true);
+  });
+});

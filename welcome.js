@@ -25,8 +25,9 @@ let previewPrayers = null;
 // the preview asked for last: an earlier pick's answer, come later, is dropped.
 let previewFailed = false;
 let previewAsk = 0;
-// Until onboarding is done, the stored city is the install default (Sunnyvale), not
-// the user's: the location field starts empty and no default-city preview is shown.
+// Until a place is chosen (setup finished with one: see locationConfirmed in the
+// worker), the stored city is the install default (Sunnyvale), not the user's: the
+// location field starts empty and no default-city preview is shown.
 let onboarded = false;
 
 // Initial state cache. No place: the stored settings bring the install default's,
@@ -65,8 +66,8 @@ async function init() {
   // Load existing settings if available
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     try {
-      const stored = await chrome.storage.local.get(['settings', 'schedule', 'onboardingCompleted']);
-      onboarded = stored.onboardingCompleted === true;
+      const stored = await chrome.storage.local.get(['settings', 'schedule', 'onboardingCompleted', 'locationConfirmed']);
+      onboarded = stored.onboardingCompleted === true && stored.locationConfirmed !== false;
       if (stored.settings) {
         state.settings = { ...state.settings, ...stored.settings };
         if (stored.settings.lang) activeLang = stored.settings.lang;
@@ -75,6 +76,9 @@ async function init() {
         updatePrayerPreview(stored.schedule.prayers, state.settings.city, state.settings.country);
       }
     } catch (_) {}
+    chrome.storage.onChanged?.addListener((changes, area) => {
+      if (area === 'local' && changes.locationConfirmed && document.getElementById('stepSuccessView')?.hidden === false) adoptPlaceChosenElsewhere();
+    });
   }
 
   wireLanguageChips(activeLang);
@@ -137,6 +141,7 @@ function applyTranslations() {
     const msg = t(key);
     if (msg && msg !== key) el.setAttribute(attr, msg);
   });
+  if (document.getElementById('stepSuccessView')?.hidden === false) renderCompletion();
 }
 
 function syncInputsFromSettings() {
@@ -657,12 +662,63 @@ function triggerCelebration() {
   requestAnimationFrame(animate);
 }
 
+// The settings with no place in them (nor a label for one).
+function withoutPlace(settings) {
+  const { city, state: region, country, lat, lon, placeLabel, ...rest } = settings;
+  return rest;
+}
+
+// The success view's line, in the page language: the place prayer times are watched
+// for (one picked or detected here, else one chosen before), or that prayer alerts
+// are off until one is chosen, and where.
+function renderCompletion() {
+  const watching = document.getElementById('successWatching');
+  const off = document.getElementById('successAlertsOff');
+  const chosen = !!selectedPlace || onboarded;
+  // Not "You're All Set!" while prayer alerts are still off.
+  const title = document.getElementById('successTitle');
+  if (title) {
+    const key = chosen ? 'success_title' : 'success_title_off';
+    title.setAttribute('data-i18n', key);
+    title.textContent = t(key);
+  }
+  if (off) off.hidden = chosen;
+  if (!watching) return;
+  watching.hidden = !chosen;
+  if (!chosen) return;
+  // The city as it was found while the page is still in that language, else as stored.
+  const city = document.createElement('b');
+  city.id = 'completionCity';
+  city.dir = 'auto'; // isolated: an Arabic name keeps the sentence around it in order
+  city.textContent = (selectedPlace && selectedPlace.lang === getLang() ? selectedPlace.city : state.settings.city) || '';
+  const line = t('success_watching');
+  const [before, after = ''] = (line.includes('{city}') ? line : 'Adhan Focus is now active and watching for prayer times in {city}.').split('{city}');
+  watching.replaceChildren(before, city, after);
+}
+
+// A place chosen elsewhere since the page loaded (the popup's guide, open beside
+// this tab, detects one; its Settings, as the off line advises): the success view
+// names the stored one rather than calling it missing. Only once that view shows:
+// the steps keep to what the page itself was given.
+async function adoptPlaceChosenElsewhere() {
+  if (selectedPlace || onboarded || typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+  try {
+    const now = await chrome.storage.local.get(['settings', 'locationConfirmed']);
+    if (now.locationConfirmed !== true || !now.settings || selectedPlace || onboarded) return;
+    onboarded = true;
+    // Reassigned, not changed: a save still on its way keeps the page's own settings.
+    state.settings = { ...now.settings, ...withoutPlace(state.settings) };
+    renderCompletion();
+  } catch (_) {}
+}
+
 // Complete onboarding
 async function finishOnboarding() {
   const finishBtn = document.getElementById('finishBtn');
   if (finishBtn) finishBtn.classList.add('is-finishing');
 
-  triggerCelebration();
+  // No confetti for a setup that leaves prayer alerts off.
+  if (selectedPlace || onboarded) triggerCelebration();
 
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     // Hand the settings to the background, which stores them and — the location
@@ -676,10 +732,14 @@ async function finishOnboarding() {
       // A lookup that failed at the pick is usually a blip: one more try.
       if (!(await placeSaved) && selectedPlace) await englishNamesOf(selectedPlace);
       const settings = state.settings;
+      // A place goes to the worker only when one was picked or detected: any place it
+      // is sent it takes as chosen, and turns prayer alerts on for (see
+      // locationConfirmed). With none, the stored one is the install default's.
+      const toSend = selectedPlace ? settings : withoutPlace(settings);
       let reply;
       try {
         // Its failure handled at once: it is awaited only after the flag below is set.
-        if (chrome.runtime && chrome.runtime.sendMessage) reply = Promise.resolve(chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings })).catch(() => undefined);
+        if (chrome.runtime && chrome.runtime.sendMessage) reply = Promise.resolve(chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings: toSend })).catch(() => undefined);
       } catch (_) {}
       // Set up only once the place is on its way: a tab closed before then leaves
       // setup to be finished, rather than the default city kept unasked.
@@ -689,6 +749,8 @@ async function finishOnboarding() {
       try {
         res = await reply;
       } catch (_) {}
+      // Stored here unchosen: only the worker, fetching the place's times as it does,
+      // turns alerts on (the popup's notice leads to Save until then).
       if (!res) await chrome.storage.local.set({ settings });
     })()
       .catch(() => {})
@@ -703,17 +765,12 @@ async function finishOnboarding() {
     if (stepper) stepper.style.display = 'none';
 
     const successView = document.getElementById('stepSuccessView');
-    const citySpan = document.getElementById('completionCity');
-    // The city as it was found while the page is still in that language, else as stored.
-    const shown = selectedPlace && selectedPlace.lang === getLang() ? selectedPlace.city : state.settings.city;
-    if (citySpan) {
-      citySpan.textContent = shown || 'your location';
-      citySpan.dir = 'auto'; // isolated: an Arabic name keeps the English sentence in order
-    }
     if (successView) {
       successView.hidden = false;
       successView.classList.add('is-active');
     }
+    renderCompletion();
+    adoptPlaceChosenElsewhere();
   }, 350);
 
   document.getElementById('closeWelcomeBtn')?.addEventListener('click', async () => {
