@@ -132,6 +132,92 @@ describe('per-tab fallback pause (background alarm delayed)', () => {
   });
 });
 
+// "Test prayer pause (10s)" (the welcome page's, and the popup guide's from
+// Settings at any time): the worker broadcasts PRAYER_NOW and RESUME with isDemo.
+// Every tab took them for the real next prayer's handling, which turned its
+// fallback off for that prayer, and a real pause gave way to them.
+describe('the pause demo (isDemo)', () => {
+  const fname = () => focusHost().shadowRoot.querySelector('.fname').textContent;
+
+  it('leaves the per-tab fallback armed for the real prayer', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 60e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, isDemo: true });
+    expect(v.paused).toBe(true);
+    jest.advanceTimersByTime(10e3);
+    dispatch({ type: 'RESUME', isDemo: true });
+    expect(v.paused).toBe(false);
+    expect(sent('PRAYER_FALLBACK')).toHaveLength(0);
+    // Asr comes and the worker's alarm is late: this tab still pauses for it.
+    jest.advanceTimersByTime(51e3);
+    expect(v.paused).toBe(true);
+    expect(sent('PRAYER_FALLBACK')).toEqual([expect.objectContaining({ type: 'PRAYER_FALLBACK', prayer: 'Asr' })]);
+  });
+
+  it("never takes over the tab's real prayer pause, nor ends it", async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Dhuhr', time: '1:05 PM', focus: true, since: BASE });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Isha', time: '9:43 PM', focus: true, since: BASE, isDemo: true });
+    expect(fname()).toBe(EN.prayer_Dhuhr);
+    dispatch({ type: 'RESUME', isDemo: true });
+    expect(v.play).not.toHaveBeenCalled();
+    expect(v.paused).toBe(true);
+    expect(focusHost().shadowRoot.querySelector('.scrim').classList.contains('show')).toBe(true);
+    // Its own end still comes.
+    dispatch({ type: 'RESUME' });
+    expect(v.paused).toBe(false);
+  });
+
+  it.each([
+    ['Resume on the overlay', () => focusHost().shadowRoot.querySelector('.fresume').click()],
+    ['Esc', () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }))],
+  ])("%s ends the demo in every tab, not as a real Resume (which counts the prayer handled everywhere)", async (_label, act) => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 60e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, isDemo: true });
+    act();
+    expect(v.paused).toBe(false);
+    expect(sent('RESUME_DEMO')).toHaveLength(1);
+    expect(sent('RESUME_NOW')).toHaveLength(0);
+    jest.advanceTimersByTime(61e3);
+    expect(sent('PRAYER_FALLBACK')).toHaveLength(1); // still armed here
+  });
+
+  // It counted down the 5-minute auto-resume window ("Auto-resumes in 4:58") while
+  // the demo ends after 10 s.
+  it('counts down to its own end (`until`), and ends there if the worker does not', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, until: BASE + 10e3, isDemo: true });
+    jest.advanceTimersByTime(1000);
+    expect(focusHost().shadowRoot.querySelector('.fauto').textContent).toBe(EN.auto_resumes_in.replace('{time}', '0:09'));
+    jest.advanceTimersByTime(9000); // its end; the worker's RESUME never came
+    expect(v.paused).toBe(false);
+    expect([sent('RESUME_DEMO').length, sent('RESUME_NOW').length]).toEqual([1, 0]);
+  });
+
+  it('counts down to its own end on the corner card too', async () => {
+    addVideo();
+    await load({ storage: { settings: settings({ focusMode: false }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: false, since: BASE, until: BASE + 10e3, isDemo: true });
+    jest.advanceTimersByTime(1000);
+    expect(host().shadowRoot.querySelector('.sub').textContent).toBe(EN.auto_resumes_in.replace('{time}', '0:09'));
+  });
+
+  it('one whose end never reached the tab self-resumes as a demo, the fallback still armed', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ autoResumeMinutes: 1 }), nextPrayer: { name: 'Asr', ts: BASE + 120e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: false, since: BASE, isDemo: true });
+    jest.advanceTimersByTime(61e3); // past its 1-minute auto-resume window
+    expect(v.paused).toBe(false);
+    expect([sent('RESUME_DEMO').length, sent('RESUME_NOW').length]).toEqual([1, 0]);
+    jest.advanceTimersByTime(60e3);
+    expect(v.paused).toBe(true);
+    expect(sent('PRAYER_FALLBACK')).toHaveLength(1);
+  });
+});
+
 describe('client-side auto-resume safety net', () => {
   it('self-resumes and tells the background when the window has elapsed', async () => {
     const v = addVideo();
@@ -336,5 +422,64 @@ describe('single-instance lifecycle', () => {
     chrome.runtime.id = undefined; // contextAlive() → false
     jest.advanceTimersByTime(1000);
     expect(host()).toBeNull();
+  });
+});
+
+// Until the user chooses a place (locationConfirmed false) the next prayer is the
+// install default's (Sunnyvale's), which every tab counted down to and paused for
+// on its own, behind the welcome page or after it was skipped.
+describe('no place chosen yet (locationConfirmed false)', () => {
+  const card = () => host() && host().shadowRoot.querySelector('.card');
+  const shown = () => !!(card() && card().classList.contains('show'));
+
+  it('shows no heads-up card and does not pause at the default place\'s prayer', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 10e3 }, paused: { active: false }, locationConfirmed: false } });
+    jest.advanceTimersByTime(1000); // inside the lead window
+    expect(shown()).toBe(false);
+    jest.advanceTimersByTime(10e3); // past Asr
+    expect(v.pause).not.toHaveBeenCalled();
+    expect(sent('PRAYER_FALLBACK')).toEqual([]);
+    expect(focusHost()).toBeNull();
+  });
+
+  it('both come back once a place is chosen, for its next prayer', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 5e3 }, paused: { active: false }, locationConfirmed: false } });
+    jest.advanceTimersByTime(6e3);
+    expect(v.pause).not.toHaveBeenCalled();
+    // Chosen (the worker writes the place's next prayer with it).
+    await chrome.storage.local.set({ locationConfirmed: true, nextPrayer: { name: 'Maghrib', time: '8:17 PM', ts: BASE + 26e3 } });
+    jest.advanceTimersByTime(1000);
+    expect(shown()).toBe(true);
+    expect(card().querySelector('.title').textContent).toContain('Maghrib');
+    jest.advanceTimersByTime(20e3);
+    expect(v.paused).toBe(true);
+    expect(sent('PRAYER_FALLBACK')).toEqual([expect.objectContaining({ prayer: 'Maghrib' })]);
+  });
+
+  it('turned off again, the card goes', async () => {
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', ts: BASE + 20e3 }, paused: { active: false } } });
+    jest.advanceTimersByTime(1000);
+    expect(shown()).toBe(true);
+    await chrome.storage.local.set({ locationConfirmed: false });
+    expect(shown()).toBe(false);
+  });
+
+  it("still pauses for the worker's broadcast (a demo, or a dev test fire)", async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false }, locationConfirmed: false } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE, until: BASE + 10e3, isDemo: true });
+    expect(v.paused).toBe(true);
+    expect(focusHost().shadowRoot.querySelector('.scrim').classList.contains('show')).toBe(true);
+  });
+
+  it('a dev test fire counts down and pauses as before', async () => {
+    const v = addVideo();
+    await load({ storage: { settings: settings(), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 5e3, test: true }, paused: { active: false }, locationConfirmed: false } });
+    jest.advanceTimersByTime(1000);
+    expect(shown()).toBe(true);
+    jest.advanceTimersByTime(5e3);
+    expect(v.paused).toBe(true);
   });
 });

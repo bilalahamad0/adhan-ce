@@ -56,6 +56,13 @@
               </div>
             </section>
 
+            <!-- Until a place is chosen (locationConfirmed) the times are the install
+                 default's and no prayer is alerted; shown by popup.js until then. -->
+            <section id="alertsOff" class="alerts-off" role="status" hidden>
+              <span id="alertsOffText" data-i18n="alerts_off_notice">Prayer alerts are off until you choose your city.</span>
+              <button type="button" id="chooseCityBtn" class="chip-btn choose-city-btn" data-i18n="choose_city">Choose city</button>
+            </section>
+
             <section id="list" class="list" aria-label="Today's prayer times"></section>
           </div>
         </section>
@@ -180,7 +187,7 @@
                     <span class="pin-ico" aria-hidden="true">📌</span>
                     <div class="pin-text">
                       <strong data-i18n="pin_extension_title">Pin to browser toolbar</strong>
-                      <p data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
+                      <p data-i18n="pin_extension_desc">Click the Extensions icon in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
                     </div>
                   </div>
                   <div class="badge-saved" id="badgeSaved" aria-live="polite">✓ Saved</div>
@@ -431,7 +438,8 @@
               <h2 class="ob-title" data-i18n="onboarding_step_location">Set Your Location</h2>
               <p class="ob-sub">Accurate prayer times calculated for your city.</p>
               <div class="ob-loc-box">
-                <div class="ob-current-loc" id="obCurrentLoc">Makkah, Saudi Arabia</div>
+                <!-- The chosen place, or that none is yet: set by popup.js. -->
+                <div class="ob-current-loc" id="obCurrentLoc">Not chosen yet</div>
                 <button type="button" id="obDetectBtn" class="btn-ghost ob-btn-detect">
                   <span aria-hidden="true">📍</span> <span id="obDetectText" data-i18n="detect_location">Detect location</span>
                 </button>
@@ -466,10 +474,11 @@
             <div class="ob-slide" id="obSlide4">
               <div class="ob-icon" aria-hidden="true">📌</div>
               <h2 class="ob-title" data-i18n="onboarding_step_pin">Pin Extension</h2>
-              <p class="ob-sub" data-i18n="pin_extension_desc">Click the puzzle icon 🧩 in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
+              <p class="ob-sub" data-i18n="pin_extension_desc">Click the Extensions icon in your toolbar and pin Adhan Focus to keep the countdown visible at a glance.</p>
               <button type="button" id="obSimBtn" class="btn-ghost ob-sim-btn" data-i18n="simulate_pause">Test prayer pause (10s)</button>
               <div id="obSimStatus" class="ob-sim-status" hidden>
-                <span>⏸️ Auto-pause test running…</span>
+                <span id="obSimRunning">⏸️ <span data-i18n="simulating_pause">Testing pause…</span></span>
+                <span id="obSimBusy" data-i18n="sim_prayer_in_progress" hidden>A prayer pause is on now. Try the test once it ends.</span>
               </div>
             </div>
           </div>

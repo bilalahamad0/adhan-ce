@@ -554,7 +554,9 @@ body {
   cursor: pointer;
   transition: background .15s;
 }
-.btn-sim:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+.btn-sim:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+.btn-sim:disabled { opacity: .5; cursor: not-allowed; }
+.sim-box .sim-hint { color: var(--text); font-size: 12.5px; }
 
 /* Footer Navigation */
 .welcome-footer {
@@ -593,23 +595,6 @@ body {
   transition: background .15s;
 }
 .btn-secondary:hover { background: rgba(255, 255, 255, .08); }
-
-/* Notification Simulation Banner (for in-page test) */
-.test-banner {
-  margin-top: 12px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 650;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  animation: viewIn .2s var(--ease);
-}
 
 /* Celebration & Confetti */
 .confetti-canvas {

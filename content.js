@@ -41,7 +41,7 @@
   const instanceId = `${Date.now()}.${Math.random()}`;
   window.__adhanCasterInstance = instanceId;
 
-  let state = { settings: null, nextPrayer: null, paused: { active: false } };
+  let state = { settings: null, nextPrayer: null, paused: { active: false }, locationConfirmed: undefined };
   let localPaused = false;
   let pausedEls = [];
   let currentPrayer = null;
@@ -151,6 +151,15 @@
   function effectiveResumeMins() {
     const m = state.settings && state.settings.autoResumeMinutes;
     return typeof m === 'number' && m >= 0 ? m : DEFAULT_AUTO_RESUME_MIN;
+  }
+
+  // When this tab's pause ends on its own: a demo's at its end (`until`), else the
+  // auto-resume window after the pause began; null with no start known.
+  function pauseDueAt() {
+    const p = state.paused;
+    if (p && p.isDemo && Number.isFinite(p.until)) return p.until;
+    const since = (p && p.since) || pauseObservedAt;
+    return since ? since + effectiveResumeMins() * 60000 : null;
   }
 
   // Freeze page scrolling while the focus overlay is up.
@@ -362,13 +371,35 @@
     lockScroll(false);
   }
 
+  // The "Test prayer pause" demo (isDemo) is not the prayer's pause: it never takes
+  // over a real one, and ending it leaves the per-tab fallback armed for the real
+  // prayer. Its Resume ends the demo in every tab (RESUME_DEMO); a real Resume
+  // (RESUME_NOW) would make every tab count the next prayer as handled.
+  function demoPaused() {
+    return !!(state.paused && state.paused.active && state.paused.isDemo);
+  }
+  function realPaused() {
+    return !!(state.paused && state.paused.active && !state.paused.isDemo);
+  }
+  function resumeRequest() {
+    return { type: demoPaused() ? 'RESUME_DEMO' : 'RESUME_NOW' };
+  }
+
+  // Until the user chooses a place (locationConfirmed false) the next prayer is the
+  // install default's, which is not alerted: no heads-up card, no fallback pause.
+  // A missing key (an install from before it) counts as chosen; a dev test fire runs.
+  function alertsOn(np) {
+    return state.locationConfirmed !== false || !!(np && np.test);
+  }
+
   function onFocusResume() {
     if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
+    const request = resumeRequest();
     resumeMedia();
     state.paused = { active: false };
     hideFocusUI();
     render();
-    chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {});
+    chrome.runtime.sendMessage(request).catch(() => {});
   }
 
   function render() {
@@ -388,7 +419,7 @@
       mode = 'focus';
     } else if (isPaused) {
       mode = 'paused';
-    } else if (np && np.ts - now <= windowMs && np.ts - now > -1500) {
+    } else if (np && alertsOn(np) && np.ts - now <= windowMs && np.ts - now > -1500) {
       mode = 'countdown';
       secs = Math.max(0, Math.ceil((np.ts - now) / 1000));
     }
@@ -402,9 +433,8 @@
       fels.fhint.style.display = isStrict ? 'none' : '';
       fels.fname.textContent = prayerLabel((state.paused && state.paused.prayer) || (np && np.name));
       fels.ftime.textContent = (state.paused && state.paused.time) || '';
-      const mins = effectiveResumeMins();
-      const since = (state.paused && state.paused.since) || pauseObservedAt;
-      const rem = since ? since + mins * 60000 - now : -1;
+      const due = pauseDueAt();
+      const rem = due ? due - now : -1;
       fels.fauto.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : '';
       fels.scrim.classList.add('show');
       lockScroll(true);
@@ -420,9 +450,8 @@
 
     if (mode === 'paused') {
       const name = prayerLabel(currentPrayer || (state.paused && state.paused.prayer) || (np && np.name));
-      const mins = effectiveResumeMins();
-      const since = (state.paused && state.paused.since) || pauseObservedAt;
-      const rem = since ? since + mins * 60000 - now : -1;
+      const due = pauseDueAt();
+      const rem = due ? due - now : -1;
       els.card.classList.add('paused');
       els.title.textContent = name;
       els.sub.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : ti('adhan_paused');
@@ -470,10 +499,11 @@
 
   function onResumeClick() {
     if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
+    const request = resumeRequest();
     resumeMedia();
     state.paused = { active: false }; // optimistic; background confirms
     render();
-    chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {});
+    chrome.runtime.sendMessage(request).catch(() => {});
   }
 
   // ---- ticking + sync ----
@@ -509,16 +539,17 @@
   function onResumeBackstop() {
     resumeTimer = null;
     resumeTimerDue = 0;
+    const request = resumeRequest();
     resumeMedia();
     const np = state.nextPrayer;
-    if (np && np.ts) lastHandledTs = Math.max(lastHandledTs, np.ts);
+    if (np && np.ts && request.type === 'RESUME_NOW') lastHandledTs = Math.max(lastHandledTs, np.ts);
     state.paused = { active: false };
     pauseObservedAt = 0;
     hideFocusUI();
     if (isTop) hideUI();
     lockScroll(false);
     if (isTop) {
-      try { chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {}); } catch (_) {}
+      try { chrome.runtime.sendMessage(request).catch(() => {}); } catch (_) {}
     }
   }
 
@@ -569,24 +600,23 @@
       // Isha bug). Falling back to a default window measured from `pauseObservedAt`
       // guarantees every tab eventually resumes on its own.
       if (!pauseObservedAt) pauseObservedAt = now;
-      const mins = effectiveResumeMins();
-      const since = (state.paused && state.paused.since) || pauseObservedAt;
-      const dueAt = since + mins * 60000;
+      const dueAt = pauseDueAt();
       // Arm the wall-clock backstop so the pause still clears if this interval is
       // later throttled/frozen or the context dies before teardown runs.
       armResumeBackstop(dueAt);
       if (now >= dueAt) {
+        const request = resumeRequest();
         resumeMedia();
         // Pin lastHandledTs so the fallback block below can't re-pause for the
-        // prayer we just timed out of.
-        if (np && np.ts) lastHandledTs = Math.max(lastHandledTs, np.ts);
+        // prayer we just timed out of (a demo's was not that prayer's).
+        if (np && np.ts && request.type === 'RESUME_NOW') lastHandledTs = Math.max(lastHandledTs, np.ts);
         state.paused = { active: false };
         pauseObservedAt = 0;
         clearResumeBackstop();
         hideFocusUI();
         render();
         if (isTop) {
-          chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {});
+          chrome.runtime.sendMessage(request).catch(() => {});
         }
         return;
       }
@@ -596,7 +626,7 @@
     }
 
     // Second-accurate fallback in case the background alarm/message is delayed.
-    if (!alreadyPaused && np && now >= np.ts && now - np.ts < STALE_FIRE_MS && lastHandledTs !== np.ts) {
+    if (!alreadyPaused && np && alertsOn(np) && now >= np.ts && now - np.ts < STALE_FIRE_MS && lastHandledTs !== np.ts) {
       lastHandledTs = np.ts;
       pauseMediaFor(np.name);
       // Carry focus intent from settings so the full-screen focus takes over
@@ -617,10 +647,11 @@
   }
 
   function loadState() {
-    chrome.storage.local.get(['settings', 'nextPrayer', 'paused'], (data) => {
+    chrome.storage.local.get(['settings', 'nextPrayer', 'paused', 'locationConfirmed'], (data) => {
       state.settings = data.settings || null;
       state.nextPrayer = data.nextPrayer || null;
       state.paused = data.paused || { active: false };
+      state.locationConfirmed = data.locationConfirmed;
       render();
     });
   }
@@ -630,6 +661,7 @@
     if (changes.lang && isTop) loadI18n();
     if (changes.nextPrayer) state.nextPrayer = changes.nextPrayer.newValue || null;
     if (changes.settings) state.settings = changes.settings.newValue || null;
+    if (changes.locationConfirmed) state.locationConfirmed = changes.locationConfirmed.newValue;
     if (changes.paused) {
       const wasActive = changes.paused.oldValue && changes.paused.oldValue.active;
       state.paused = changes.paused.newValue || { active: false };
@@ -651,12 +683,15 @@
   chrome.runtime.onMessage.addListener((msg) => {
     if (!msg) return;
     if (msg.type === 'PRAYER_NOW') {
+      if (msg.isDemo && realPaused()) return; // the prayer's own pause stands
       pauseMediaFor(msg.prayer);
       state.paused = { active: true, prayer: msg.prayer, time: msg.time, focus: !!msg.focus, since: msg.since };
+      if (msg.isDemo) state.paused.isDemo = true;
+      if (msg.isDemo && Number.isFinite(msg.until)) state.paused.until = msg.until;
       // Treat the broadcast as authoritative handling of this prayer so the
       // 90-second fallback in tick() can't re-fire on tabs that didn't trigger
-      // the fallback themselves.
-      if (state.nextPrayer && state.nextPrayer.ts) {
+      // the fallback themselves. A demo handles no prayer.
+      if (!msg.isDemo && state.nextPrayer && state.nextPrayer.ts) {
         lastHandledTs = Math.max(lastHandledTs, state.nextPrayer.ts);
       }
       render();
@@ -675,10 +710,11 @@
       hideFocusUI();
       render();
     } else if (msg.type === 'RESUME') {
+      if (msg.isDemo && realPaused()) return; // the demo's end, not the prayer's
       resumeMedia();
       // Pin lastHandledTs so the per-tab fallback in tick() can't re-pause for
-      // the just-resumed prayer within its 90s window.
-      if (state.nextPrayer && state.nextPrayer.ts) {
+      // the just-resumed prayer within its 90s window (not after a demo's).
+      if (!msg.isDemo && state.nextPrayer && state.nextPrayer.ts) {
         lastHandledTs = Math.max(lastHandledTs, state.nextPrayer.ts);
       }
       state.paused = { active: false };
