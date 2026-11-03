@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Adhan Caster: Muslim Prayer Times & Auto-Pause",
-  "version": "2.0.0",
+  "name": "Adhan Focus: Muslim Prayer Times & Auto-Pause",
+  "version": "2.1.4",
   "description": "Muslim prayer times with a live Adhan countdown that auto-pauses video & audio in every tab at salah. Free, no ads, private.",
   "minimum_chrome_version": "121",
   "permissions": [
@@ -9,7 +9,7 @@
     "alarms",
     "notifications",
     "scripting",
-    "tabs"
+    "offscreen"
   ],
   "host_permissions": [
     "https://api.aladhan.com/*",
@@ -18,14 +18,11 @@
   ],
   "background": {
     "service_worker": "background.js",
-    "type": "module",
-    "scripts": [
-      "background.js"
-    ]
+    "type": "module"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Adhan Caster — Muslim Prayer Times",
+    "default_title": "Adhan Focus — Muslim Prayer Times",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -58,14 +55,19 @@
       "resources": [
         "icons/icon16.png",
         "icons/icon48.png",
-        "icons/icon128.png"
+        "icons/icon128.png",
+        "audio/chime.mp3"
       ],
       "matches": [
         "http://*/*",
         "https://*/*"
-      ]
+      ],
+      "use_dynamic_url": true
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'none'"
+  },
   "commands": {
     "toggle-focus": {
       "suggested_key": {
@@ -78,12 +80,15 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "adhan-caster@bilalahamad.com",
-      "strict_min_version": "127.0",
+      "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [
-          "none"
+          "locationInfo"
         ]
       }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
     }
   }
 }

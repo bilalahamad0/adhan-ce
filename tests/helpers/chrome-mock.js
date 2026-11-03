@@ -50,9 +50,11 @@ export function makeChrome(opts = {}) {
     notifications: [], // {id, options}
     broadcasts: [], // messages sent via tabs.sendMessage
     injected: [], // tabIds we ran executeScript on
-    badge: { text: '', color: null },
+    badge: { text: '', color: null, textColor: null },
+    title: '',
     sent: [], // runtime.sendMessage payloads from content/popup
     popupOpened: 0,
+    offscreenDoc: null,
     onChanged,
     onMessage,
     onInstalled,
@@ -148,6 +150,15 @@ export function makeChrome(opts = {}) {
         if (target) harness.deadTabs.delete(target.tabId);
       },
     },
+    offscreen: {
+      createDocument: async (opts) => {
+        harness.offscreenDoc = opts;
+      },
+      closeDocument: async () => {
+        harness.offscreenDoc = null;
+      },
+      hasDocument: async () => !!harness.offscreenDoc,
+    },
     notifications: {
       create: async (id, options) => {
         // Firefox profile: the WebExtensions schema rejects the Chrome-only
@@ -159,9 +170,13 @@ export function makeChrome(opts = {}) {
         harness.notifications.push({ id, options });
         return id;
       },
+      // Gecko leaves the API members it marks unsupported out of the namespace
+      // (no key at all), update() among them; background.js keys button support
+      // off its presence.
+      ...(opts.firefox ? {} : { update: async () => true }),
       onClicked: { addListener: notifClicked.addListener },
-      // Firefox exposes onButtonClicked as a no-op stub (never fires); Chrome
-      // delivers real clicks. Either way addListener is safe to call.
+      // Firefox exposes onButtonClicked as a stub (never fires, and addListener
+      // logs an "unimplemented" warning); Chrome delivers real clicks.
       onButtonClicked: { addListener: notifButtonClicked.addListener },
     },
     action: {
@@ -170,6 +185,12 @@ export function makeChrome(opts = {}) {
       },
       setBadgeBackgroundColor: async ({ color }) => {
         harness.badge.color = color;
+      },
+      setBadgeTextColor: async ({ color }) => {
+        harness.badge.textColor = color;
+      },
+      setTitle: async ({ title }) => {
+        harness.title = title;
       },
       // Firefox historically only allows openPopup() from a user gesture; the
       // production code guards it with `?.()`, so the firefox profile omits it.

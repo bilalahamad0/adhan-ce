@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Dependency-free PNG icon generator for Adhan Caster Pro.
+ * Dependency-free PNG icon generator for Adhan Focus.
  * Renders a crescent + sparkle on a green rounded square at 16/48/128 px
  * using only Node's built-in zlib. Re-run with `node generate-icons.cjs`.
  */
@@ -109,7 +109,7 @@ function renderPNG(size) {
   ]);
 }
 
-for (const size of [16, 48, 128]) {
+for (const size of [16, 48, 64, 128]) {
   const out = path.join(__dirname, `icon${size}.png`);
   fs.writeFileSync(out, renderPNG(size));
   console.log(`wrote ${out} (${size}x${size})`);

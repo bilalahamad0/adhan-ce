@@ -29,8 +29,9 @@ import { fileURLToPath } from 'node:url';
 
 export const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_EXTENSION_ID = 'jfjknglldcdminelckmmfdbnlikiogia';
+export const DEFAULT_PUBLISHER_ID = '1441ca88-135b-4f7f-8ea0-a310657241d9';
+export const API_ROOT = 'https://chromewebstore.googleapis.com';
 export const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-export const CWS_ITEM_URL = 'https://www.googleapis.com/chromewebstore/v1.1/items';
 
 export function loadDotEnv() {
   const envPath = join(REPO, '.env');
@@ -104,16 +105,16 @@ export async function refreshAccessToken({
 
 export async function queryItemStatus({
   token,
-  extId,
-  apiUrl = CWS_ITEM_URL,
+  extId = DEFAULT_EXTENSION_ID,
+  publisherId = DEFAULT_PUBLISHER_ID,
+  apiRoot = API_ROOT,
   fetchFn = fetch,
 }) {
-  const url = `${apiUrl}/${extId}?projection=draft`;
+  const url = `${apiRoot}/v2/publishers/${publisherId}/items/${extId}:fetchStatus`;
   const res = await fetchFn(url, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
-      'x-goog-api-version': '2',
     },
   });
 
@@ -160,8 +161,10 @@ export async function runHeartbeat({
   const modeLabel = modeDescriptions[selectedMode] || selectedMode.toUpperCase();
 
   const extId = env.CWS_EXTENSION_ID || DEFAULT_EXTENSION_ID;
+  const publisherId = env.CWS_PUBLISHER_ID || DEFAULT_PUBLISHER_ID;
   log(`• Heartbeat Mode: ${modeLabel}`);
   log(`• Extension ID:   ${extId}`);
+  log(`• Publisher ID:   ${publisherId}`);
 
   if (dryRun) {
     log('✓ Dry run: heartbeat configuration verified (no network calls made).');
@@ -195,13 +198,13 @@ export async function runHeartbeat({
 
   log('• Querying Chrome Web Store API (read-only item check)…');
   const itemResult = await withRetry(
-    () => queryItemStatus({ token: accessToken, extId, fetchFn }),
+    () => queryItemStatus({ token: accessToken, extId, publisherId, fetchFn }),
     { maxRetries: 2, delayMs: retryDelayMs, warn }
   );
 
   if (itemResult.ok) {
-    const crxVer = itemResult.data.crxVersion ? `v${itemResult.data.crxVersion}` : 'active';
-    const state = itemResult.data.uploadState || 'SUCCESS';
+    const crxVer = itemResult.data.crxVersion ? `v${itemResult.data.crxVersion}` : (itemResult.data.submittedItemRevisionStatus?.distributionChannels?.[0]?.crxVersion || 'active');
+    const state = itemResult.data.state || itemResult.data.uploadState || 'SUCCESS';
     log(`✓ Chrome Web Store API query succeeded (state: ${state}, version: ${crxVer}).`);
   } else {
     warn(

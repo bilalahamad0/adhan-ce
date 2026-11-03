@@ -1,16 +1,20 @@
-// Adhan Caster — popup UI logic.
+// Adhan Focus — popup UI logic.
 // A fixed-frame popup with three tabbed views (Home / Tracker / Settings) that
 // swap in place (the popup never resizes), an SVG analog clock that ticks in the
-// selected location's timezone, an Appearance control (System / Light / Dark), a
-// prayer-log Tracker (check-offs + streaks + a month heatmap), and on-device
-// Hijri dates. Pure helpers live in ./lib.
-import { formatCountdown, ymd, PRAYER_ORDER } from './lib/schedule.js';
+// selected location's time (see clockParts), an Appearance control (System /
+// Light / Dark), a prayer-log Tracker (check-offs + streaks + a month heatmap),
+// and on-device Hijri dates. Pure helpers live in ./lib.
+import { formatCountdown, ymd, PRAYER_ORDER, locationClock, prayerAdjustments, ADJUST_LIMIT_MIN } from './lib/schedule.js';
 import { dayCount, totalLogged, completeStreak, daysInMonth, firstWeekday, addMonths, monthKey } from './lib/tracker.js';
 import { emptyUsage, recent, activeDays } from './lib/usage.js';
-import { searchPlaces } from './lib/geocode.js';
-import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir } from './lib/i18n.js';
+import { searchPlaces, placeToSave, detectLocationByIp } from './lib/geocode.js';
+import { initI18n, setLang, t, getLang, applyStaticI18n, applyDir, placeDir } from './lib/i18n.js';
 import { formatHijri } from './lib/hijri.js';
 import { DEV } from './lib/buildinfo.js';
+import { playChime } from './lib/audio.js';
+import { containsPii } from './lib/privacy-guard.js';
+
+
 
 const $ = (id) => document.getElementById(id);
 let st = null;
@@ -57,6 +61,48 @@ function populateMethods() {
   }
 }
 
+// Signed minutes as shown: "+2", "−1", "0".
+const signedMin = (n) => (n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0');
+
+// The per-prayer minute adjustment selects: -ADJUST_LIMIT_MIN … +ADJUST_LIMIT_MIN,
+// plus "All prayers", which sets the five at once. It shows their value while they
+// agree and "—" once they differ: each prayer keeps a single number, the one applied.
+const ADJUST_MIXED = '';
+function addAdjustOptions(sel) {
+  for (let n = -ADJUST_LIMIT_MIN; n <= ADJUST_LIMIT_MIN; n++) {
+    const opt = document.createElement('option');
+    opt.value = String(n);
+    opt.textContent = signedMin(n);
+    sel.appendChild(opt);
+  }
+}
+function syncAdjustAll() {
+  const all = $('adjust-all');
+  if (!all) return;
+  const values = PRAYER_ORDER.map((name) => $('adjust-' + name) && $('adjust-' + name).value);
+  all.value = values.every((v) => v === values[0]) ? values[0] : ADJUST_MIXED;
+}
+function populateAdjustments() {
+  for (const name of PRAYER_ORDER) {
+    const sel = $('adjust-' + name);
+    if (!sel || sel.options.length) continue;
+    addAdjustOptions(sel);
+    sel.addEventListener('change', syncAdjustAll);
+  }
+  const all = $('adjust-all');
+  if (!all || all.options.length) return;
+  const mixed = document.createElement('option');
+  mixed.value = ADJUST_MIXED;
+  mixed.textContent = '\u2014';
+  mixed.disabled = true; // shown when the five differ; not a choice
+  all.appendChild(mixed);
+  addAdjustOptions(all);
+  all.addEventListener('change', () => {
+    if (all.value === ADJUST_MIXED) return;
+    for (const name of PRAYER_ORDER) if ($('adjust-' + name)) $('adjust-' + name).value = all.value;
+  });
+}
+
 // ───────────────────────────── appearance / theme ─────────────────────────
 // Persisted UI prefs (local-only; the worker doesn't need them).
 async function getPref(key, fallback) {
@@ -73,16 +119,197 @@ function applyClockStyle(style) {
   c.classList.toggle('is-analog', style !== 'digital');
 }
 
-// Control-Center toggle tiles are backed by hidden checkboxes (#enabled etc.),
-// so the existing render/save logic (and tests) keep using the checkboxes.
-const TOGGLE_TILES = [['enabled', 'enabledTile'], ['focusMode', 'focusTile'], ['showHijri', 'hijriTile']];
+function isStrictFocusActive() {
+  return !!(
+    st &&
+    st.paused &&
+    st.paused.active &&
+    st.settings &&
+    st.settings.strictFocus
+  );
+}
+
+// Segmented toggle controls backed by hidden inputs for state and testing compatibility.
+const TOGGLE_CONFIG = [
+  { cb: 'enabled', tile: 'enabledTile', onVal: 'enabled', offVal: 'disabled', tagOnKey: 'tag_enabled', tagOffKey: 'tag_disabled', tagOnDef: 'Enabled', tagOffDef: 'Disabled' },
+  { cb: 'focusMode', tile: 'focusTile', onVal: 'fullscreen', offVal: 'subtle', tagOnKey: 'tag_fullscreen', tagOffKey: 'tag_subtle_banner', tagOnDef: 'Fullscreen', tagOffDef: 'Subtle Banner' },
+  { cb: 'strictFocus', tile: 'strictFocusTile', onVal: 'strict', offVal: 'casual', tagOnKey: 'tag_strict_focus', tagOffKey: 'tag_can_resume', tagOnDef: 'Strict Focus', tagOffDef: 'Can Resume' },
+  { cb: 'adhanChime', tile: 'chimeTile', onVal: 'on', offVal: 'off', tagOnKey: 'tag_on', tagOffKey: 'tag_off', tagOnDef: 'ON', tagOffDef: 'OFF' },
+  { cb: 'badgeCountdown', tile: 'badgeTile', onVal: 'on', offVal: 'off', tagOnKey: 'tag_on', tagOffKey: 'tag_off', tagOnDef: 'ON', tagOffDef: 'OFF' },
+];
+const TOGGLE_TILES = TOGGLE_CONFIG.map((c) => [c.cb, c.tile]);
+
+let focusSubpanelOpen = false;
+let badgeSubpanelOpen = false;
+
+function setFocusSubpanel(open) {
+  focusSubpanelOpen = open;
+  if ($('focusSubpanel')) $('focusSubpanel').hidden = !focusSubpanelOpen;
+  if ($('focusExpandBtn')) {
+    $('focusExpandBtn').classList.toggle('is-expanded', focusSubpanelOpen);
+    $('focusExpandBtn').setAttribute('aria-expanded', String(focusSubpanelOpen));
+  }
+}
+
+function setBadgeSubpanel(open) {
+  badgeSubpanelOpen = open;
+  if ($('badgeSubpanel')) $('badgeSubpanel').hidden = !badgeSubpanelOpen;
+  if ($('badgeExpandBtn')) {
+    $('badgeExpandBtn').classList.toggle('is-expanded', badgeSubpanelOpen);
+    $('badgeExpandBtn').setAttribute('aria-expanded', String(badgeSubpanelOpen));
+  }
+}
+
+function wireSubpanelToggles() {
+  $('focusExpandBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setFocusSubpanel(!focusSubpanelOpen);
+  });
+  $('badgeExpandBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setBadgeSubpanel(!badgeSubpanelOpen);
+  });
+}
+
+function syncBadgeModeSeg() {
+  const seg = $('badgeModeSeg');
+  const sel = $('badgeMode');
+  if (!seg || !sel) return;
+  const val = sel.value || 'auto';
+  const opts = [...seg.querySelectorAll('.seg-opt')];
+  opts.forEach((o, i) => {
+    const isMatch = o.dataset.val === val;
+    o.classList.toggle('is-active', isMatch);
+    o.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+    if (isMatch) seg.style.setProperty('--i', String(i));
+  });
+}
+
 function syncToggleTiles() {
-  for (const [cb, tile] of TOGGLE_TILES) {
-    const el = $(tile);
-    if (!el) continue;
-    const on = $(cb).checked;
+  const strictActive = isStrictFocusActive();
+  for (const cfg of TOGGLE_CONFIG) {
+    const el = $(cfg.tile);
+    const cb = $(cfg.cb);
+    if (!el || !cb) continue;
+    const on = cb.checked;
     el.classList.toggle('on', on);
     el.setAttribute('aria-pressed', on ? 'true' : 'false');
+
+    // If strict focus is currently active during salah, disable and lock tiles so
+    // user cannot turn strictFocus or focusMode off intermittently.
+    if (strictActive && (cfg.tile === 'strictFocusTile' || cfg.tile === 'focusTile')) {
+      el.classList.add('is-disabled');
+      el.setAttribute('aria-disabled', 'true');
+      el.querySelectorAll('.seg-opt').forEach((b) => (b.disabled = true));
+    } else {
+      el.classList.remove('is-disabled');
+      el.removeAttribute('aria-disabled');
+      el.querySelectorAll('.seg-opt').forEach((b) => (b.disabled = false));
+    }
+
+    // Update segmented control buttons and thumb
+    const opts = [...el.querySelectorAll('.seg-opt')];
+    if (opts.length) {
+      const activeVal = on ? cfg.onVal : cfg.offVal;
+      let activeIdx = 0;
+      opts.forEach((o, i) => {
+        const isMatch = o.dataset.val === activeVal;
+        o.classList.toggle('is-active', isMatch);
+        o.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+        if (isMatch) activeIdx = i;
+      });
+      el.style.setProperty('--i', String(activeIdx));
+    }
+
+    const tag = $(cfg.tile.replace('Tile', 'Tag')) || el.querySelector('.cc-tag');
+    if (tag) {
+      if (strictActive && cfg.tile === 'strictFocusTile') {
+        tag.textContent = t('locked') || 'Locked';
+      } else {
+        const onText = t(cfg.tagOnKey) || cfg.tagOnDef;
+        const offText = t(cfg.tagOffKey) || t('tag_casual_focus') || cfg.tagOffDef;
+        tag.textContent = on ? onText : offText;
+      }
+    }
+  }
+
+  // Show strictFocus warning hint only when strictFocus is selected (Strict Focus mode)
+  if ($('strictFocusHint')) {
+    const strictOn = $('strictFocus') ? $('strictFocus').checked : false;
+    $('strictFocusHint').hidden = !strictOn;
+  }
+
+  // Hide and disable the toolbar Resume button during enforced strict focus
+  if ($('resumeBtn')) {
+    if (strictActive) {
+      $('resumeBtn').hidden = true;
+      $('resumeBtn').style.display = 'none';
+      $('resumeBtn').disabled = true;
+      $('resumeBtn').classList.add('is-disabled');
+      $('resumeBtn').setAttribute('aria-disabled', 'true');
+    } else {
+      $('resumeBtn').hidden = false;
+      $('resumeBtn').style.display = '';
+      $('resumeBtn').disabled = false;
+      $('resumeBtn').classList.remove('is-disabled');
+      $('resumeBtn').removeAttribute('aria-disabled');
+    }
+  }
+
+  syncFocusSettings();
+  syncBadgeSettings();
+}
+
+function syncFocusSettings() {
+  const focusOn = $('focusMode') ? $('focusMode').checked : false;
+  if ($('resumeMinRow')) $('resumeMinRow').hidden = !focusOn;
+  if ($('strictFocusTileWrap')) $('strictFocusTileWrap').hidden = !focusOn;
+  if ($('focusSubpanel')) $('focusSubpanel').hidden = !focusSubpanelOpen;
+}
+
+function syncBadgeSettings() {
+  const badgeOn = $('badgeCountdown') ? $('badgeCountdown').checked : true;
+  const isManual = $('badgeMode') ? $('badgeMode').value === 'manual' : false;
+  if ($('pinHint')) $('pinHint').hidden = !badgeOn;
+  if ($('badgeModeRow')) $('badgeModeRow').hidden = !badgeOn;
+  if ($('badgeHoursRow')) $('badgeHoursRow').hidden = !badgeOn || !isManual;
+  if ($('badgeExpandBtn')) {
+    $('badgeExpandBtn').style.display = badgeOn ? '' : 'none';
+  }
+  if (!badgeOn) {
+    badgeSubpanelOpen = false;
+    if ($('badgeSubpanel')) $('badgeSubpanel').hidden = true;
+    if ($('badgeExpandBtn')) {
+      $('badgeExpandBtn').classList.remove('is-expanded');
+      $('badgeExpandBtn').setAttribute('aria-expanded', 'false');
+    }
+  } else {
+    if ($('badgeSubpanel')) $('badgeSubpanel').hidden = !badgeSubpanelOpen;
+  }
+}
+
+let _tileSaveTimer = null;
+async function autoSaveToggleSettings() {
+  syncBadgeSettings();
+  syncFocusSettings();
+  const settings = {
+    enabled: $('enabled') ? $('enabled').checked : true,
+    focusMode: $('focusMode') ? $('focusMode').checked : false,
+    strictFocus: $('strictFocus') ? $('strictFocus').checked : false,
+    adhanChime: $('adhanChime') ? $('adhanChime').checked : true,
+    badgeCountdown: $('badgeCountdown') ? $('badgeCountdown').checked : true,
+    badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
+    badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
+    autoResumeMinutes: Math.max(0, parseInt($('resumeMin') ? $('resumeMin').value : 5, 10) || 5),
+    leadSeconds: Math.max(15, parseInt($('leadSeconds') ? $('leadSeconds').value : 30, 10) || 30),
+  };
+  await send({ type: 'SAVE_SETTINGS', settings });
+  // Flash "✓ Saved" indicator inside badge subpanel if open
+  const el = $('badgeSaved');
+  if (el && $('badgeCountdown') && $('badgeCountdown').checked) {
+    el.classList.add('visible');
+    clearTimeout(_tileSaveTimer);
+    _tileSaveTimer = setTimeout(() => el.classList.remove('visible'), 1800);
   }
 }
 
@@ -114,59 +341,55 @@ function initSeg(id, value, onPick) {
 function buildClockFace() {
   const el = $('clock');
   if (!el) return;
-  let ticks = '';
+  const ticks = svgEl('g', { class: 'cf-ticks' });
   for (let i = 0; i < 60; i++) {
     const maj = i % 5 === 0;
     const a = (i / 60) * Math.PI * 2;
     const r1 = maj ? 78 : 83;
     const r2 = 88;
-    const x1 = (100 + r1 * Math.sin(a)).toFixed(1);
-    const y1 = (100 - r1 * Math.cos(a)).toFixed(1);
-    const x2 = (100 + r2 * Math.sin(a)).toFixed(1);
-    const y2 = (100 - r2 * Math.cos(a)).toFixed(1);
-    ticks += `<line class="cf-tick${maj ? ' maj' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    ticks.appendChild(
+      svgEl('line', {
+        class: `cf-tick${maj ? ' maj' : ''}`,
+        x1: (100 + r1 * Math.sin(a)).toFixed(1),
+        y1: (100 - r1 * Math.cos(a)).toFixed(1),
+        x2: (100 + r2 * Math.sin(a)).toFixed(1),
+        y2: (100 - r2 * Math.cos(a)).toFixed(1),
+      }),
+    );
   }
-  el.innerHTML =
-    `<svg class="clock-face" viewBox="0 0 200 200" role="img" aria-label="Clock">` +
-    `<circle class="cf-track" cx="100" cy="100" r="92"/>` +
-    `<g class="cf-ticks">${ticks}</g>` +
-    `<line class="cf-hand cf-hour" id="handHour" x1="100" y1="110" x2="100" y2="52"/>` +
-    `<line class="cf-hand cf-min" id="handMin" x1="100" y1="113" x2="100" y2="36"/>` +
-    `<line class="cf-hand cf-sec" id="handSec" x1="100" y1="116" x2="100" y2="30"/>` +
-    `<circle class="cf-cap" cx="100" cy="100" r="5.5"/>` +
-    `<circle class="cf-cap-gold" cx="100" cy="100" r="2.5"/>` +
-    `</svg>` +
-    `<div class="clock-digital" id="clockDigital"></div>`;
+  const svg = svgEl('svg', { class: 'clock-face', viewBox: '0 0 200 200', role: 'img', 'aria-label': 'Clock' }, [
+    svgEl('circle', { class: 'cf-track', cx: 100, cy: 100, r: 92 }),
+    ticks,
+    svgEl('line', { class: 'cf-hand cf-hour', id: 'handHour', x1: 100, y1: 110, x2: 100, y2: 52 }),
+    svgEl('line', { class: 'cf-hand cf-min', id: 'handMin', x1: 100, y1: 113, x2: 100, y2: 36 }),
+    svgEl('line', { class: 'cf-hand cf-sec', id: 'handSec', x1: 100, y1: 116, x2: 100, y2: 30 }),
+    svgEl('circle', { class: 'cf-cap', cx: 100, cy: 100, r: 5.5 }),
+    svgEl('circle', { class: 'cf-cap-gold', cx: 100, cy: 100, r: 2.5 }),
+  ]);
+  const digital = document.createElement('div');
+  digital.className = 'clock-digital';
+  digital.id = 'clockDigital';
+  el.replaceChildren(svg, digital);
 }
 
-function clockParts(tz) {
-  const opts = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
-  if (tz) opts.timeZone = tz;
-  let parts;
-  try {
-    parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(new Date());
-  } catch (_) {
-    parts = new Intl.DateTimeFormat('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
-  }
-  const g = (type) => Number((parts.find((p) => p.type === type) || {}).value || 0);
-  return { h: g('hour') % 12, m: g('minute'), s: g('second') };
+// The location's wall clock comes from locationClock (Aladhan's UTC offsets when
+// this browser's tz data disagrees with them, e.g. Morocco's +00 read as +01), as
+// a Date whose UTC fields read it — so it is formatted in 'UTC', never in the zone.
+function clockParts(schedule) {
+  const d = locationClock(schedule);
+  return { h: d.getUTCHours() % 12, m: d.getUTCMinutes(), s: d.getUTCSeconds() };
 }
-function fmtDigital(tz, withSeconds) {
-  const opts = { hour: 'numeric', minute: '2-digit', hour12: true };
+function fmtDigital(schedule, withSeconds) {
+  const opts = { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' };
   if (withSeconds) opts.second = '2-digit';
-  if (tz) opts.timeZone = tz;
-  try {
-    return new Date().toLocaleTimeString('en-US', opts);
-  } catch (_) {
-    return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  }
+  return locationClock(schedule).toLocaleTimeString('en-US', opts);
 }
 
 function updateClock() {
-  const tz = st && st.schedule && st.schedule.tz;
+  const schedule = (st && st.schedule) || null;
   const digital = $('clock') && $('clock').classList.contains('is-digital');
 
-  const { h, m, s } = clockParts(tz);
+  const { h, m, s } = clockParts(schedule);
   const setHand = (id, deg) => {
     const el = $(id);
     if (el) el.setAttribute('transform', `rotate(${deg.toFixed(2)} 100 100)`);
@@ -178,11 +401,19 @@ function updateClock() {
   const dig = $('clockDigital');
   if (dig) {
     if (digital) {
-      const str = fmtDigital(tz, false);
+      const str = fmtDigital(schedule, false);
       const mt = str.match(/^(.*?)\s*([AP]M)$/i);
-      dig.innerHTML = mt ? `${mt[1]}<span class="ampm">${mt[2]}</span>` : str;
+      if (mt) {
+        dig.textContent = mt[1];
+        const ap = document.createElement('span');
+        ap.className = 'ampm';
+        ap.textContent = mt[2];
+        dig.appendChild(ap);
+      } else {
+        dig.textContent = str;
+      }
     } else {
-      dig.textContent = fmtDigital(tz, true);
+      dig.textContent = fmtDigital(schedule, true);
     }
   }
 }
@@ -208,9 +439,21 @@ let searchAbort = null;
 function placeLabel(p) {
   return [p.city, p.state, p.country].filter(Boolean).join(', ');
 }
+// The saved place as shown: as it was found, when that was in the UI language
+// (see placeToSave), else its stored English names.
+function shownLabel(p) {
+  return p.placeLabel && p.placeLabel.lang === localeFor() && p.placeLabel.text ? p.placeLabel.text : placeLabel(p);
+}
+// The place the settings hold, labelled as shown, or null.
+function savedPlace(settings) {
+  if (!settings.city) return null;
+  const place = { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon, placeLabel: settings.placeLabel || null, saved: true };
+  place.label = shownLabel(place);
+  return place;
+}
 function renderCityResults(items) {
   const box = $('cityResults');
-  box.innerHTML = '';
+  box.replaceChildren();
   if (!items.length) {
     box.hidden = true;
     return;
@@ -227,23 +470,29 @@ function renderCityResults(items) {
   }
   box.hidden = false;
 }
+function showPlace(label) {
+  $('city').value = label;
+  $('locLabel').textContent = label;
+  $('locLabel').title = label; // the whole name, should a long one still clip
+  $('city').dir = $('locLabel').dir = placeDir(label);
+}
 function choosePlace(p) {
   selectedPlace = p;
-  $('city').value = p.label;
-  $('locLabel').textContent = p.label;
+  showPlace(p.label);
   $('cityResults').hidden = true;
 }
 async function doCitySearch() {
   const q = $('city').value;
   selectedPlace = null;
-  if (q.trim().length < 2) {
+  if (q.trim().length < 2 || containsPii(q)) {
     $('cityResults').hidden = true;
     return;
   }
+
   try {
     if (searchAbort) searchAbort.abort();
     searchAbort = new AbortController();
-    const items = await searchPlaces(q, { signal: searchAbort.signal });
+    const items = await searchPlaces(q, { signal: searchAbort.signal, lang: localeFor() });
     renderCityResults(items.slice(0, 8));
   } catch (_) {
     /* aborted or offline */
@@ -256,35 +505,100 @@ async function load() {
   renderAll();
 }
 
+// State the worker changes on its own — the pause at a prayer and its resume, the
+// next prayer, a new day's times, the activity counts — with GET_STATE's value for
+// a key that is gone. A popup left open across a prayer kept its countdown until
+// reopened. Taken from the change itself: GET_STATE stores nextPrayer, which can
+// wake this listener again.
+const LIVE_STATE = { paused: { active: false }, nextPrayer: null, schedule: null, usage: null };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function onStorageChange(changes, area) {
+  if (area !== 'local' || !st) return;
+  let live = false;
+  let usage = false;
+  for (const k of Object.keys(LIVE_STATE)) {
+    if (!(k in changes)) continue;
+    const value = changes[k].newValue !== undefined ? changes[k].newValue : LIVE_STATE[k];
+    if (same(value, st[k])) continue; // Firefox reports a write of the same value too
+    st[k] = value;
+    if (k === 'usage') usage = true;
+    else live = true;
+  }
+  // Saved settings (a toggle here, the worker's strict-focus hold): what renderLive
+  // reads of them stays current — never the Settings fields being edited.
+  const settings = changes.settings && changes.settings.newValue;
+  if (settings && !same(settings, st.settings)) {
+    // A place saved elsewhere (the welcome page, another popup) shows here too,
+    // unless the field holds a search or a pick not yet saved (which any toggle's
+    // autosave would otherwise throw away, two places sharing a label unseen).
+    const untouched = selectedPlace ? selectedPlace.saved === true && $('city').value.trim() === selectedPlace.label : !$('city').value.trim();
+    st.settings = { ...st.settings, ...settings };
+    if (untouched) {
+      selectedPlace = savedPlace(st.settings);
+      showPlace(selectedPlace ? selectedPlace.label : '');
+      if (!selectedPlace) $('locLabel').textContent = '—';
+    }
+    live = true;
+  }
+  if (live) renderLive(); // rebuilds the prayer list: only for a real change
+  if (usage) renderUsage();
+}
+
+// After Resume or Focus: the state they changed, without renderAll, which would put
+// the saved settings back into Settings fields being edited (the banner shows over
+// Settings too).
+async function refreshLive() {
+  const s = await send({ type: 'GET_STATE' });
+  if (!s) return;
+  st = s;
+  renderLive();
+  renderUsage();
+}
+
 function renderAll() {
   if (!st) return;
-  const { settings, schedule, paused } = st;
+  const { settings } = st;
 
   $('enabled').checked = settings.enabled !== false;
   $('focusMode').checked = settings.focusMode === true;
+  if ($('strictFocus')) $('strictFocus').checked = settings.strictFocus === true;
+  if ($('adhanChime')) $('adhanChime').checked = settings.adhanChime !== false;
   $('method').value = String(settings.method != null ? settings.method : 2);
   $('school').value = String(settings.school != null ? settings.school : 0);
-  $('showHijri').checked = settings.showHijri !== false;
   $('hijriOffset').value = String(settings.hijriOffset || 0);
+  const adjust = prayerAdjustments(settings.adjustMinutes);
+  for (const name of PRAYER_ORDER) if ($('adjust-' + name)) $('adjust-' + name).value = String(adjust[name]);
+  syncAdjustAll();
+  $('badgeCountdown').checked = settings.badgeCountdown !== false;
+  if ($('badgeMode')) $('badgeMode').value = settings.badgeMode === 'manual' ? 'manual' : 'auto';
+  if ($('badgeManualHours')) $('badgeManualHours').value = String(settings.badgeManualHours || 2);
   syncToggleTiles();
+  syncBadgeModeSeg();
+  syncBadgeSettings();
+  syncFocusSettings();
 
-  const place = settings.city
-    ? { city: settings.city, state: settings.state || '', country: settings.country || '', lat: settings.lat, lon: settings.lon }
-    : null;
-  if (place) place.label = placeLabel(place);
+  const place = savedPlace(settings);
   selectedPlace = place;
-  $('city').value = place ? place.label : '';
+  showPlace(place ? place.label : '');
+  if (!place) $('locLabel').textContent = '—';
   $('resumeMin').value = settings.autoResumeMinutes != null ? settings.autoResumeMinutes : 5;
   $('leadSeconds').value = String(settings.leadSeconds || 30);
-  $('locLabel').textContent = place ? place.label : '—';
+  renderLive();
+  renderUsage();
+}
 
-  // Header date (Gregorian) in the location's timezone. The Hijri date lives in
-  // the Tracker (not the header).
+// The parts drawn from what the worker changes on its own while the popup is open
+// (see LIVE_STATE) — never the Settings fields, so an edit in progress survives.
+function renderLive() {
+  const { schedule, paused } = st;
+  syncToggleTiles(); // strict focus locks two tiles while a prayer's pause lasts
+
+  // Header date (Gregorian) at the location (see clockParts). The Hijri date lives
+  // in the Tracker (not the header).
   try {
-    const tz = schedule && schedule.tz;
     $('headDate').textContent = new Intl.DateTimeFormat(localeFor(), {
-      weekday: 'short', day: 'numeric', month: 'short', timeZone: tz || undefined,
-    }).format(new Date());
+      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+    }).format(locationClock(schedule || null));
   } catch (_) {}
 
   if (paused && paused.active) {
@@ -293,6 +607,9 @@ function renderAll() {
       prayer: paused.prayer ? t('prayer_' + paused.prayer) : t('prayer_generic'),
     });
     $('focusBtn').hidden = paused.focus === true;
+    const isStrict = isStrictFocusActive();
+    $('resumeBtn').hidden = isStrict;
+    $('resumeBtn').style.display = isStrict ? 'none' : '';
   } else {
     $('pausedBanner').hidden = true;
   }
@@ -301,11 +618,12 @@ function renderAll() {
   renderList();
   updateClock();
   if (trackerActive()) renderTracker();
-  renderUsage();
 
   $('updated').textContent =
     schedule && schedule.fetchedAt
-      ? t('updated', { time: new Date(schedule.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
+      ? t('updated', {
+          time: locationClock(schedule, schedule.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }),
+        })
       : '';
 }
 
@@ -319,34 +637,57 @@ function renderNext() {
   }
   $('nextName').textContent = t('prayer_' + np.name);
   $('nextTime').textContent = np.time;
-  $('nextCountdown').textContent = t('next_in', { time: formatCountdown(np.ts - Date.now()) });
+  $('nextCountdown').textContent = nextIn(np.ts);
+}
+
+// "in 4m 13s" until `ts`, its units too in the UI language. The digits stay Latin,
+// as in the clock and the prayer times beside it.
+function nextIn(ts) {
+  const units = { h: t('countdown_h'), m: t('countdown_m'), s: t('countdown_s') };
+  return t('next_in', { time: formatCountdown(ts - Date.now(), units) });
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-function ico(paths, cls) {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('class', 'pico ' + (cls || ''));
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  svg.innerHTML = paths;
-  return svg;
+// Build an SVG element from a tag + attribute map (+ optional children). Used
+// instead of innerHTML so no markup string is ever parsed into the DOM — the
+// popup stays injection-proof and matches content.js's DOM-only style.
+function svgEl(tag, attrs, children) {
+  const el = document.createElementNS(SVG_NS, tag);
+  if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (children) for (const c of children) el.appendChild(c);
+  return el;
 }
-const ICO_SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
-const ICO_DOT = '<circle cx="12" cy="12" r="3.4"/>';
+function ico(parts, cls) {
+  return svgEl(
+    'svg',
+    {
+      viewBox: '0 0 24 24',
+      class: 'pico ' + (cls || ''),
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    },
+    parts.map(([tag, attrs]) => svgEl(tag, attrs)),
+  );
+}
+// Icon paths as [tag, attrs] specs (were raw SVG markup strings).
+const ICO_SUN = [
+  ['circle', { cx: 12, cy: 12, r: 4 }],
+  ['path', { d: 'M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4' }],
+];
+const ICO_DOT = [['circle', { cx: 12, cy: 12, r: 4.2, fill: 'currentColor', stroke: 'none' }]];
 
 function renderList() {
   const wrap = $('list');
-  wrap.innerHTML = '';
+  wrap.replaceChildren();
   const sched = st.schedule;
   if (!sched || !sched.prayers) return;
   const now = Date.now();
   const nextName = st.nextPrayer && st.nextPrayer.name;
 
-  const makeRow = (cls, icon, name, time, { tomorrow = false, prayer = null } = {}) => {
+  const makeRow = (cls, icon, name, time, { tomorrow = false, prayer = null, adjustMin = 0 } = {}) => {
     const row = document.createElement('div');
     row.className = 'row' + (cls ? ' ' + cls : '');
     row.appendChild(icon);
@@ -357,6 +698,15 @@ function renderList() {
     const pt = document.createElement('span');
     pt.className = 'ptime';
     pt.textContent = time;
+    if (adjustMin) {
+      // Moved by the user's adjustment (Settings): say so, as aladhan.com shows the time unmoved.
+      const adj = document.createElement('span');
+      adj.className = 'adj';
+      adj.textContent = signedMin(adjustMin);
+      // Isolated left-to-right, so an Arabic or Urdu sentence keeps "+2", not "2+".
+      adj.title = t('adjusted_by', { min: `\u2066${signedMin(adjustMin)}\u2069` });
+      pt.appendChild(adj);
+    }
     if (tomorrow) {
       const em = document.createElement('span');
       em.className = 'em';
@@ -372,7 +722,7 @@ function renderList() {
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = prayedToday(prayer);
-      cb.disabled = prayerLocked(logToday(), prayer); // upcoming prayer — not yet markable
+      cb.disabled = !!tomorrow || prayerLocked(logToday(), prayer); // upcoming prayer — not yet markable
       cb.setAttribute('aria-label', t('mark_prayed', { prayer: name }));
       cb.addEventListener('change', () => togglePrayer(logToday(), prayer));
       pcheck.appendChild(cb);
@@ -384,8 +734,11 @@ function renderList() {
   sched.prayers.forEach((p) => {
     const past = p.ts < now;
     const isNext = p.name === nextName;
-    const cls = [past ? 'past' : '', isNext ? 'next' : ''].filter(Boolean).join(' ');
-    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past, prayer: p.name });
+    const cls = [past ? 'past' : '', isNext ? 'next' : '', 'p-' + p.name.toLowerCase()].filter(Boolean).join(' ');
+    // The prayer paused for is not tomorrow's: the worker moves nextPrayer on just
+    // after it stores the pause.
+    const pausedFor = st.paused && st.paused.active && st.paused.prayer === p.name;
+    makeRow(cls, ico(ICO_DOT), t('prayer_' + p.name), p.time, { tomorrow: isNext && past && !pausedFor, prayer: p.name, adjustMin: p.adjustMin });
     if (p.name === 'Fajr' && sched.sunrise) {
       makeRow('sunrise', ico(ICO_SUN), t('sunrise'), sched.sunrise.time, {});
     }
@@ -397,7 +750,7 @@ function startTick() {
   tickTimer = setInterval(() => {
     updateClock();
     if (st && st.nextPrayer) {
-      $('nextCountdown').textContent = t('next_in', { time: formatCountdown(st.nextPrayer.ts - Date.now()) });
+      $('nextCountdown').textContent = nextIn(st.nextPrayer.ts);
     }
   }, 1000);
 }
@@ -422,12 +775,15 @@ function prayedToday(name) {
   const day = ((st && st.prayerLog) || {})[logToday()] || {};
   return !!day[name];
 }
-// A prayer is "locked" (not yet markable) only while it's still upcoming TODAY,
+// A prayer is "locked" (not yet markable) while it's still upcoming,
 // judged by the loaded schedule's per-prayer times. Past days are always editable.
 function prayerLocked(date, name) {
-  if (date !== logToday()) return false;
+  const today = logToday();
+  if (date > today) return true; // future dates are never markable
+  if (date < today) return false; // past dates are always editable
   const p = st && st.schedule && st.schedule.prayers && st.schedule.prayers.find((x) => x.name === name);
-  return !!(p && p.ts > Date.now());
+  if (!p || !p.ts) return true; // if timing is not yet ready, stay locked
+  return p.ts > Date.now(); // only markable after prayer time has passed
 }
 async function togglePrayer(date, name) {
   if (prayerLocked(date, name)) return;
@@ -474,7 +830,7 @@ function stepMonth(delta) {
 function renderTracker() {
   const today = logToday();
   const log = (st && st.prayerLog) || {};
-  const showH = !st || !st.settings || st.settings.showHijri !== false;
+  const showH = true; // Hijri date is always shown
   const off = (st && st.settings && st.settings.hijriOffset) || 0;
   const tp = parseYmd(today);
   const curYM = { year: tp.year, month: tp.month };
@@ -491,7 +847,7 @@ function renderTracker() {
   $('calNext').disabled = monthKey(viewYM) >= monthKey(curYM);
 
   const grid = $('calGrid');
-  grid.innerHTML = '';
+  grid.replaceChildren();
   for (const w of weekdayLabels()) {
     const wd = document.createElement('div');
     wd.className = 'cal-wd';
@@ -522,14 +878,18 @@ function renderTracker() {
     $('ddDate').textContent = `${fmtLogDate(selDate)} · ${dayCount(log, selDate)}/${PRAYER_ORDER.length}`;
     $('ddHijri').textContent = showH ? formatHijri(selDate + 'T12:00:00', localeFor(), off) : '';
     const wrap = $('ddPrayers');
-    wrap.innerHTML = '';
+    wrap.replaceChildren();
     const day = log[selDate] || {};
     for (const name of PRAYER_ORDER) {
       const locked = prayerLocked(selDate, name);
       const cell = document.createElement('div');
-      cell.className = 'dd-p' + (day[name] ? ' on' : '') + (locked ? ' locked' : '');
+      cell.className = 'dd-p p-' + name.toLowerCase() + (day[name] ? ' on' : '') + (locked ? ' locked' : '');
       cell.textContent = t('prayer_' + name);
-      if (!locked) cell.addEventListener('click', () => togglePrayer(selDate, name));
+      if (!locked) {
+        cell.addEventListener('click', () => togglePrayer(selDate, name));
+      } else {
+        cell.setAttribute('aria-disabled', 'true');
+      }
       wrap.appendChild(cell);
     }
   }
@@ -565,11 +925,11 @@ function renderUsage() {
 // ───────────────────────────── wiring ─────────────────────────────────────
 $('resumeBtn').addEventListener('click', async () => {
   await send({ type: 'RESUME_NOW' });
-  await load();
+  await refreshLive();
 });
 $('focusBtn').addEventListener('click', async () => {
   await send({ type: 'FOCUS_NOW' });
-  await load();
+  await refreshLive();
 });
 $('testBtn').addEventListener('click', async () => {
   $('testMsg').textContent = '';
@@ -581,6 +941,18 @@ $('testBtn').addEventListener('click', async () => {
     $('testMsg').textContent = (res && res.error) || t('unavailable');
   }
 });
+if ($('testChimeBtn')) {
+  $('testChimeBtn').addEventListener('click', async () => {
+    $('testMsg').textContent = '';
+    try {
+      await playChime();
+      $('testMsg').textContent = t('test_chime_played');
+      setTimeout(() => ($('testMsg').textContent = ''), 4000);
+    } catch (err) {
+      $('testMsg').textContent = (err && err.message) || t('unavailable');
+    }
+  });
+}
 $('save').addEventListener('click', async () => {
   if (!selectedPlace || $('city').value.trim() !== selectedPlace.label) {
     $('saveMsg').textContent = t('pick_location');
@@ -588,24 +960,42 @@ $('save').addEventListener('click', async () => {
     setTimeout(() => ($('saveMsg').textContent = ''), 3000);
     return;
   }
+  $('save').disabled = true;
+  $('save').textContent = t('saving');
+  let place;
+  try {
+    place = await placeToSave(selectedPlace);
+  } catch (e) {
+    // A place found in another language is saved under its English names, which
+    // could not be had (offline): nothing is saved, as when the worker can't fetch.
+    $('save').disabled = false;
+    $('save').textContent = t('save');
+    $('saveMsg').textContent = t('error_detail', { msg: String((e && e.message) || e) });
+    setTimeout(() => ($('saveMsg').textContent = ''), 2500);
+    return;
+  }
   const method = parseInt($('method').value, 10);
   const settings = {
     enabled: $('enabled').checked,
     focusMode: $('focusMode').checked,
-    country: selectedPlace.country || 'United States',
-    state: selectedPlace.state || '',
-    city: selectedPlace.city,
-    lat: selectedPlace.lat,
-    lon: selectedPlace.lon,
+    strictFocus: $('strictFocus') ? $('strictFocus').checked : false,
+    adhanChime: $('adhanChime') ? $('adhanChime').checked : true,
+    country: place.country || '', // Open-Meteo has none for some places (Hebron, Gaza): never a made-up one
+    state: place.state || '',
+    city: place.city,
+    lat: place.lat,
+    lon: place.lon,
+    placeLabel: place.placeLabel, // null clears one an earlier place left (settings are merged)
     autoResumeMinutes: Math.max(0, parseInt($('resumeMin').value, 10) || 5),
     leadSeconds: parseInt($('leadSeconds').value, 10) || 30,
     method: Number.isFinite(method) ? method : 2,
     school: parseInt($('school').value, 10) === 1 ? 1 : 0,
-    showHijri: $('showHijri').checked,
     hijriOffset: parseInt($('hijriOffset').value, 10) || 0,
+    adjustMinutes: Object.fromEntries(PRAYER_ORDER.map((name) => [name, parseInt($('adjust-' + name).value, 10) || 0])),
+    badgeCountdown: $('badgeCountdown').checked,
+    badgeMode: $('badgeMode') ? $('badgeMode').value : 'auto',
+    badgeManualHours: Math.max(1, Math.min(5, parseInt($('badgeManualHours') ? $('badgeManualHours').value : 2, 10) || 2)),
   };
-  $('save').disabled = true;
-  $('save').textContent = t('saving');
   const res = await send({ type: 'SAVE_SETTINGS', settings });
   $('save').disabled = false;
   $('save').textContent = t('save');
@@ -620,9 +1010,14 @@ $('save').addEventListener('click', async () => {
 $('refresh').addEventListener('click', async (e) => {
   e.preventDefault();
   $('refresh').textContent = t('refreshing');
-  await send({ type: 'REFRESH' });
+  const res = await send({ type: 'REFRESH' });
   await load();
   $('refresh').textContent = t('refresh');
+  if (!res || !res.ok) {
+    // The times shown are the last ones fetched: say why they did not change.
+    $('saveMsg').textContent = res && res.error ? t('error_detail', { msg: res.error }) : t('error');
+    setTimeout(() => ($('saveMsg').textContent = ''), 2500);
+  }
 });
 
 // Tabs
@@ -643,22 +1038,78 @@ $('clock').addEventListener('keydown', (e) => {
   }
 });
 
-// Control-Center toggle tiles flip their backing checkbox on click / Enter / Space.
-TOGGLE_TILES.forEach(([cb, tile]) => {
-  const el = $(tile);
-  if (!el) return;
-  const flip = () => {
-    $(cb).checked = !$(cb).checked;
+// Toggle controls: clicking an explicit option (.seg-opt) sets that state;
+// clicking the container itself (or pressing Enter/Space) flips state.
+TOGGLE_CONFIG.forEach((cfg) => {
+  const el = $(cfg.tile);
+  const cb = $(cfg.cb);
+  if (!el || !cb) return;
+
+  const handleSelection = (e) => {
+    if (el.classList.contains('is-disabled') || el.getAttribute('aria-disabled') === 'true') {
+      return;
+    }
+    const opt = e.target && e.target.closest ? e.target.closest('.seg-opt') : null;
+    if (opt) {
+      const val = opt.dataset.val;
+      const targetChecked = val === cfg.onVal;
+      if (cb.checked === targetChecked) return;
+      cb.checked = targetChecked;
+    } else {
+      cb.checked = !cb.checked;
+    }
     syncToggleTiles();
+    autoSaveToggleSettings();
+    if (cfg.cb === 'adhanChime' && cb.checked) {
+      playChime().catch(() => {});
+    }
   };
-  el.addEventListener('click', flip);
+
+  el.addEventListener('click', handleSelection);
   el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      flip();
+      if (el.classList.contains('is-disabled') || el.getAttribute('aria-disabled') === 'true') {
+        return;
+      }
+      cb.checked = !cb.checked;
+      syncToggleTiles();
+      autoSaveToggleSettings();
+      if (cfg.cb === 'adhanChime' && cb.checked) {
+        playChime().catch(() => {});
+      }
     }
   });
 });
+
+if ($('badgeModeSeg')) {
+  $('badgeModeSeg').addEventListener('click', (e) => {
+    const opt = e.target && e.target.closest ? e.target.closest('.seg-opt') : null;
+    if (!opt) return;
+    const val = opt.dataset.val;
+    if ($('badgeMode') && $('badgeMode').value !== val) {
+      $('badgeMode').value = val;
+      syncBadgeModeSeg();
+      autoSaveToggleSettings();
+    }
+  });
+}
+
+if ($('badgeMode')) {
+  $('badgeMode').addEventListener('change', () => {
+    syncBadgeModeSeg();
+    autoSaveToggleSettings();
+  });
+}
+if ($('badgeManualHours')) {
+  $('badgeManualHours').addEventListener('change', autoSaveToggleSettings);
+}
+if ($('resumeMin')) {
+  $('resumeMin').addEventListener('change', autoSaveToggleSettings);
+}
+if ($('leadSeconds')) {
+  $('leadSeconds').addEventListener('change', autoSaveToggleSettings);
+}
 
 // Tracker month navigation
 $('calPrev').addEventListener('click', () => {
@@ -670,6 +1121,7 @@ $('calNext').addEventListener('click', () => {
 
 // Location autocomplete
 $('city').addEventListener('input', () => {
+  $('city').dir = 'auto'; // what is typed, from its first letter
   clearTimeout(searchTimer);
   searchTimer = setTimeout(doCitySearch, 300);
 });
@@ -695,6 +1147,126 @@ try {
   $('version').textContent = 'v' + chrome.runtime.getManifest().version;
 } catch (_) {}
 
+// ───────────────────────────── Onboarding & Tour ─────────────────────────
+let obStep = 1;
+let obSimTimer = null;
+
+function showOnboardingModal(force = false) {
+  const modal = $('onboardingModal');
+  if (!modal) return;
+  modal.hidden = false;
+  obStep = 1;
+  updateObSlides();
+  if ($('obCurrentLoc')) {
+    const loc = $('locLabel') ? $('locLabel').textContent : (st?.settings?.city || 'Makkah');
+    $('obCurrentLoc').textContent = loc !== '—' ? loc : 'Makkah, Saudi Arabia';
+  }
+}
+
+function hideOnboardingModal() {
+  const modal = $('onboardingModal');
+  if (modal) modal.hidden = true;
+  chrome.storage.local.set({ onboardingCompleted: true });
+}
+
+function updateObSlides() {
+  for (let i = 1; i <= 4; i++) {
+    const slide = $(`obSlide${i}`);
+    if (slide) slide.classList.toggle('is-active', i === obStep);
+  }
+  const dots = $('obDots');
+  if (dots) {
+    Array.from(dots.children).forEach((dot, idx) => {
+      dot.classList.toggle('is-active', idx + 1 === obStep);
+    });
+  }
+  const prevBtn = $('obPrevBtn');
+  const nextBtn = $('obNextBtn');
+  const finishBtn = $('obFinishBtn');
+  if (prevBtn) prevBtn.style.visibility = obStep === 1 ? 'hidden' : 'visible';
+  if (nextBtn) nextBtn.hidden = obStep === 4;
+  if (finishBtn) finishBtn.hidden = obStep !== 4;
+}
+
+function wireOnboarding() {
+  $('obSkipBtn')?.addEventListener('click', hideOnboardingModal);
+  $('obFinishBtn')?.addEventListener('click', hideOnboardingModal);
+  $('openTourBtn')?.addEventListener('click', () => showOnboardingModal(true));
+
+  $('obNextBtn')?.addEventListener('click', () => {
+    if (obStep < 4) {
+      obStep += 1;
+      updateObSlides();
+    }
+  });
+  $('obPrevBtn')?.addEventListener('click', () => {
+    if (obStep > 1) {
+      obStep -= 1;
+      updateObSlides();
+    }
+  });
+
+  $('obChimePreviewBtn')?.addEventListener('click', () => {
+    playChime().catch(() => {});
+  });
+
+  $('obSimBtn')?.addEventListener('click', () => {
+    const status = $('obSimStatus');
+    if (!status) return;
+    status.hidden = false;
+    if (obSimTimer) clearTimeout(obSimTimer);
+    playChime().catch(() => {});
+    obSimTimer = setTimeout(() => {
+      status.hidden = true;
+    }, 4000);
+  });
+
+  $('obDetectBtn')?.addEventListener('click', async () => {
+    const text = $('obDetectText');
+    const btn = $('obDetectBtn');
+    if (text) text.textContent = t('detecting_location') || 'Detecting…';
+    if (btn) btn.disabled = true;
+    try {
+      const place = await detectLocationByIp();
+      if (place) {
+        choosePlace(place);
+        if ($('obCurrentLoc')) $('obCurrentLoc').textContent = place.label;
+        $('save').click();
+      }
+    } catch (_) {
+    } finally {
+      if (text) text.textContent = t('detect_location') || 'Detect location';
+      if (btn) btn.disabled = false;
+    }
+  });
+}
+
+function wireDetectLocation() {
+  const btn = $('detectLocBtn');
+  const text = $('detectText');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (text) text.textContent = t('detecting_location') || 'Detecting…';
+    btn.disabled = true;
+    try {
+      const place = await detectLocationByIp();
+      if (place) {
+        choosePlace(place);
+        $('save').click();
+      } else {
+        if ($('saveMsg')) {
+          $('saveMsg').textContent = t('pick_location') || 'Please search for your city';
+          setTimeout(() => ($('saveMsg').textContent = ''), 3000);
+        }
+      }
+    } catch (_) {
+    } finally {
+      if (text) text.textContent = t('detect_location') || 'Detect location';
+      btn.disabled = false;
+    }
+  });
+}
+
 // ───────────────────────────── start ──────────────────────────────────────
 async function start() {
   // Theme first to minimize any flash before the rest renders.
@@ -706,6 +1278,7 @@ async function start() {
   applyStaticI18n(document);
   $('lang').value = getLang();
   populateMethods();
+  populateAdjustments();
 
   // Reveal all views to the router (CSS .is-active controls visibility now).
   document.querySelectorAll('.view[hidden]').forEach((v) => v.removeAttribute('hidden'));
@@ -723,7 +1296,19 @@ async function start() {
     updateClock();
   });
 
+  wireDetectLocation();
+  wireSubpanelToggles();
+  wireOnboarding();
+
   await load();
   startTick();
+  chrome.storage.onChanged.addListener(onStorageChange);
+
+  try {
+    const { onboardingCompleted } = await chrome.storage.local.get('onboardingCompleted');
+    if (onboardingCompleted === false) {
+      showOnboardingModal();
+    }
+  } catch (_) {}
 }
 start();

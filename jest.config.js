@@ -4,6 +4,8 @@ export default {
   testEnvironment: 'node',
   transform: {},
   coverageDirectory: 'coverage',
+  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/'],
+  modulePathIgnorePatterns: ['<rootDir>/.claude/'],
   // Measure the whole shipped extension, not just lib/. Build/tooling scripts,
   // generated icons and the locale JSON are excluded — they're verified by the
   // manifest/locale integrity suites rather than executed under coverage.
@@ -14,3 +16,4 @@ export default {
     global: { statements: 92, branches: 74, functions: 85, lines: 95 },
   },
 };
+

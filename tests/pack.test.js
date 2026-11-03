@@ -46,7 +46,21 @@ describe('packaged runtime files', () => {
 
   it('ships the core top-level runtime files', async () => {
     const packaged = new Set(await runtimeFiles());
-    for (const f of ['manifest.json', 'background.js', 'content.js', 'content.css', 'popup.html', 'popup.js', 'popup.css']) {
+    for (const f of [
+      'manifest.json',
+      'background.js',
+      'content.js',
+      'content.css',
+      'popup.html',
+      'popup.js',
+      'popup.css',
+      'offscreen.html',
+      'offscreen.js',
+      'welcome.html',
+      'welcome.js',
+      'welcome.css',
+      'audio/chime.mp3',
+    ]) {
       expect(packaged).toContain(f);
     }
   });
@@ -98,6 +112,186 @@ describe('per-target manifest name (AMO 45-char limit)', () => {
     } finally {
       await rm(ffDir, { recursive: true, force: true });
       await rm(crDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// The shared manifest declares both background entry points: service_worker (what
+// Chrome runs) and scripts (what Gecko runs). Firefox ignores the former, and AMO
+// warns about it on every submission, so the XPI packer strips it from the staged
+// copy only — dropping it from source would break the Chrome build outright.
+// Edge is Chromium, so its package is the Chrome one minus the Firefox-only
+// browser_specific_settings block. The invariants that matter: the Chromium
+// entry point survives (strip the wrong key and the extension simply never runs),
+// and Chrome's own package is untouched by the Edge option.
+describe('per-target Edge manifest', () => {
+  it('Edge build drops browser_specific_settings and keeps the Chromium entry point', async () => {
+    const edgeDir = await mkdtemp(join(tmpdir(), 'adhan-edge-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-gecko-'));
+    try {
+      await stageExtension(edgeDir, { stripGecko: true, stripBackgroundScripts: true });
+      await stageExtension(crDir);
+      const edge = JSON.parse(await readFile(join(edgeDir, 'manifest.json'), 'utf8'));
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      expect(edge.browser_specific_settings).toBeUndefined();
+      expect(edge.background.service_worker).toBe('background.js'); // Chromium still boots
+      // Edge REJECTS the package if background.scripts rides along with
+      // service_worker under MV3 — Partner Center fails validation outright.
+      expect(edge.background.scripts).toBeUndefined();
+      expect(edge.name).toBe(cr.name); // no Firefox name truncation on Edge
+      expect(cr.browser_specific_settings).toBeDefined(); // Chrome untouched
+      expect(cr.background.scripts).toBeUndefined(); // Chrome has no background.scripts in MV3
+    } finally {
+      await rm(edgeDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+    }
+  });
+
+  it('the Edge stage still forces DEV=false (store-safety invariant)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'adhan-edge-dev-'));
+    try {
+      await stageExtension(dir, { stripGecko: true, stripBackgroundScripts: true });
+      const staged = await readFile(join(dir, 'lib', 'buildinfo.js'), 'utf8');
+      expect(staged.trim()).toBe('export const DEV = false;');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('per-target Opera manifest & package', () => {
+  it('Opera build drops browser_specific_settings and keeps the Chromium service worker', async () => {
+    const operaDir = await mkdtemp(join(tmpdir(), 'adhan-opera-'));
+    try {
+      await stageExtension(operaDir, { stripGecko: true, stripBackgroundScripts: true });
+      const opera = JSON.parse(await readFile(join(operaDir, 'manifest.json'), 'utf8'));
+      expect(opera.browser_specific_settings).toBeUndefined();
+      expect(opera.background.service_worker).toBe('background.js');
+      expect(opera.background.scripts).toBeUndefined();
+      expect(opera.manifest_version).toBe(3);
+    } finally {
+      await rm(operaDir, { recursive: true, force: true });
+    }
+  });
+
+  it('Opera staging forces DEV=false (store-safety invariant)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'adhan-opera-dev-'));
+    try {
+      await stageExtension(dir, { stripGecko: true, stripBackgroundScripts: true });
+      const staged = await readFile(join(dir, 'lib', 'buildinfo.js'), 'utf8');
+      expect(staged.trim()).toBe('export const DEV = false;');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('per-target background entry point', () => {
+  it('source declares MV3 service worker entry point without background.scripts', () => {
+    const bg = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).background;
+    expect(bg.service_worker).toBeDefined();
+    expect(bg.type).toBe('module');
+    expect(bg.scripts).toBeUndefined();
+  });
+
+  it('Firefox build drops service_worker and sets scripts; Chrome build keeps service_worker without scripts', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-bg-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-bg-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true });
+      await stageExtension(crDir);
+      const ff = JSON.parse(await readFile(join(ffDir, 'manifest.json'), 'utf8'));
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      expect(ff.background.service_worker).toBeUndefined();
+      expect(ff.background.scripts).toEqual(['background.js']); // Gecko still has an entry point
+      // ...loaded as the ES module it is: a classic script dies at the first `import`.
+      expect(ff.background.type).toBe('module');
+      expect(cr.background.service_worker).toBe('background.js'); // Chrome untouched
+      expect(cr.background.scripts).toBeUndefined();
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('per-target Firefox manifest (offscreen permission strip)', () => {
+  it('Firefox build drops offscreen permission and Chrome build keeps it', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-offscreen-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-offscreen-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripOffscreen: true });
+      await stageExtension(crDir);
+      const ff = JSON.parse(await readFile(join(ffDir, 'manifest.json'), 'utf8'));
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      expect(ff.permissions).not.toContain('offscreen');
+      expect(cr.permissions).toContain('offscreen');
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// web_accessible_resources[].use_dynamic_url is Chromium-only (Chrome 130+);
+// Firefox reports it as an unexpected manifest property on every load. Only the
+// Firefox stage drops it: the Chromium packages keep their per-session URLs.
+describe('per-target Firefox manifest (use_dynamic_url strip)', () => {
+  it('Firefox build drops use_dynamic_url; Chrome, Edge and Opera keep it', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-war-'));
+    const crDir = await mkdtemp(join(tmpdir(), 'adhan-cr-war-'));
+    const edgeDir = await mkdtemp(join(tmpdir(), 'adhan-edge-war-'));
+    const operaDir = await mkdtemp(join(tmpdir(), 'adhan-opera-war-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripDynamicUrl: true, stripOffscreen: true });
+      await stageExtension(crDir);
+      await stageExtension(edgeDir, { stripGecko: true, stripBackgroundScripts: true });
+      await stageExtension(operaDir, { stripGecko: true, stripBackgroundScripts: true });
+
+      const war = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).web_accessible_resources;
+      const ffRaw = await readFile(join(ffDir, 'manifest.json'), 'utf8');
+      const cr = JSON.parse(await readFile(join(crDir, 'manifest.json'), 'utf8'));
+      const edge = JSON.parse(await readFile(join(edgeDir, 'manifest.json'), 'utf8'));
+      const opera = JSON.parse(await readFile(join(operaDir, 'manifest.json'), 'utf8'));
+
+      expect(war.some((w) => w.use_dynamic_url === true)).toBe(true); // the source declares it
+      expect(ffRaw).not.toContain('use_dynamic_url');
+      // Only the key goes: the same resources stay reachable from the same pages.
+      expect(JSON.parse(ffRaw).web_accessible_resources).toEqual(war.map(({ use_dynamic_url: _dropped, ...w }) => w));
+      expect(cr.web_accessible_resources).toEqual(war);
+      expect(edge.web_accessible_resources).toEqual(war);
+      expect(opera.web_accessible_resources).toEqual(war);
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(crDir, { recursive: true, force: true });
+      await rm(edgeDir, { recursive: true, force: true });
+      await rm(operaDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('per-target Firefox Mobile (Android) manifest', () => {
+  it('Firefox build retains gecko_android while Edge and Opera strip it', async () => {
+    const ffDir = await mkdtemp(join(tmpdir(), 'adhan-ff-android-'));
+    const edgeDir = await mkdtemp(join(tmpdir(), 'adhan-edge-android-'));
+    const operaDir = await mkdtemp(join(tmpdir(), 'adhan-opera-android-'));
+    try {
+      await stageExtension(ffDir, { manifestName: FIREFOX_NAME, stripServiceWorker: true, stripOffscreen: true });
+      await stageExtension(edgeDir, { stripGecko: true, stripBackgroundScripts: true });
+      await stageExtension(operaDir, { stripGecko: true, stripBackgroundScripts: true });
+
+      const ff = JSON.parse(await readFile(join(ffDir, 'manifest.json'), 'utf8'));
+      const edge = JSON.parse(await readFile(join(edgeDir, 'manifest.json'), 'utf8'));
+      const opera = JSON.parse(await readFile(join(operaDir, 'manifest.json'), 'utf8'));
+
+      expect(ff.browser_specific_settings.gecko_android).toBeDefined();
+      expect(ff.browser_specific_settings.gecko_android.strict_min_version).toBe('142.0');
+      expect(edge.browser_specific_settings).toBeUndefined();
+      expect(opera.browser_specific_settings).toBeUndefined();
+    } finally {
+      await rm(ffDir, { recursive: true, force: true });
+      await rm(edgeDir, { recursive: true, force: true });
+      await rm(operaDir, { recursive: true, force: true });
     }
   });
 });

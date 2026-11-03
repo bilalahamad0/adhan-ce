@@ -1,7 +1,8 @@
 # Release workflow — one-time setup
 
 Releases are triggered by **prefixed** tags (a bare `v*` is retired):
-`chrome-v<version>` → Chrome Web Store, `firefox-v<version>` → Firefox/AMO. See
+`chrome-v<version>` → Chrome Web Store, `firefox-v<version>` → Firefox/AMO,
+`edge-v<version>` → Microsoft Edge Add-ons. See
 [RELEASING.md](../RELEASING.md) for the full flow.
 
 The [`Release (Chrome)` workflow](workflows/release.yml) packs a signed `.crx`
@@ -11,14 +12,14 @@ section at the bottom of this file.)
 
 ## 1. Encode the private key
 
-Locally, with `adhan-caster-pro-private.pem` accessible:
+Locally, with `adhan-caster-private.pem` accessible:
 
 ```bash
 # macOS — copies the base64 string to your clipboard
-base64 -i adhan-caster-pro-private.pem | pbcopy
+base64 -i adhan-caster-private.pem | pbcopy
 
 # Linux
-base64 -w 0 adhan-caster-pro-private.pem
+base64 -w 0 adhan-caster-private.pem
 ```
 
 The output is a single long base64 string. Anything in it can recreate the
@@ -56,9 +57,9 @@ git push origin v1.6.4
 
 The workflow fires on the tag push. When it finishes:
 
-- **Releases** tab → a draft release named `v1.6.4` with `adhan-caster-pro-1.6.4.crx` attached.
+- **Releases** tab → a draft release named `v1.6.4` with `adhan-caster-1.6.4.crx` attached.
 - Review the auto-generated notes, edit if needed, click **Publish**.
-- Upload the same `.crx` to the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster Pro → Package → Upload new package → Submit for review.
+- Upload the same `.crx` to the [Chrome Web Store dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster → Package → Upload new package → Submit for review.
 
 ## Rotating the secret
 
@@ -68,17 +69,40 @@ If the private key is rotated (see "Key rotation" in [RELEASING.md](../RELEASING
 2. Edit the existing `CRX_PRIVATE_KEY_B64` secret with the new value
 3. No workflow changes needed
 
-## Automating CWS submission (optional)
+## Automating CWS submission (Chrome)
 
-By default the workflow stops at a signed CRX on a draft GitHub Release, and you
-upload it through the dashboard. If you set the four secrets below, the workflow
-will instead **upload the CRX to the Chrome Web Store and submit it for review
-automatically** on every tag push. (Verified CRX uploads is fully compatible
-with the API: the upload must be the signed CRX, which is exactly what this
-pipeline produces.)
+> **Status: configured.** The secrets below are set on this repo, so a
+> `chrome-v*` tag submits to the Chrome Web Store on its own. The steps below are
+> kept for rotating the credentials, or re-creating them on a fork.
 
-If these secrets are absent, the step **no-ops** — the build/sign/release still
-runs, you just submit manually. So you can configure this whenever you like.
+The workflow **uploads the CRX to the Chrome Web Store and submits it for review
+automatically** on every tag push. (Verified CRX uploads is fully compatible with
+the API: the upload must be the signed CRX, which is exactly what this pipeline
+produces.)
+
+Were these secrets absent, the step would **no-op** instead — the
+build/sign/release still runs and you submit manually from the draft release.
+
+`scripts/submit-cws.mjs` uses the [Chrome Web Store API v2](https://developer.chrome.com/docs/webstore/api).
+(v1.1 is unsupported after 2026-10-15.) Each run:
+
+1. **Checks the item's status** (read-only `fetchStatus`). It stops before uploading
+   if the publisher ID is wrong, a previous submission is still in review or
+   staged, or `manifest.json` isn't above the published version.
+2. **Uploads the signed CRX.** If the store processes it asynchronously, the
+   script waits up to 5 minutes for it to finish.
+3. **Submits it for review.** If the store refuses the submission (for example,
+   the Privacy practices tab is incomplete), the package stays uploaded as a
+   draft. The step then emits a warning, not a failure, and you click
+   **Submit for review** in the dashboard.
+
+v2 addresses items as `publishers/<publisher-id>/items/<item-id>`. The publisher
+ID is built into the script: it is the UUID in the Developer Dashboard URL
+(`chrome.google.com/webstore/devconsole/<publisher-id>/…`), also shown in the
+dashboard's publisher settings. It isn't secret. To point at a different publisher,
+set a repo **variable** (not a secret) `CWS_PUBLISHER_ID` under
+**Settings → Secrets and variables → Actions → Variables**. If it's wrong, step 1
+fails with `PERMISSION_DENIED` and nothing is uploaded.
 
 ### One-time OAuth setup
 
@@ -114,16 +138,21 @@ required + one optional:
 | `CWS_CLIENT_ID` | OAuth client ID from step 3 |
 | `CWS_CLIENT_SECRET` | OAuth client secret from step 3 |
 | `CWS_REFRESH_TOKEN` | Refresh token from step 4 |
-| `CWS_EXTENSION_ID` | _(optional)_ item ID — defaults to the published Adhan Caster Pro ID |
+| `CWS_EXTENSION_ID` | _(optional)_ item ID — defaults to the published Adhan Focus ID |
+
+The same OAuth client and refresh token work for API v2; it uses the same
+`chromewebstore` scope. v2 can also authenticate as a
+[service account](https://developer.chrome.com/docs/webstore/service-accounts)
+linked in the dashboard, but this script uses the refresh token.
 
 ### Test it without cutting a release
 
-Locally, copy `.env.example` → `.env`, fill in the same four values, then:
+Locally, copy `.env.example` → `.env`, fill in the same values, then:
 
 ```bash
-npm run submit:cws -- adhan-caster-pro-<version>.crx --dry-run   # validate, no network
-npm run submit:cws -- adhan-caster-pro-<version>.crx --no-publish # upload only, you submit in the dashboard
-npm run submit:cws -- adhan-caster-pro-<version>.crx              # upload + submit for review
+npm run submit:cws -- adhan-focus-<version>.crx --dry-run   # validate, no network
+npm run submit:cws -- adhan-focus-<version>.crx --no-publish # status check + upload, you submit in the dashboard
+npm run submit:cws -- adhan-focus-<version>.crx              # status check + upload + submit for review
 ```
 
 `.env` is gitignored. A refresh token is as sensitive as a password — anyone
@@ -157,19 +186,24 @@ npm run heartbeat:cws                              # primary ping (live credenti
 npm run heartbeat:cws -- --fallback                # fallback ping
 ```
 
-## Automating AMO submission (Firefox, optional)
+## Automating AMO submission (Firefox)
+
+> **Status: configured.** `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` are set on this
+> repo, so a `firefox-v*` tag submits to AMO on its own. The steps below are kept
+> for rotating the credentials, or re-creating them on a fork.
 
 The [`Release (Firefox)` workflow](workflows/release-firefox.yml) fires on a
 `firefox-v*.*.*` tag: it lints + builds the XPI, attaches it to a draft GitHub
-Release, and — if the two secrets below are set — **AMO-signs and submits it for
-review** via `web-ext sign`. Without them the sign step **no-ops** (the XPI is on
-the GitHub Release for a manual upload), so you can configure this whenever.
+Release, and **AMO-signs and submits it for review** via `web-ext sign`. Were the
+two secrets below ever unset, the sign step **no-ops** instead and the XPI on the
+GitHub Release is there for a manual upload.
 
-> **First submission is manual.** AMO won't create a *listed* add-on from the
-> API, so the very first version must be uploaded once at
-> [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) to
-> create the listing (this locks in the add-on id
-> `adhan-caster@bilalahamad.com`). After that, tagging automates new versions.
+> **The listing exists — every version from here is tag-driven.** AMO won't create
+> a *listed* add-on from the API, so v2.0.3 was uploaded by hand on 2026-08-13 to
+> create it; that locked in the add-on id `adhan-caster@bilalahamad.com` and the
+> slug [`adhan-caster-prayer-times`](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/).
+> No manual upload is needed again. See [`RELEASING.md`](../RELEASING.md) →
+> "6. Firefox / AMO release" for the one-time recipe, kept for a fork or re-create.
 
 ### One-time AMO API credentials
 
@@ -198,6 +232,64 @@ sensitive as a password — anyone with it can publish to your AMO listing.
 **Actions → Release (Firefox) → Run workflow** (leave `ref` blank). It builds and
 lints the XPI and uploads it as an artifact — no release, no AMO submission.
 
+## Automating Edge submission (Microsoft Edge Add-ons)
+
+> **Status: not configured.** Until the three secrets below are set, a `edge-v*`
+> tag still builds the ZIP and attaches it to a draft GitHub Release — the submit
+> step just no-ops, and you upload by hand at Partner Center.
+
+The [`Release (Edge)` workflow](workflows/release-edge.yml) fires on an
+`edge-v*.*.*` tag: it builds the ZIP (`scripts/pack-edge.mjs`), attaches it to a
+draft GitHub Release, and **uploads it to Edge Add-ons and submits it for
+review** via `scripts/submit-edge.mjs`.
+
+> **First submission is manual.** Like AMO, Edge won't create a new product from
+> the API. Register at
+> [Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/) —
+> free, no developer fee — and upload one ZIP by hand to create the product. That
+> also gives you the product ID the API needs.
+
+### One-time API credentials
+
+1. Register for the Microsoft Edge program at
+   [Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/) with
+   a Microsoft account. There is **no registration fee**.
+2. Create the product by uploading a ZIP once (see above).
+3. On the extension's **Overview** page, copy the **product ID** — a GUID. This
+   is not the storefront URL slug.
+4. **Publish API** (in the extension's left nav) → create credentials. Copy the
+   **client ID** and the **API key**; the key is shown once.
+
+### Add the secrets
+
+**Settings → Secrets and variables → Actions → New repository secret:**
+
+| Secret | Value |
+| --- | --- |
+| `EDGE_PRODUCT_ID` | Product ID (GUID) from step 3 |
+| `EDGE_CLIENT_ID` | Client ID from step 4 |
+| `EDGE_API_KEY` | API key from step 4 |
+
+The workflow passes these as env vars, never on a command line. An API key is as
+sensitive as a password — anyone with it can publish to your listing.
+
+This uses the Edge Add-ons REST API **v1.1**, which authenticates with the API
+key directly. (v1 used Azure AD access tokens and was retired at the end of 2024;
+there is no token to refresh or expire mid-release.)
+
+### Test it without cutting a release
+
+Locally, copy `.env.example` → `.env`, fill in the three values, then:
+
+```bash
+npm run pack:edge                                                    # build the ZIP
+npm run submit:edge -- --dry-run                                     # validate, no network
+npm run submit:edge -- --no-publish                                  # upload only, you submit in Partner Center
+npm run submit:edge                                                  # upload + submit for review
+```
+
+`--dry-run` needs no credentials at all, so it is safe in any environment.
+
 ## What the workflows do NOT do
 
 - **They do not publish the GitHub Release.** Releases are created as drafts
@@ -205,8 +297,12 @@ lints the XPI and uploads it as an artifact — no release, no AMO submission.
 - **They do not bump versions.** Version bumps still happen in a PR before
   the tag is pushed. The workflows only verify that the tag matches the
   manifest/package/lock version and fail fast if they disagree.
-- **Store submission is opt-in.** Without the OAuth secrets (Chrome) or the
-  `AMO_JWT_*` secrets (Firefox), the workflows don't touch the stores — the
-  signed CRX / built XPI is on the GitHub Release for a manual upload.
+- **Store submission is live for Chrome and Firefox.** The CWS OAuth secrets and
+  the `AMO_JWT_*` secrets are configured, so a `chrome-v*` or `firefox-v*` tag
+  uploads to the live store and submits it for review. Tag deliberately. Edge is
+  the exception: its `EDGE_*` secrets are not set yet, so an `edge-v*` tag builds
+  and releases but does not submit. Were any of those secrets removed, the
+  workflow falls back to leaving the signed CRX / built XPI / ZIP on the GitHub
+  Release for a manual upload.
 - **A bare `v*` tag does nothing** except fail the
   [tag guard](workflows/release-tag-guard.yml). Use `chrome-v*` or `firefox-v*`.

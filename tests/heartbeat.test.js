@@ -6,8 +6,9 @@ import {
   parseCliArgs,
   withRetry,
   DEFAULT_EXTENSION_ID,
+  DEFAULT_PUBLISHER_ID,
+  API_ROOT,
   TOKEN_URL,
-  CWS_ITEM_URL,
 } from '../scripts/heartbeat-cws.mjs';
 
 describe('heartbeat-cws script', () => {
@@ -134,33 +135,34 @@ describe('heartbeat-cws script', () => {
   });
 
   describe('queryItemStatus', () => {
-    it('queries CWS API with bearer token and x-goog-api-version', async () => {
+    it('queries CWS API v2 fetchStatus with bearer token', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
         json: async () => ({
-          id: DEFAULT_EXTENSION_ID,
-          crxVersion: '2.0.0',
-          uploadState: 'SUCCESS',
+          name: `publishers/${DEFAULT_PUBLISHER_ID}/items/${DEFAULT_EXTENSION_ID}`,
+          itemId: DEFAULT_EXTENSION_ID,
+          crxVersion: '2.1.4',
+          state: 'PUBLISHED',
         }),
       });
 
       const result = await queryItemStatus({
         token: 'mock-token',
         extId: DEFAULT_EXTENSION_ID,
+        publisherId: DEFAULT_PUBLISHER_ID,
         fetchFn: mockFetch,
       });
 
       expect(result.ok).toBe(true);
       expect(result.status).toBe(200);
-      expect(result.data.id).toBe(DEFAULT_EXTENSION_ID);
+      expect(result.data.itemId).toBe(DEFAULT_EXTENSION_ID);
       expect(mockFetch).toHaveBeenCalledWith(
-        `${CWS_ITEM_URL}/${DEFAULT_EXTENSION_ID}?projection=draft`,
+        `${API_ROOT}/v2/publishers/${DEFAULT_PUBLISHER_ID}/items/${DEFAULT_EXTENSION_ID}:fetchStatus`,
         expect.objectContaining({
           method: 'GET',
           headers: {
             Authorization: 'Bearer mock-token',
-            'x-goog-api-version': '2',
           },
         })
       );

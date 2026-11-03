@@ -15,9 +15,9 @@ Goal: rank for the terms people actually search (**prayer times, adhan, azan, mu
 
 **✅ Live now in manifest:**
 ```
-Adhan Caster: Muslim Prayer Times & Auto-Pause
+Adhan Focus: Muslim Prayer Times & Auto-Pause
 ```
-Why: leads with the two highest-volume search terms (**Adhan**, **Muslim Prayer Times**) while keeping the "Adhan Caster" brand. The differentiator ("Auto-Pause") trails because it's not what people *search* — it's what makes you *win the click*.
+Why: leads with the two highest-volume search terms (**Adhan**, **Muslim Prayer Times**) while keeping the "Adhan Focus" brand. The differentiator ("Auto-Pause") trails because it's not what people *search* — it's what makes you *win the click*.
 
 **Alternates** (if you want to A/B later — only change once you have reviews, since a rename resets some momentum):
 - `Muslim Prayer Times & Adhan — Auto-Pause Media` (pure-keyword, drops brand)
@@ -41,14 +41,14 @@ Muslim prayer times with a live Adhan countdown that auto-pauses video & audio i
 ```
 🕌 Never miss a prayer because a video, podcast, or playlist pulled you in.
 
-Adhan Caster turns your browser into a calm, reliable prayer companion. It shows accurate Muslim prayer times — Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha — with a live countdown to the next salah and a real-time clock for your city. And the instant the Adhan begins, it automatically pauses every video and audio playing across all your open Chrome tabs. No scrambling for the mute button. No realizing an hour later that you prayed late.
+Adhan Focus turns your browser into a calm, reliable prayer companion. It shows accurate Muslim prayer times — Fajr, Sunrise, Dhuhr, Asr, Maghrib, and Isha — with a live countdown to the next salah and a real-time clock for your city. And the instant the Adhan begins, it automatically pauses every video and audio playing across all your open Chrome tabs. No scrambling for the mute button. No realizing an hour later that you prayed late.
 
 When the moment comes, your screen settles: an optional full-screen Prayer Focus gently takes over with a softly animated reminder, so you can step away with intention. One click — or an automatic timer — brings everything back exactly where you left off.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ✨ WHAT MAKES IT SPECIAL
 ━━━━━━━━━━━━━━━━━━━━━━━━
-⏰ Live local clock — the current time for your chosen city, right in the popup. Stop glancing at the system clock.
+⏰ Live local clock — the current time for your chosen city, right in the popup.
 🕋 Every prayer + Sunrise — Fajr, Dhuhr, Asr, Maghrib, Isha, plus Shuruq (Sunrise), with the next prayer highlighted and a second-by-second countdown.
 ⏸️ Auto-pause everywhere — YouTube, Netflix, Spotify, podcasts, lecture tabs… all pause the instant the Adhan starts, in every open tab (even embedded players).
 🧘 Animated Prayer Focus — a calm, breathing full-screen reminder during the Adhan. On by default, from the notification, or via Ctrl/Cmd+Shift+Y. Dismiss with Resume or Esc.
@@ -56,25 +56,32 @@ When the moment comes, your screen settles: an optional full-screen Prayer Focus
 ▶️ Effortless resume — one click, or auto-resume after a delay you choose. Always in your control.
 🌍 Any city on Earth — search and lock to your exact location; times are calculated precisely for you.
 🌐 Your language — English, العربية, اردو, Bahasa Indonesia, Türkçe, Français — switch instantly, with full right-to-left support.
-📅 Prayer tracking — check off each of the five daily prayers and watch your month fill in on a calendar, with a streak to keep you going. Kept entirely on your device.
+📅 Prayer tracking — check off each of the five daily prayers and watch your month fill in on a calendar, with color-coded prayer indicators and streaks. Kept entirely on your device.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 🔒 PRIVATE BY DESIGN — FREE FOREVER
 ━━━━━━━━━━━━━━━━━━━━━━━━
 • No ads. No subscriptions. No account. No sign-in. Ever.
 • Zero analytics. Zero tracking. Zero data harvesting.
-• Everything stays on your device — the only thing that ever leaves is the city name needed to look up prayer times.
+• Your settings stay on your device — only what's needed to find your place and its prayer times ever leaves it: the place's name (or its coordinates), and what you type in the search.
 • Open source and built on the latest, most secure Manifest V3.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 💡 MADE FOR REAL LIFE
 ━━━━━━━━━━━━━━━━━━━━━━━━
-Racing a deadline. Deep in a lecture playlist. Catching up on a series. Whatever has your attention, Adhan Caster quietly keeps watch and hands the moment back to you when it's time to stand before your Lord — then returns you to exactly where you were. Lightweight, distraction-free, and respectful of both your time and your privacy.
+Whatever has your attention, Adhan Focus quietly keeps watch and hands the moment back to you when it's time to stand before your Lord — then returns you to exactly where you were. Lightweight, distraction-free, and respectful of both your time and your privacy.
 
 Prayer times are powered by the trusted Aladhan service; city search by Open-Meteo.
 
 Made with care for the Ummah. We read every review and reply to feedback — tell us what would make your salah easier. 🤲
+```
 
+---
+
+## 4. Single-purpose description (for the "Privacy" tab)
+
+```
+Adhan Focus shows Muslim prayer times in the browser and automatically pauses audio/video playback in open tabs during the Adhan (call to prayer), then resumes it afterward.
 Keywords: Muslim prayer times, Adhan, Azan, Salah, Namaz, prayer reminder, Islamic prayer times, prayer notification, prayer clock, prayer tracker, salah tracker, Fajr, Dhuhr, Asr, Maghrib, Isha, Sunrise, Shuruq.
 ```
 
@@ -92,7 +99,7 @@ Keywords: Muslim prayer times, Adhan, Azan, Salah, Namaz, prayer reminder, Islam
 ## 5. Single-purpose description (required field)
 
 ```
-Adhan Caster shows Muslim prayer times in the browser and automatically pauses audio/video playback in open tabs during the Adhan (call to prayer), then resumes it afterward.
+Adhan Focus shows Muslim prayer times in the browser and automatically pauses audio/video playback in open tabs during the Adhan (call to prayer), then resumes it afterward.
 ```
 
 ---
@@ -107,7 +114,6 @@ Reviewers (and the Featured-badge team) read these. Be specific — vague justif
 | `alarms` | Schedules a reliable background timer so the countdown and the Adhan trigger fire at the exact prayer time even when the popup is closed. |
 | `notifications` | Shows a desktop notification when it's time to pray. |
 | `scripting` | Injects the content script that pauses media and renders the in-page heads-up countdown / focus screen on the page you're viewing. |
-| `tabs` | Sends pause/resume messages to media playing in your other open tabs at prayer time. |
 | `host_permissions` (`http://*/*`, `https://*/*`) | Required to pause `<video>`/`<audio>` on whatever sites you happen to have open at prayer time. The extension does not read or transmit page content. |
 | `host_permissions` (prayer-times API host) | Fetches the daily prayer-time schedule for your chosen city. |
 
@@ -136,6 +142,30 @@ Screenshots are downscaled to 640×400, so use **large text and one idea per ima
 > Seven retina-rendered 1280×800 screenshots are generated into `docs/store/` by `npm run shots` (editorial layout, Fraunces/Inter web fonts). **Chrome Web Store allows up to 5 screenshots**, so pick your best five — the hero (#1) is essential and the tracker (#7) is a strong differentiator; if you must drop one, #6 (privacy) is the most expendable. Replace old media on the live listing.
 
 ---
+
+## 7b. Promotional tiles (Edge only)
+
+Microsoft Edge Add-ons has two optional promotional images the other stores don't;
+they're what Edge uses if it ever features the extension. Rendered by
+`npm run tiles` from `docs/promo-tiles.html`, same headless-Chrome pipeline as the
+screenshots:
+
+| Tile | Size | File |
+| --- | --- | --- |
+| Small promotional tile | 440x280 | `docs/store/promo-small-440x280.png` |
+| Large promotional tile | 1400x560 | `docs/store/promo-large-1400x560.png` |
+
+Both reuse the in-page focus overlay's gradient and star field so the store art and
+the product read as the same thing. The star positions come from a seeded PRNG, so
+the tiles *look* identical run to run — but the PNGs are **not** byte-reproducible:
+headless Chrome's font rasterisation and PNG encoding (and the `sips` downscale)
+vary by a few hundred bytes between runs. Re-render only when the design actually
+changes; a re-render for its own sake just produces a binary diff with no visible
+difference.
+
+> Adding these to a **published** listing requires submitting an update, which puts
+> the extension through certification again. Cheaper to let them ride along with the
+> next version bump than to spend a review cycle on artwork alone.
 
 ## 8. Pre-publish checklist
 

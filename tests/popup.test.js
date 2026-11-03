@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeChrome } from './helpers/chrome-mock.js';
 import { makeFetch } from './helpers/fetch-mock.js';
+import { simulateStaleTzData } from './helpers/stale-icu.js';
+import { tzOffsetMs } from '../lib/schedule.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BODY = readFileSync(join(ROOT, 'popup.html'), 'utf8').match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -24,7 +26,7 @@ let counter = 0;
 
 function defaultState() {
   return {
-    settings: { enabled: true, focusMode: true, country: 'United States', state: 'California', city: 'Sunnyvale', lat: 37.36, lon: -122.03, autoResumeMinutes: 5, leadSeconds: 30 },
+    settings: { enabled: true, focusMode: true, badgeCountdown: true, country: 'United States', state: 'California', city: 'Sunnyvale', lat: 37.36, lon: -122.03, autoResumeMinutes: 5, leadSeconds: 30 },
     schedule: {
       date: '2026-05-23',
       tz: 'America/Los_Angeles',
@@ -47,13 +49,25 @@ const settle = async () => {
   for (let i = 0; i < 25; i++) await Promise.resolve();
 };
 
-async function load({ state = defaultState(), manifest = { version: '1.7.4' }, send } = {}) {
+async function load({ state = defaultState(), manifest = { version: '1.7.4' }, send, initialStorage = {}, fetchRoutes = [] } = {}) {
+  window.HTMLMediaElement.prototype.play = () => Promise.resolve();
   document.body.innerHTML = BODY;
   const handleSendMessage = send || ((m) => (m.type === 'GET_STATE' ? state : { ok: true }));
-  chrome = makeChrome({ initialStorage: {}, manifest, handleSendMessage });
+  chrome = makeChrome({ initialStorage, manifest, handleSendMessage });
   globalThis.chrome = chrome;
   globalThis.fetch = makeFetch([
+    ...fetchRoutes,
     ['locales/', (url) => cat(url.match(/locales\/(\w+)\.json/)[1])],
+    [
+      'reverse-geocode-client',
+      {
+        latitude: 37.36,
+        longitude: -122.03,
+        city: 'Sunnyvale',
+        principalSubdivision: 'California',
+        countryName: 'United States',
+      },
+    ],
     [
       'geocoding-api.open-meteo.com',
       {
@@ -101,9 +115,15 @@ describe('initial render from GET_STATE', () => {
     expect(rows).toHaveLength(6);
     expect($('list').querySelector('.row.sunrise')).not.toBeNull();
     expect($('list').querySelector('.row.next .pname').textContent).toBe('Asr');
+    expect($('list').querySelector('.row.p-fajr')).not.toBeNull();
+    expect($('list').querySelector('.row.p-dhuhr')).not.toBeNull();
+    expect($('list').querySelector('.row.p-asr')).not.toBeNull();
+    expect($('list').querySelector('.row.p-maghrib')).not.toBeNull();
+    expect($('list').querySelector('.row.p-isha')).not.toBeNull();
 
     expect($('enabled').checked).toBe(true);
     expect($('focusMode').checked).toBe(true);
+    expect($('badgeCountdown').checked).toBe(true);
     expect($('city').value).toBe('Sunnyvale, California, United States');
     expect($('resumeMin').value).toBe('5');
   });
@@ -125,6 +145,154 @@ describe('initial render from GET_STATE', () => {
     expect($('nextName').textContent).toBe('—');
     expect($('nextTime').textContent).toBe(EN.no_schedule);
     expect($('list').children).toHaveLength(0);
+  });
+});
+
+// A popup left open across a prayer kept its countdown and showed no paused banner
+// until it was reopened: it read the state once.
+describe('live updates while the popup is open', () => {
+  const prayerFires = () =>
+    chrome.__.fireStorageChange({
+      paused: { oldValue: { active: false }, newValue: { active: true, prayer: 'Asr', time: '04:56 PM', since: BASE, focus: false } },
+      nextPrayer: { newValue: { name: 'Maghrib', time: '08:17 PM', ts: BASE + 6 * 3600e3 } },
+    });
+
+  it('shows the paused banner and the next prayer as the prayer fires', async () => {
+    await load();
+    expect($('pausedBanner').hidden).toBe(true);
+    await prayerFires();
+    expect($('pausedBanner').hidden).toBe(false);
+    expect($('pausedText').textContent).toBe('Media paused for Asr');
+    expect($('focusBtn').hidden).toBe(false);
+    expect($('nextName').textContent).toBe('Maghrib');
+    expect($('list').querySelector('.row.next .pname').textContent).toBe('Maghrib');
+    jest.advanceTimersByTime(1000); // the tick counts down to the new next prayer
+    expect($('nextCountdown').textContent).toBe('in 5h 59m');
+  });
+
+  it('hides the banner when the prayer is resumed elsewhere, or its pause is cleared', async () => {
+    const state = defaultState();
+    state.paused = { active: true, prayer: 'Asr', focus: false };
+    await load({ state });
+    expect($('pausedBanner').hidden).toBe(false);
+    await chrome.__.fireStorageChange({ paused: { newValue: { active: false } } });
+    expect($('pausedBanner').hidden).toBe(true);
+    await prayerFires();
+    await chrome.__.fireStorageChange({ paused: { oldValue: { active: true } } }); // removed
+    expect($('pausedBanner').hidden).toBe(true);
+  });
+
+  it('locks Resume and the strict-focus tiles while a strict pause lasts', async () => {
+    const state = defaultState();
+    state.settings.strictFocus = true;
+    await load({ state });
+    await prayerFires();
+    expect($('resumeBtn').hidden).toBe(true);
+    expect($('strictFocusTile').getAttribute('aria-disabled')).toBe('true');
+    expect($('focusTile').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('keeps Settings edits in progress, and asks the worker nothing', async () => {
+    await load();
+    $('resumeMin').value = '9';
+    $('method').value = '3';
+    $('city').value = 'Lon';
+    const asked = chrome.__.sent.length;
+    await prayerFires();
+    await chrome.__.fireStorageChange({ schedule: { newValue: { ...defaultState().schedule, date: '2026-05-24' } } });
+    expect($('resumeMin').value).toBe('9');
+    expect($('method').value).toBe('3');
+    expect($('city').value).toBe('Lon');
+    expect(chrome.__.sent.length).toBe(asked);
+  });
+
+  it('draws nothing again for a write of the same value (Firefox reports those)', async () => {
+    await load();
+    const box = $('list').querySelector('input[type="checkbox"]');
+    box.focus();
+    await chrome.__.fireStorageChange({ nextPrayer: { oldValue: defaultState().nextPrayer, newValue: defaultState().nextPrayer } });
+    expect(document.activeElement).toBe(box);
+  });
+
+  it('follows saved settings for the strict-focus lock, never into the Settings fields', async () => {
+    const state = defaultState();
+    state.settings.strictFocus = true;
+    await load({ state });
+    $('resumeMin').value = '9';
+    // Strict focus turned off (here, or by the worker) before the prayer comes.
+    await chrome.__.fireStorageChange({ settings: { newValue: { ...state.settings, strictFocus: false } } });
+    await prayerFires();
+    expect($('resumeBtn').hidden).toBe(false);
+    expect($('strictFocusTile').getAttribute('aria-disabled')).toBeNull();
+    expect($('resumeMin').value).toBe('9');
+  });
+
+  it('Resume and Focus keep Settings edits in progress', async () => {
+    await load();
+    $('method').value = '3';
+    $('school').value = '1';
+    await prayerFires();
+    $('focusBtn').click();
+    await settle();
+    expect(sentTypes()).toContain('FOCUS_NOW');
+    expect($('method').value).toBe('3');
+    expect($('school').value).toBe('1');
+  });
+
+  it("never shows the prayer paused for as tomorrow's", async () => {
+    // The worker stores the pause, then moves nextPrayer on: in between the fired
+    // prayer is still next, its time just past.
+    await load();
+    await chrome.__.fireStorageChange({ paused: { newValue: { active: true, prayer: 'Dhuhr' } }, nextPrayer: { newValue: { name: 'Dhuhr', time: '01:05 PM', ts: BASE - 1000 } } });
+    const dhuhr = $('list').querySelector('.row.p-dhuhr');
+    expect(dhuhr.classList.contains('next')).toBe(true);
+    expect(dhuhr.querySelector('.ptime').textContent).not.toContain(EN.tomorrow);
+  });
+
+  it('shows a place saved elsewhere, unless the field holds a search', async () => {
+    const CAIRO = { ...defaultState().settings, city: 'Cairo', state: 'Cairo Governorate', country: 'Egypt', lat: 30.06, lon: 31.25 };
+    await load();
+    await chrome.__.fireStorageChange({ settings: { newValue: CAIRO } });
+    expect($('locLabel').textContent).toBe('Cairo, Cairo Governorate, Egypt');
+    expect($('city').value).toBe('Cairo, Cairo Governorate, Egypt');
+    $('city').value = 'Lon'; // being searched
+    await chrome.__.fireStorageChange({ settings: { newValue: { ...CAIRO, city: 'Giza', state: 'Giza' } } });
+    expect($('city').value).toBe('Lon');
+  });
+
+  it("keeps a pick not yet saved when a toggle's autosave writes the settings", async () => {
+    // Two "Springfield, Florida, United States": the pick differs only by its coordinates.
+    const SPRING = (lat, lon) => ({ name: 'Springfield', admin1: 'Florida', country: 'United States', latitude: lat, longitude: lon });
+    const state = defaultState();
+    Object.assign(state.settings, { city: 'Springfield', state: 'Florida', country: 'United States', lat: 30.16, lon: -85.61 });
+    await load({ state, fetchRoutes: [['geocoding-api.open-meteo.com', { results: [SPRING(30.2, -85.68)] }]] });
+    $('city').value = 'Spring';
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    $('cityResults').children[0].dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    // A tile's autosave: the worker stores the merged settings, still the saved place.
+    await chrome.__.fireStorageChange({ settings: { newValue: { ...state.settings, adhanChime: false } } });
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.filter((m) => m.type === 'SAVE_SETTINGS').pop();
+    expect(saved.settings).toMatchObject({ city: 'Springfield', lat: 30.2, lon: -85.68 });
+  });
+
+  it('says why a Refresh changed nothing', async () => {
+    const state = defaultState();
+    await load({ state, send: (m) => (m.type === 'GET_STATE' ? state : m.type === 'REFRESH' ? { ok: false, error: 'Aladhan 503' } : { ok: true }) });
+    $('refresh').click();
+    await settle();
+    expect($('saveMsg').textContent).toContain('Aladhan 503');
+  });
+
+  it('ignores other storage areas and keys', async () => {
+    await load();
+    await chrome.__.fireStorageChange({ paused: { newValue: { active: true, prayer: 'Asr' } } }, 'sync');
+    await chrome.__.fireStorageChange({ appearance: { newValue: 'dark' } });
+    expect($('pausedBanner').hidden).toBe(true);
+    expect($('nextName').textContent).toBe('Asr');
   });
 });
 
@@ -165,21 +333,293 @@ describe('saving settings', () => {
     expect(saved.settings).toMatchObject({ method: 3, school: 1 });
   });
 
-  it('shows the Hijri date in the Tracker (not the header) and saves the toggle + offset', async () => {
+  it('always shows the Hijri date in the Tracker and saves the offset', async () => {
     await load();
-    expect($('showHijri').checked).toBe(true);
-    // The Hijri date lives only in the Tracker day-detail now (not the popup header,
-    // and no longer duplicated in the Tracker month header).
+    // Hijri date is now always on — no toggle to check.
     document.querySelector('[data-tab="tracker"]').click();
     expect($('calHijri')).toBeNull(); // header month Hijri removed as redundant
     expect($('ddHijri').textContent).toMatch(/\d{4}/); // e.g. "Dhuʻl-Hijjah 18, 1447 AH"
-    // Turn it off, nudge the offset, and save.
-    $('showHijri').checked = false;
+    // Offset still user-adjustable and saved via Save.
     $('hijriOffset').value = '1';
     $('save').click();
     await settle();
     const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
-    expect(saved.settings).toMatchObject({ showHijri: false, hijriOffset: 1 });
+    expect(saved.settings).toMatchObject({ hijriOffset: 1 });
+  });
+
+  it('directly auto-saves enabled and focusMode toggles with correct Fullscreen / Enabled / Disabled / OFF tags', async () => {
+    await load();
+    expect($('enabled').checked).toBe(true);
+    expect($('enabledTag').textContent).toBe('Enabled');
+    expect($('focusMode').checked).toBe(true);
+    expect($('focusTag').textContent).toBe('Fullscreen');
+
+    // Click focusTile -> toggles off -> tag becomes Subtle Banner and auto-saves
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(false);
+    expect($('focusTag').textContent).toBe('Subtle Banner');
+    const savedFocus = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedFocus.settings).toMatchObject({ focusMode: false });
+
+    // Click focusTile again -> toggles on -> tag becomes Fullscreen and auto-saves
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(true);
+    expect($('focusTag').textContent).toBe('Fullscreen');
+    const savedFocusOn = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedFocusOn.settings).toMatchObject({ focusMode: true });
+
+    // Click enabledTile -> toggles off -> tag becomes Disabled and auto-saves
+    $('enabledTile').click();
+    await settle();
+    expect($('enabled').checked).toBe(false);
+    expect($('enabledTag').textContent).toBe('Disabled');
+    const savedEnabled = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedEnabled.settings).toMatchObject({ enabled: false });
+
+    // Click enabledTile again -> toggles on -> tag becomes Enabled and auto-saves
+    $('enabledTile').click();
+    await settle();
+    expect($('enabled').checked).toBe(true);
+    expect($('enabledTag').textContent).toBe('Enabled');
+  });
+
+  it('renders and auto-saves the adhanChime toggle (default ON, flips to OFF)', async () => {
+    await load();
+    expect($('adhanChime').checked).toBe(true);
+    expect($('chimeTag').textContent).toBe('ON');
+    expect($('chimeTile').classList.contains('on')).toBe(true);
+
+    // Click chimeTile -> toggles off -> tag becomes OFF and auto-saves
+    $('chimeTile').click();
+    await settle();
+    expect($('adhanChime').checked).toBe(false);
+    expect($('chimeTag').textContent).toBe('OFF');
+    expect($('chimeTile').classList.contains('on')).toBe(false);
+    const savedOff = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOff.settings).toMatchObject({ adhanChime: false });
+
+    // Click chimeTile again -> toggles on -> tag becomes ON and auto-saves
+    $('chimeTile').click();
+    await settle();
+    expect($('adhanChime').checked).toBe(true);
+    expect($('chimeTag').textContent).toBe('ON');
+    expect($('chimeTile').classList.contains('on')).toBe(true);
+    const savedOn = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOn.settings).toMatchObject({ adhanChime: true });
+  });
+
+  it('renders and auto-saves the strictFocus toggle (default Can Resume, flips to Strict Focus)', async () => {
+    await load();
+    expect($('strictFocus').checked).toBe(false);
+    expect($('strictFocusTag').textContent).toBe('Can Resume');
+    expect($('strictFocusTile').classList.contains('on')).toBe(false);
+    expect($('strictFocusHint').hidden).toBe(true);
+
+    // Click strictFocusTile -> toggles on -> tag becomes Strict Focus, hint shows and auto-saves
+    $('strictFocusTile').click();
+    await settle();
+    expect($('strictFocus').checked).toBe(true);
+    expect($('strictFocusTag').textContent).toBe('Strict Focus');
+    expect($('strictFocusTile').classList.contains('on')).toBe(true);
+    expect($('strictFocusHint').hidden).toBe(false);
+    const savedOn = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOn.settings).toMatchObject({ strictFocus: true });
+
+    // Click strictFocusTile again -> toggles off -> tag becomes Can Resume, hint hides and auto-saves
+    $('strictFocusTile').click();
+    await settle();
+    expect($('strictFocus').checked).toBe(false);
+    expect($('strictFocusTag').textContent).toBe('Can Resume');
+    expect($('strictFocusTile').classList.contains('on')).toBe(false);
+    expect($('strictFocusHint').hidden).toBe(true);
+    const savedOff = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedOff.settings).toMatchObject({ strictFocus: false });
+  });
+
+  it('locks strictFocus and focusMode tiles and hides Resume button while screen freeze is active', async () => {
+    const base = defaultState();
+    await load({
+      state: {
+        ...base,
+        settings: { ...base.settings, strictFocus: true },
+        paused: { active: true, focus: true, prayer: 'Asr', since: BASE },
+      },
+    });
+
+    expect($('strictFocusTile').classList.contains('is-disabled')).toBe(true);
+    expect($('strictFocusTile').getAttribute('aria-disabled')).toBe('true');
+    expect($('strictFocusTag').textContent).toBe('Locked');
+    expect($('focusTile').classList.contains('is-disabled')).toBe(true);
+    expect($('resumeBtn').disabled).toBe(true);
+    expect($('resumeBtn').hidden).toBe(true);
+    expect($('resumeBtn').style.display).toBe('none');
+
+    // Attempting to click strictFocusTile does not flip it
+    $('strictFocusTile').click();
+    await settle();
+    expect($('strictFocus').checked).toBe(true);
+  });
+
+  it('shows Freeze Screen and auto-resume rows when focusMode is enabled and hides them when disabled while keeping headsUpRow', async () => {
+    await load();
+    expect($('focusMode').checked).toBe(true);
+    expect($('resumeMinRow').hidden).toBe(false);
+    expect($('strictFocusTileWrap').hidden).toBe(false);
+    expect($('headsUpRow').hidden).toBe(false);
+
+    // Toggle focusMode off -> Freeze Screen & auto-resume hide, heads-up stays
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(false);
+    expect($('resumeMinRow').hidden).toBe(true);
+    expect($('strictFocusTileWrap').hidden).toBe(true);
+    expect($('headsUpRow').hidden).toBe(false);
+
+    // Toggle focusMode back on -> Freeze Screen & auto-resume show again
+    $('focusTile').click();
+    await settle();
+    expect($('focusMode').checked).toBe(true);
+    expect($('resumeMinRow').hidden).toBe(false);
+    expect($('strictFocusTileWrap').hidden).toBe(false);
+
+    // Changing resumeMin auto-saves autoResumeMinutes
+    $('resumeMin').value = '10';
+    $('resumeMin').dispatchEvent(new Event('change'));
+    await settle();
+    const saved = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings).toMatchObject({ autoResumeMinutes: 10 });
+  });
+
+  it('saves the badgeCountdown toggle state (auto-saves on tile click and respects collapsed subpanel)', async () => {
+    await load();
+    expect($('badgeCountdown').checked).toBe(true);
+    expect($('badgeTag').textContent).toBe('ON');
+    // Sublist under Countdown Timer is collapsed by default
+    expect($('badgeSubpanel').hidden).toBe(true);
+    expect($('badgeExpandBtn').getAttribute('aria-expanded')).toBe('false');
+
+    // Expand button opens options subpanel
+    $('badgeExpandBtn').click();
+    expect($('badgeSubpanel').hidden).toBe(false);
+    expect($('badgeExpandBtn').getAttribute('aria-expanded')).toBe('true');
+    expect($('pinHint').hidden).toBe(false);
+
+    $('badgeTile').click(); // toggles from true to false — auto-saves immediately
+    await settle();
+    expect($('badgeCountdown').checked).toBe(false);
+    expect($('badgeTag').textContent).toBe('OFF');
+    expect($('badgeSubpanel').hidden).toBe(true);
+    expect($('pinHint').hidden).toBe(true);
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings).toMatchObject({ badgeCountdown: false });
+  });
+
+  it('renders and auto-saves badgeMode (Auto/Manual) and badgeManualHours', async () => {
+    await load();
+    expect($('badgeMode').value).toBe('auto');
+    expect($('badgeHoursRow').hidden).toBe(true); // auto hides hours row
+    $('badgeMode').value = 'manual';
+    $('badgeMode').dispatchEvent(new window.Event('change')); // triggers auto-save
+    await settle();
+    expect($('badgeHoursRow').hidden).toBe(false); // manual reveals hours row
+    const saved1 = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved1.settings).toMatchObject({ badgeMode: 'manual' });
+
+    // Also test hours selector auto-save
+    $('badgeManualHours').value = '3';
+    $('badgeManualHours').dispatchEvent(new window.Event('change'));
+    await settle();
+    const saved2 = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved2.settings).toMatchObject({ badgeManualHours: 3 });
+  });
+
+  it('supports segmented controls and expand/collapse buttons for Notification Screen and Countdown Timer', async () => {
+    await load();
+
+    // 1. Notification Screen subpanel toggle
+    expect($('focusSubpanel').hidden).toBe(true);
+    expect($('focusExpandBtn').getAttribute('aria-expanded')).toBe('false');
+    $('focusExpandBtn').click();
+    expect($('focusSubpanel').hidden).toBe(false);
+    expect($('focusExpandBtn').getAttribute('aria-expanded')).toBe('true');
+    $('focusExpandBtn').click();
+    expect($('focusSubpanel').hidden).toBe(true);
+    expect($('focusExpandBtn').getAttribute('aria-expanded')).toBe('false');
+
+    // 2. Notification Screen segmented buttons (Fullscreen / Subtle Banner)
+    const subtleOpt = document.querySelector('#focusTile [data-val="subtle"]');
+    const fullscreenOpt = document.querySelector('#focusTile [data-val="fullscreen"]');
+    subtleOpt.click();
+    await settle();
+    expect($('focusMode').checked).toBe(false);
+    expect($('focusTile').style.getPropertyValue('--i')).toBe('1');
+    const savedSubtle = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedSubtle.settings).toMatchObject({ focusMode: false });
+
+    fullscreenOpt.click();
+    await settle();
+    expect($('focusMode').checked).toBe(true);
+    expect($('focusTile').style.getPropertyValue('--i')).toBe('0');
+    const savedFullscreen = [...chrome.__.sent].reverse().find((m) => m.type === 'SAVE_SETTINGS');
+    expect(savedFullscreen.settings).toMatchObject({ focusMode: true });
+
+    // 3. Lock Screen segmented buttons (Can Resume / Strict Focus)
+    const strictOpt = document.querySelector('#strictFocusTile [data-val="strict"]');
+    const casualOpt = document.querySelector('#strictFocusTile [data-val="casual"]');
+    strictOpt.click();
+    await settle();
+    expect($('strictFocus').checked).toBe(true);
+    expect($('strictFocusHint').hidden).toBe(false);
+    expect($('strictFocusTile').style.getPropertyValue('--i')).toBe('1');
+
+    casualOpt.click();
+    await settle();
+    expect($('strictFocus').checked).toBe(false);
+    expect($('strictFocusHint').hidden).toBe(true);
+    expect($('strictFocusTile').style.getPropertyValue('--i')).toBe('0');
+
+    // 4. Chime Sound segmented buttons
+    const chimeOffOpt = document.querySelector('#chimeTile [data-val="off"]');
+    const chimeOnOpt = document.querySelector('#chimeTile [data-val="on"]');
+    chimeOffOpt.click();
+    await settle();
+    expect($('adhanChime').checked).toBe(false);
+    expect($('chimeTile').style.getPropertyValue('--i')).toBe('1');
+
+    chimeOnOpt.click();
+    await settle();
+    expect($('adhanChime').checked).toBe(true);
+    expect($('chimeTile').style.getPropertyValue('--i')).toBe('0');
+
+    // 5. Adhan Focus segmented buttons
+    const disabledOpt = document.querySelector('#enabledTile [data-val="disabled"]');
+    const enabledOpt = document.querySelector('#enabledTile [data-val="enabled"]');
+    disabledOpt.click();
+    await settle();
+    expect($('enabled').checked).toBe(false);
+    expect($('enabledTile').style.getPropertyValue('--i')).toBe('1');
+
+    enabledOpt.click();
+    await settle();
+    expect($('enabled').checked).toBe(true);
+    expect($('enabledTile').style.getPropertyValue('--i')).toBe('0');
+
+    // 6. Icon Countdown Mode segmented control (Auto / Manual)
+    const manualModeOpt = document.querySelector('#badgeModeSeg [data-val="manual"]');
+    const autoModeOpt = document.querySelector('#badgeModeSeg [data-val="auto"]');
+    manualModeOpt.click();
+    await settle();
+    expect($('badgeMode').value).toBe('manual');
+    expect($('badgeModeSeg').style.getPropertyValue('--i')).toBe('1');
+    expect($('badgeHoursRow').hidden).toBe(false);
+
+    autoModeOpt.click();
+    await settle();
+    expect($('badgeMode').value).toBe('auto');
+    expect($('badgeModeSeg').style.getPropertyValue('--i')).toBe('0');
+    expect($('badgeHoursRow').hidden).toBe(true);
   });
 });
 
@@ -193,6 +633,14 @@ describe('action buttons relay to the worker', () => {
     await settle();
     expect(sentTypes()).toEqual(expect.arrayContaining(['RESUME_NOW', 'FOCUS_NOW', 'REFRESH', 'TEST_ADHAN']));
     expect($('testMsg').textContent).toBe(EN.test_started);
+  });
+
+  it('testChimeBtn plays chime and shows feedback message', async () => {
+    await load();
+    expect($('testChimeBtn')).toBeTruthy();
+    $('testChimeBtn').click();
+    await settle();
+    expect($('testMsg').textContent).toBe(EN.test_chime_played);
   });
 
   it('the tab bar swaps views within the fixed frame (no resize)', async () => {
@@ -224,7 +672,191 @@ describe('location autocomplete (Open-Meteo geocoding)', () => {
     // Picking a suggestion fills the field and closes the list.
     results.children[0].dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     expect($('city').value).toBe('London, England, United Kingdom');
+    expect($('locLabel').title).toBe('London, England, United Kingdom');
     expect(results.hidden).toBe(true);
+  });
+
+  // Open-Meteo answers in the language asked for, and matches the query against the
+  // names in that language: an Arabic name was found only when Arabic was asked for.
+  const AR_FOUND = {
+    results: [{ id: 2553604, name: 'الدار البيضاء', admin1: 'الدار البيضاء - سطات', country: 'المغرب', country_code: 'MA', latitude: 33.59, longitude: -7.61 }],
+  };
+  const AR_LABEL = 'الدار البيضاء, الدار البيضاء - سطات, المغرب';
+  const NONE = { results: [] }; // an Arabic query, asked in English
+  const CASABLANCA_EN = { id: 2553604, name: 'Casablanca', admin1: 'Casablanca-Settat', country: 'Morocco', country_code: 'MA', latitude: 33.59, longitude: -7.61 };
+  const toArabic = async () => {
+    $('lang').value = 'ar';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+  };
+  const searchAndPick = async (q) => {
+    $('city').value = q;
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    $('cityResults').children[0].dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  };
+  const saveSent = async () => {
+    $('save').click();
+    await settle();
+    return chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+  };
+
+  it('searches in the UI language, and saves the place under its English names', async () => {
+    await load({ fetchRoutes: [['/v1/get?', CASABLANCA_EN], ['language=en', NONE], ['language=ar', AR_FOUND]] });
+    await toArabic();
+    await searchAndPick('الدار البيضاء');
+    const searches = globalThis.fetch.calls.filter((u) => u.includes('/v1/search'));
+    expect(searches.map((u) => u.match(/language=(\w+)/)[1]).sort()).toEqual(['ar', 'en']);
+    expect($('city').getAttribute('dir')).toBe('rtl');
+    expect($('city').value).toBe(AR_LABEL);
+    expect($('locLabel').textContent).toBe(AR_LABEL);
+
+    const saved = await saveSent();
+    // Aladhan is asked by these names, as for a place found in English.
+    expect(saved.settings).toMatchObject({ city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.61 });
+    expect(saved.settings.placeLabel).toEqual({ lang: 'ar', text: AR_LABEL });
+    expect(globalThis.fetch.calls).toContain('https://geocoding-api.open-meteo.com/v1/get?id=2553604&language=en');
+  });
+
+  it('shows a saved place as it was found while the UI is in that language', async () => {
+    const state = defaultState();
+    Object.assign(state.settings, { city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.61, placeLabel: { lang: 'ar', text: AR_LABEL } });
+    await load({ state });
+    expect($('locLabel').textContent).toBe('Casablanca, Casablanca-Settat, Morocco');
+    await toArabic();
+    expect($('locLabel').textContent).toBe(AR_LABEL);
+    expect($('city').value).toBe(AR_LABEL);
+    // Saving other settings keeps the place and its label, and asks nothing.
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Casablanca', country: 'Morocco', placeLabel: { lang: 'ar', text: AR_LABEL } });
+    expect(globalThis.fetch.calls.filter((u) => u.includes('open-meteo'))).toEqual([]);
+  });
+
+  it('a place found in English clears the label an earlier place left', async () => {
+    const state = defaultState();
+    state.settings.placeLabel = { lang: 'ar', text: AR_LABEL };
+    await load({ state });
+    await searchAndPick('Lon');
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'London', country: 'United Kingdom', placeLabel: null });
+    expect(globalThis.fetch.calls.some((u) => u.includes('/v1/get'))).toBe(false);
+  });
+
+  it('saves nothing when the English names cannot be had', async () => {
+    await load({ fetchRoutes: [['/v1/get?', { status: 503 }], ['language=en', NONE], ['language=ar', AR_FOUND]] });
+    await toArabic();
+    await searchAndPick('الدار البيضاء');
+    expect(await saveSent()).toBeUndefined();
+    expect($('saveMsg').textContent).toContain('geocode 503');
+    expect($('save').disabled).toBe(false);
+  });
+
+  it('gives up on English names that do not come, so Save can be tried again', async () => {
+    await load({ fetchRoutes: [['/v1/get?', () => new Promise(() => {})], ['language=en', NONE], ['language=ar', AR_FOUND]] });
+    await toArabic();
+    await searchAndPick('الدار البيضاء');
+    $('save').click();
+    await settle();
+    expect($('save').disabled).toBe(true);
+    await jest.advanceTimersByTimeAsync(8000);
+    expect($('save').disabled).toBe(false);
+    expect($('saveMsg').textContent).toContain('geocode: no answer');
+    expect(chrome.__.sent.some((m) => m.type === 'SAVE_SETTINGS')).toBe(false);
+  });
+
+  it('finds places English knows when the UI is in another language (Mecca, Saudi Arabia, not California)', async () => {
+    const MECCA_SA = { id: 104515, name: 'Mecca', admin1: 'Mecca Region', country: 'Saudi Arabia', latitude: 21.42, longitude: 39.83 };
+    const MECCA_CA_FR = { id: 5371965, name: 'Mecca', admin1: 'Californie', country: 'États-Unis', latitude: 33.57, longitude: -116.08 };
+    await load({ fetchRoutes: [['language=en', { results: [MECCA_SA] }], ['language=fr', { results: [MECCA_CA_FR] }]] });
+    $('lang').value = 'fr';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    await searchAndPick('Mecca');
+    expect($('city').value).toBe('Mecca, Mecca Region, Saudi Arabia');
+    expect([...$('cityResults').children].map((c) => c.textContent)).toEqual(['Mecca, Mecca Region, Saudi Arabia', 'Mecca, Californie, États-Unis']);
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Mecca', country: 'Saudi Arabia', placeLabel: null });
+    expect(globalThis.fetch.calls.some((u) => u.includes('/v1/get'))).toBe(false); // already in English
+  });
+
+  it('keeps an Arabic label that opens with a Latin city right to left', async () => {
+    // By its first letter "Toronto, داكوتا الجنوبية, …" read left to right, its parts
+    // reordered: region and country before the city for an Arabic reader.
+    const TORONTO_AR = { id: 5232379, name: 'Toronto', admin1: 'داكوتا الجنوبية', country: 'الولايات المتحدة الأمريكية', latitude: 44.57, longitude: -96.64 };
+    await load({ fetchRoutes: [['language=en', NONE], ['language=ar', { results: [TORONTO_AR] }]] });
+    await toArabic();
+    // A Latin place (the saved Sunnyvale) keeps its own direction, from its start.
+    expect($('city').dir).toBe('auto');
+    expect($('locLabel').dir).toBe('auto');
+    await searchAndPick('Toronto');
+    expect($('city').value).toBe('Toronto, داكوتا الجنوبية, الولايات المتحدة الأمريكية');
+    expect($('city').dir).toBe('rtl');
+    expect($('locLabel').dir).toBe('rtl');
+    // What is typed takes its own direction again.
+    $('city').value = 'الدار';
+    $('city').dispatchEvent(new window.Event('input'));
+    expect($('city').dir).toBe('auto');
+  });
+
+  it('picking a suggestion, or clicking the Location heading, never runs Detect location', async () => {
+    // The block was a <label> whose control was the Detect button: any click in it
+    // ran the IP lookup and saved the detected city over the pick.
+    await load();
+    $('city').value = 'Lon';
+    $('city').dispatchEvent(new window.Event('input'));
+    jest.advanceTimersByTime(300);
+    await settle();
+    const item = $('cityResults').children[0];
+    item.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    item.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    item.click();
+    document.querySelector('[data-i18n="location"]').click();
+    await settle();
+    expect(globalThis.fetch.calls.some((u) => u.includes('bigdatacloud'))).toBe(false);
+    expect(chrome.__.sent.some((m) => m.type === 'SAVE_SETTINGS')).toBe(false);
+    expect($('city').value).toBe('London, England, United Kingdom');
+    expect(document.querySelector('label[for="city"]').getAttribute('data-i18n')).toBe('location'); // the heading labels the field
+  });
+
+  it('saves a place with no country as having none (not "United States")', async () => {
+    // Open-Meteo gives Hebron (and Gaza, Ramallah, Nablus, Laayoune) no country;
+    // Aladhan took "Hebron, United States" for Hebron, Connecticut.
+    const HEBRON = { id: 285066, name: 'Hebron', admin1: 'West Bank', latitude: 31.53, longitude: 35.09, feature_code: 'PPLA', population: 160470 };
+    await load({ fetchRoutes: [['geocoding-api.open-meteo.com', { results: [HEBRON] }]] });
+    await searchAndPick('Hebron');
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Hebron', state: 'West Bank', country: '', lat: 31.53, lon: 35.09 });
+  });
+
+  it('finds a city by its name in the UI language ("Londres") ahead of the villages of that name, and saves its English names', async () => {
+    const village = (id, population) => ({ id, name: 'Londres', admin1: 'X', country: 'Argentina', latitude: -27.7, longitude: -67.1, feature_code: 'PPL', population });
+    const LONDRES_EN = { results: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => village(i, 100 * i)) };
+    const LONDRES_FR = { results: [{ id: 2643743, name: 'Londres', admin1: 'Angleterre', country: 'Royaume-Uni', latitude: 51.5, longitude: -0.12, feature_code: 'PPLC', population: 8961989 }] };
+    const LONDON_EN = { id: 2643743, name: 'London', admin1: 'England', country: 'United Kingdom', latitude: 51.5, longitude: -0.12 };
+    await load({ fetchRoutes: [['/v1/get?', LONDON_EN], ['language=en', LONDRES_EN], ['language=fr', LONDRES_FR]] });
+    $('lang').value = 'fr';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    await searchAndPick('Londres');
+    expect($('city').value).toBe('Londres, Angleterre, Royaume-Uni');
+    const saved = await saveSent();
+    // Found only in French: its English names asked for by id.
+    expect(globalThis.fetch.calls.filter((u) => u.includes('/v1/get'))).toHaveLength(1);
+    expect(saved.settings).toMatchObject({ city: 'London', state: 'England', country: 'United Kingdom' });
+    expect(saved.settings.placeLabel).toEqual({ lang: 'fr', text: 'Londres, Angleterre, Royaume-Uni' });
+  });
+
+  it('saves a place both answers have under the English answer\'s names, asking nothing more', async () => {
+    const PARIS = (country, admin1) => ({ results: [{ id: 2988507, name: 'Paris', admin1, country, latitude: 48.85, longitude: 2.35, feature_code: 'PPLC', population: 2138551 }] });
+    await load({ fetchRoutes: [['language=en', PARIS('France', 'Île-de-France Region')], ['language=fr', PARIS('France', 'Île-de-France')]] });
+    $('lang').value = 'fr';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    await searchAndPick('Paris');
+    const saved = await saveSent();
+    expect(saved.settings).toMatchObject({ city: 'Paris', state: 'Île-de-France Region', country: 'France', placeLabel: { lang: 'fr', text: 'Paris, Île-de-France, France' } });
+    expect(globalThis.fetch.calls.some((u) => u.includes('/v1/get'))).toBe(false);
   });
 
   it('does not search for fewer than two characters', async () => {
@@ -278,6 +910,69 @@ describe('language switching', () => {
     expect(document.documentElement.lang).toBe('ar');
     // Static markup re-translated: the next-prayer label now reads Arabic.
     expect(document.querySelector('[data-i18n="next_prayer"]').textContent).toBe(cat('ar').next_prayer);
+  });
+
+  it('keeps the header place whole, in its own direction, in Arabic', async () => {
+    // A Latin place name in an RTL header used to clip at its start (the city).
+    // dir="auto" gives it its own direction, the title holds the whole name, and
+    // the date shares the app name's row so the place has the width below it.
+    await load();
+    $('lang').value = 'ar';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    const loc = $('locLabel');
+    expect(loc.getAttribute('dir')).toBe('auto');
+    expect(loc.textContent).toBe('Sunnyvale, California, United States'); // as geocoded, untranslated
+    expect(loc.title).toBe(loc.textContent);
+    expect($('headDate').parentElement).toBe(loc.previousElementSibling);
+  });
+});
+
+describe('the next-prayer countdown in the UI language', () => {
+  // Asr 4 min 13 s away.
+  function soonState() {
+    const state = defaultState();
+    state.nextPrayer = { ...state.nextPrayer, ts: BASE + 4 * 60e3 + 13e3 };
+    return state;
+  }
+
+  it.each([
+    ['en', 'in 4m 13s'],
+    ['ar', 'بعد 4 د 13 ث'],
+    ['ur', '4 منٹ 13 سیکنڈ میں'],
+    ['id', 'dalam 4 mnt 13 dtk'],
+    ['tr', '4 dk 13 sn içinde'],
+    ['fr', 'dans 4 min 13 s'],
+  ])('%s: "%s", with Latin digits as in the clock and the prayer times', async (lang, text) => {
+    await load({ state: soonState(), initialStorage: { lang } });
+    expect($('nextCountdown').textContent).toBe(text);
+  });
+
+  it('hours and minutes too', async () => {
+    const state = defaultState();
+    state.nextPrayer.ts = BASE + 3600e3 + 5 * 60e3;
+    await load({ state, initialStorage: { lang: 'ar' } });
+    expect($('nextCountdown').textContent).toBe('بعد 1 س 5 د');
+  });
+
+  it('the 1-second tick keeps the language', async () => {
+    const state = defaultState();
+    state.nextPrayer.ts = BASE + 61e3;
+    await load({ state, initialStorage: { lang: 'ar' } });
+    expect($('nextCountdown').textContent).toBe('بعد 1 د 1 ث');
+    jest.advanceTimersByTime(1000);
+    expect($('nextCountdown').textContent).toBe('بعد 1 د 0 ث');
+    jest.advanceTimersByTime(1000);
+    expect($('nextCountdown').textContent).toBe('بعد 59 ث');
+  });
+
+  it('switching the language re-words it at once', async () => {
+    await load({ state: soonState() });
+    expect($('nextCountdown').textContent).toBe('in 4m 13s');
+    $('lang').value = 'ur';
+    $('lang').dispatchEvent(new window.Event('change'));
+    await settle();
+    expect($('nextCountdown').textContent).toBe('4 منٹ 13 سیکنڈ میں');
   });
 });
 
@@ -373,6 +1068,52 @@ describe('prayer tracking', () => {
     await settle();
     expect(sent.find((m) => m.type === 'TOGGLE_PRAYER')).toMatchObject({ date: '2026-05-20', prayer: 'Fajr' });
   });
+
+  it('Option 1: styles tracker pills with prayer-specific classes and prevents marking upcoming prayers', async () => {
+    const state = defaultState();
+    state.schedule.date = '2026-05-23';
+    state.prayerLog = {
+      '2026-05-23': { Fajr: true },
+    };
+    const sent = [];
+    await load({ state, send: (m) => { sent.push(m); return m.type === 'GET_STATE' ? state : { ok: true, prayerLog: {} }; } });
+    document.querySelector('[data-tab="tracker"]').click();
+
+    const pills = $('ddPrayers').querySelectorAll('.dd-p');
+    expect(pills).toHaveLength(5);
+
+    // 1. Prayer classes attached (p-fajr, p-dhuhr, p-asr, p-maghrib, p-isha)
+    expect(pills[0].classList.contains('p-fajr')).toBe(true);
+    expect(pills[1].classList.contains('p-dhuhr')).toBe(true);
+    expect(pills[2].classList.contains('p-asr')).toBe(true);
+    expect(pills[3].classList.contains('p-maghrib')).toBe(true);
+    expect(pills[4].classList.contains('p-isha')).toBe(true);
+
+    // 2. Attended prayer has "on" class
+    expect(pills[0].classList.contains('on')).toBe(true);
+    expect(pills[1].classList.contains('on')).toBe(false);
+
+    // 3. Past prayers are markable (unlocked); upcoming prayers today are locked
+    expect(pills[0].classList.contains('locked')).toBe(false); // Fajr passed
+    expect(pills[1].classList.contains('locked')).toBe(false); // Dhuhr passed
+    expect(pills[2].classList.contains('locked')).toBe(true);  // Asr upcoming
+    expect(pills[3].classList.contains('locked')).toBe(true);  // Maghrib upcoming
+    expect(pills[4].classList.contains('locked')).toBe(true);  // Isha upcoming
+    expect(pills[2].getAttribute('aria-disabled')).toBe('true');
+
+    // 4. Clicking upcoming prayer does NOT send TOGGLE_PRAYER
+    pills[2].click();
+    await settle();
+    expect(sent.find((m) => m.type === 'TOGGLE_PRAYER' && m.prayer === 'Asr')).toBeUndefined();
+
+    // 5. Clicking passed prayer sends TOGGLE_PRAYER
+    pills[1].click(); // Dhuhr
+    await settle();
+    expect(sent.find((m) => m.type === 'TOGGLE_PRAYER' && m.prayer === 'Dhuhr')).toMatchObject({
+      date: '2026-05-23',
+      prayer: 'Dhuhr',
+    });
+  });
 });
 
 describe('appearance & clock style', () => {
@@ -424,5 +1165,291 @@ describe('usage card (local-only activity)', () => {
     await load(); // defaultState carries no usage
     expect($('usageEmpty').hidden).toBe(false);
     expect($('usageGrid').hidden).toBe(true);
+  });
+
+  it('preserves and renders historical tracker streak and device activity upon version upgrade', async () => {
+    const state = defaultState();
+    state.installedAt = new Date('2026-01-01T12:00:00').getTime();
+    state.prayerLog = {
+      '2026-05-22': { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true, Isha: true },
+      '2026-05-23': { Fajr: true, Dhuhr: true, Asr: true, Maghrib: true },
+    };
+    state.usage = {
+      totals: { pauses: 42, resumes: 39, notifications: 38, focusUsed: 10 },
+      perDay: { '2026-05-22': { pauses: 5 }, '2026-05-23': { pauses: 4 } },
+    };
+    await load({ state });
+
+    // Verify Tracker renders historical data
+    document.querySelector('[data-tab="tracker"]').click();
+    expect($('trackerStreak').textContent).toMatch(/streak|prayers logged/);
+    const dayCell = [...$('calGrid').querySelectorAll('.cal-day:not(.empty)')].find((c) => c.textContent === '22');
+    expect(dayCell.className).toContain('lvl-5'); // all 5 prayers logged
+
+    // Verify Activity on this device renders historical data
+    document.querySelector('[data-tab="settings"]').click();
+    expect($('usageGrid').hidden).toBe(false);
+    expect($('usagePaused').textContent).toBe('42');
+    expect($('usageAlerts').textContent).toBe('38');
+    expect($('usageActiveDays').textContent).toBe('2');
+    expect($('usageSince').textContent).toMatch(/Jan 2026/);
+  });
+});
+
+describe('in-popup onboarding & tutorial', () => {
+  it('displays onboarding modal when onboardingCompleted is false and allows skipping', async () => {
+    await load();
+    await chrome.storage.local.set({ onboardingCompleted: false });
+    $('openTourBtn').click();
+    expect($('onboardingModal').hidden).toBe(false);
+    expect($('obSlide1').classList.contains('is-active')).toBe(true);
+
+    // Click Next -> moves to slide 2
+    $('obNextBtn').click();
+    expect($('obSlide2').classList.contains('is-active')).toBe(true);
+
+    // Click Skip -> hides modal and marks completed
+    $('obSkipBtn').click();
+    expect($('onboardingModal').hidden).toBe(true);
+    const stored = await chrome.storage.local.get('onboardingCompleted');
+    expect(stored.onboardingCompleted).toBe(true);
+  });
+
+  it('allows stepping through all 4 slides and clicking finish', async () => {
+    await load();
+    $('openTourBtn').click();
+    expect($('onboardingModal').hidden).toBe(false);
+
+    $('obNextBtn').click(); // to slide 2
+    expect($('obSlide2').classList.contains('is-active')).toBe(true);
+    $('obNextBtn').click(); // to slide 3
+    expect($('obSlide3').classList.contains('is-active')).toBe(true);
+    $('obNextBtn').click(); // to slide 4
+    expect($('obSlide4').classList.contains('is-active')).toBe(true);
+    expect($('obFinishBtn').hidden).toBe(false);
+
+    $('obFinishBtn').click();
+    expect($('onboardingModal').hidden).toBe(true);
+    const stored = await chrome.storage.local.get('onboardingCompleted');
+    expect(stored.onboardingCompleted).toBe(true);
+  });
+
+  it('handles onboarding detect button, chime preview, simulation, and prev button', async () => {
+    await load({ initialStorage: { onboardingCompleted: false } });
+    expect($('onboardingModal').hidden).toBe(false);
+
+    // Test obDetectBtn
+    $('obDetectBtn').click();
+    await settle();
+    expect($('obCurrentLoc').textContent).toContain('Sunnyvale');
+
+    // Test obChimePreviewBtn
+    $('obChimePreviewBtn').click();
+    await settle();
+
+    // Test obSimBtn
+    $('obSimBtn').click();
+    expect($('obSimStatus').hidden).toBe(false);
+
+    // Test obNextBtn then obPrevBtn
+    $('obNextBtn').click();
+    expect($('obSlide2').classList.contains('is-active')).toBe(true);
+    $('obPrevBtn').click();
+    expect($('obSlide1').classList.contains('is-active')).toBe(true);
+  });
+});
+
+describe('detect location and clock keyboard shortcuts', () => {
+  it('detects location via IP when detectLocBtn is clicked', async () => {
+    await load();
+    const btn = $('detectLocBtn');
+    expect(btn).toBeTruthy();
+    btn.click();
+    await settle();
+    expect($('city').value).toBe('Sunnyvale, California, United States');
+    expect($('locLabel').textContent).toContain('Sunnyvale');
+  });
+
+  it('shows pick location error if detectLocationByIp returns no place', async () => {
+    await load({
+      fetchRoutes: [
+        ['reverse-geocode-client', { status: 500 }],
+        ['ipapi.co', { status: 500 }],
+      ],
+    });
+    const btn = $('detectLocBtn');
+    btn.click();
+    await settle();
+    expect($('saveMsg').textContent).toBe(EN.pick_location || 'Please search for your city');
+  });
+
+  it('toggles clock style on Enter or Space keydown', async () => {
+    await load();
+    const clock = $('clock');
+    clock.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle();
+    expect(clock.classList.contains('is-digital')).toBe(true);
+
+    clock.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await settle();
+    expect(clock.classList.contains('is-digital')).toBe(false);
+  });
+});
+
+
+describe("the clock reads the location's time from Aladhan's offsets (Morocco +00)", () => {
+  // Morocco is on +00 since 2026-09-20, but a browser shipping older tz data still
+  // reads Africa/Casablanca as +01: the clock ran an hour ahead of the prayer
+  // times. simulateStaleTzData makes Intl answer like such a browser.
+  const utc = (h, m, d = 10) => Date.UTC(2026, 9, d, h, m);
+  const CASA = [['Fajr', '05:23 AM', 5, 23], ['Dhuhr', '12:17 PM', 12, 17], ['Asr', '03:35 PM', 15, 35], ['Maghrib', '06:03 PM', 18, 3], ['Isha', '07:11 PM', 19, 11]];
+  function casaState() {
+    const base = defaultState();
+    return {
+      ...base,
+      settings: { ...base.settings, city: 'Casablanca', state: 'Casablanca-Settat', country: 'Morocco', lat: 33.59, lon: -7.62 },
+      schedule: {
+        date: '2026-10-10',
+        tz: 'Africa/Casablanca',
+        fetchedAt: utc(9, 15),
+        sunrise: { time: '06:31 AM', ts: utc(6, 31), offsetMin: 0 },
+        prayers: CASA.map(([name, time, h, m]) => ({ name, time, ts: utc(h, m), offsetMin: 0 })),
+      },
+      nextPrayer: { name: 'Dhuhr', time: '12:17 PM', ts: utc(12, 17) },
+    };
+  }
+  let restore;
+  beforeEach(() => {
+    restore = simulateStaleTzData();
+    jest.setSystemTime(Date.UTC(2026, 9, 10, 10, 58, 5)); // the report: 10:58, Saturday 10/10/2026
+    expect(tzOffsetMs(new Date(), 'Africa/Casablanca')).toBe(3600e3); // the out-of-date reading is in force
+  });
+  afterEach(() => restore());
+
+  it('shows 10:58 at 10:58 UTC, matching the prayer times (this browser alone reads 11:58)', async () => {
+    await load({ state: casaState() });
+    expect($('clockDigital').textContent).toMatch(/^10:58:05\sAM$/);
+    expect($('handHour').getAttribute('transform')).toBe('rotate(329.00 100 100)'); // 10:58
+    expect($('handMin').getAttribute('transform')).toBe('rotate(348.50 100 100)');
+    expect($('headDate').textContent).toBe('Sat, Oct 10');
+    // The machine's locale picks the digits ('09:15' / '٠٩:١٥'): compare with the same formatting.
+    const hm = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    expect($('updated').textContent).toContain(hm(utc(9, 15)));
+    expect($('nextTime').textContent).toBe('12:17 PM');
+    expect($('nextCountdown').textContent).toBe('in 1h 18m');
+  });
+
+  it('the digital clock and the date too, up to midnight (this browser alone reads Sun, Oct 11)', async () => {
+    jest.setSystemTime(Date.UTC(2026, 9, 10, 23, 30));
+    await load({ state: casaState(), initialStorage: { clockStyle: 'digital' } });
+    expect($('clock').classList.contains('is-digital')).toBe(true);
+    expect($('clockDigital').textContent).toBe('11:30PM'); // "11:30" + the AM/PM badge
+    expect($('headDate').textContent).toBe('Sat, Oct 10');
+  });
+
+  it("reads the location's time, not this machine's, wherever this machine is (Kathmandu, +05:45)", async () => {
+    const state = casaState();
+    state.schedule = {
+      ...state.schedule,
+      tz: 'Asia/Kathmandu',
+      prayers: state.schedule.prayers.map((p) => ({ ...p, offsetMin: 345 })),
+      sunrise: { ...state.schedule.sunrise, offsetMin: 345 },
+    };
+    await load({ state });
+    expect($('clockDigital').textContent).toMatch(/^4:43:05\sPM$/); // 10:58:05Z + 5:45
+    const hm = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    expect($('updated').textContent).toContain(hm(utc(9, 15) + 345 * 60e3)); // fetched 09:15Z = 15:00 there
+  });
+});
+
+describe('per-prayer minute adjustments (±5)', () => {
+  function adjustedState() {
+    const base = defaultState();
+    return {
+      ...base,
+      settings: { ...base.settings, adjustMinutes: { Fajr: 0, Dhuhr: 2, Asr: 0, Maghrib: -1, Isha: 0 } },
+      schedule: {
+        ...base.schedule,
+        prayers: base.schedule.prayers.map((p) =>
+          p.name === 'Dhuhr' ? { ...p, time: '01:07 PM', adjustMin: 2 } : p.name === 'Maghrib' ? { ...p, time: '08:16 PM', adjustMin: -1 } : p
+        ),
+      },
+    };
+  }
+
+  const NAMES = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  const values = () => NAMES.map((n) => $('adjust-' + n).value);
+  const choose = (id, value) => {
+    $(id).value = value;
+    $(id).dispatchEvent(new Event('change'));
+  };
+
+  it('Settings shows each prayer\'s adjustment, from −5 to +5', async () => {
+    await load({ state: adjustedState() });
+    expect(values()).toEqual(['0', '2', '0', '-1', '0']);
+    expect([...$('adjust-Fajr').options].map((o) => o.textContent)).toEqual(['−5', '−4', '−3', '−2', '−1', '0', '+1', '+2', '+3', '+4', '+5']);
+    expect($('adjustRow').querySelector('.set-label').textContent).toBe(EN.adjust_times);
+  });
+
+  it('"All prayers" sets the five at once, and shows "—" once they differ', async () => {
+    await load({ state: adjustedState() });
+    expect($('adjust-all').value).toBe(''); // they differ: "—"
+    expect($('adjust-all').selectedOptions[0].textContent).toBe('—');
+    expect($('adjust-all').closest('label').textContent).toContain(EN.adjust_all);
+    choose('adjust-all', '4');
+    expect(values()).toEqual(['4', '4', '4', '4', '4']);
+    choose('adjust-Asr', '-1'); // one tuned on its own
+    expect($('adjust-all').value).toBe('');
+    choose('adjust-Asr', '4'); // back in step
+    expect($('adjust-all').value).toBe('4');
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings.adjustMinutes).toEqual({ Fajr: 4, Dhuhr: 4, Asr: 4, Maghrib: 4, Isha: 4 });
+  });
+
+  it('"All prayers" shows the common value when the saved ones agree', async () => {
+    const state = adjustedState();
+    state.settings.adjustMinutes = { Fajr: -2, Dhuhr: -2, Asr: -2, Maghrib: -2, Isha: -2 };
+    await load({ state });
+    expect($('adjust-all').value).toBe('-2');
+    await load(); // none saved yet: all 0
+    expect($('adjust-all').value).toBe('0');
+  });
+
+  it('Save sends them with the other settings', async () => {
+    await load({ state: adjustedState() });
+    $('adjust-Fajr').value = '3';
+    $('adjust-Maghrib').value = '0';
+    $('save').click();
+    await settle();
+    const saved = chrome.__.sent.find((m) => m.type === 'SAVE_SETTINGS');
+    expect(saved.settings.adjustMinutes).toEqual({ Fajr: 3, Dhuhr: 2, Asr: 0, Maghrib: 0, Isha: 0 });
+  });
+
+  it('marks an adjusted time in the list', async () => {
+    await load({ state: adjustedState() });
+    const marks = [...document.querySelectorAll('#list .row')].filter((r) => r.querySelector('.adj'));
+    expect(marks.map((r) => [r.querySelector('.pname').textContent, r.querySelector('.adj').textContent, r.querySelector('.adj').title])).toEqual([
+      ['Dhuhr', '+2', 'Adjusted by \u2066+2\u2069 min'],
+      ['Maghrib', '−1', 'Adjusted by \u2066−1\u2069 min'],
+    ]);
+    expect(document.querySelector('#list .row.p-dhuhr .ptime').textContent).toBe('01:07 PM+2');
+  });
+
+  it("the mark's tooltip is translated, and keeps the sign first in Arabic", async () => {
+    await load({ state: adjustedState(), initialStorage: { lang: 'ar' } });
+    const title = document.querySelector('#list .row.p-dhuhr .adj').title;
+    expect(title).toBe(cat('ar').adjusted_by.replace('{min}', '\u2066+2\u2069')); // isolated: "+2", not "2+"
+  });
+
+  it('the five selects form one group named by its heading and described by its help text', async () => {
+    await load({ state: adjustedState() });
+    const group = $('adjustRow');
+    expect(group.getAttribute('role')).toBe('group');
+    expect($(group.getAttribute('aria-labelledby')).textContent).toBe(EN.adjust_times);
+    expect($(group.getAttribute('aria-describedby')).textContent).toBe(EN.adjust_times_desc);
+    // Each select is named by the prayer its <label> wraps.
+    expect($('adjust-Maghrib').closest('label').textContent).toContain(EN.prayer_Maghrib);
   });
 });

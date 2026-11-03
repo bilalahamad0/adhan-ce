@@ -1,6 +1,7 @@
-# Releasing Adhan Caster
+# Releasing Adhan Focus
 
-How to publish a new version to the Chrome Web Store and to Firefox/AMO.
+How to publish a new version to the Chrome Web Store, Firefox/AMO, and Microsoft
+Edge Add-ons.
 
 > **⚠️ Tag namespaces decide the store.** Releases are triggered by **prefixed**
 > tags, never a bare `v*`:
@@ -8,12 +9,35 @@ How to publish a new version to the Chrome Web Store and to Firefox/AMO.
 >   signs the CRX and submits to the **live Chrome Web Store**.
 > - **`firefox-v<version>`** → [`Release (Firefox)`](.github/workflows/release-firefox.yml):
 >   builds + AMO-signs the XPI and submits to **addons.mozilla.org**.
+> - **`edge-v<version>`** → [`Release (Edge)`](.github/workflows/release-edge.yml):
+>   builds the ZIP and submits to **Microsoft Edge Add-ons**.
+> - **`opera-v<version>`** → [`Release (Opera)`](.github/workflows/release-opera.yml):
+>   builds the clean Chromium MV3 ZIP for **Opera Add-ons**.
 >
 > A bare `v<version>` tag is **retired** — it triggers no release and
 > [`release-tag-guard.yml`](.github/workflows/release-tag-guard.yml) fails it on
-> purpose. This keeps a Firefox release from ever touching the Chrome store and
-> vice versa. The two stores share one `manifest.json` version, so you can tag
-> the same commit `chrome-v2.1.0` and `firefox-v2.1.0`.
+> purpose. This keeps one store's release from ever touching another. All stores
+> share one `manifest.json` version, so you can tag the same commit
+> `chrome-v2.1.0`, `firefox-v2.1.0`, `edge-v2.1.0`, and `opera-v2.1.0`.
+>
+> Push the tags **one per `git push`**: GitHub starts no workflow runs for a
+> push that carries more than three tags.
+
+> **Releasing without pushing a tag.** Each release workflow can also be run
+> manually (Actions → the workflow → **Run workflow** on `main` with `ref` left
+> empty, or the workflow-dispatch API) with **`release`** ticked. That run tags
+> the commit it started on `<store>-v<manifest version>` itself, after the tests
+> and version check pass, then runs exactly the steps a tag push runs. Use it
+> from somewhere that can start workflows but not push tags.
+>
+> - It releases `main`'s tip. GitHub refuses a tag created by the workflow's own
+>   token on a commit whose `.github/workflows` differ from `main`'s tip, so the
+>   run refuses such a commit up front. Don't merge workflow changes to `main`
+>   until all four runs are past their tag step.
+> - If the tag already exists, it must point at the same commit: a re-run of
+>   the same release reuses it. A tag on another commit stops the run. If that
+>   version reached no store, delete the tag and run again; otherwise bump the
+>   version.
 
 > **Verified CRX uploads is enabled** on the Chrome listing. Every CWS upload
 > must be a `.crx` signed with the project's verified-uploads private key. Plain
@@ -32,7 +56,7 @@ There are two release paths:
 
 ## Prerequisites (one-time)
 
-You need the verified-uploads private key: `adhan-caster-pro-private.pem`.
+You need the verified-uploads private key: `adhan-focus-private.pem` (or legacy `adhan-caster-private.pem`).
 
 - It is **not in this repo** (and never should be — `*.pem` is gitignored).
 - Stored in: _\<password manager entry name + offline backup location\>_ —
@@ -86,9 +110,9 @@ fix and re-push (`git tag -d chrome-v1.6.4 && git push --delete origin chrome-v1
 
 ### 4. Chrome Web Store submission
 
-**If the CWS OAuth secrets are configured** (see
+**The CWS OAuth secrets are configured** (see
 [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Automating CWS
-submission"), the tag push already did this: the workflow uploaded the signed
+submission"), so the tag push already did this: the workflow uploaded the signed
 CRX and **submitted it for review** automatically. Check the run's "Submit to
 Chrome Web Store" step for the confirmation, then just review/publish the draft
 GitHub Release notes. Skip to [Wait for review](#wait-for-review).
@@ -96,12 +120,12 @@ GitHub Release notes. Skip to [Wait for review](#wait-for-review).
 **Otherwise, submit manually:**
 
 1. **Releases** tab → draft `chrome-v1.6.4` → review the auto-generated notes → **Publish**
-2. Download `adhan-caster-pro-1.6.4.crx` from the release's attached assets
-3. [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Caster → **Package** → **Upload new package** → pick the CRX → **Submit for review**
+2. Download `adhan-focus-1.6.4.crx` from the release's attached assets
+3. [Developer Dashboard](https://chrome.google.com/webstore/devconsole) → Adhan Focus → **Package** → **Upload new package** → pick the CRX → **Submit for review**
 
    Or from your machine, with the OAuth `.env` set up:
    ```bash
-   npm run submit:cws -- adhan-caster-pro-1.6.4.crx
+   npm run submit:cws -- adhan-focus-1.6.4.crx
    ```
 
 ## Manual fallback (pack locally)
@@ -112,10 +136,10 @@ Use when GitHub Actions is down, or you need to test a build before tagging.
 
 ```bash
 npm ci
-npm run pack:crx /path/to/adhan-caster-pro-private.pem
+npm run pack:crx /path/to/adhan-focus-private.pem
 ```
 
-Drops `adhan-caster-pro-<manifest.version>.crx` at the repo root. Same
+Drops `adhan-focus-<manifest.version>.crx` at the repo root. Same
 [`scripts/pack-crx.mjs`](scripts/pack-crx.mjs) the CI workflow uses, so the
 output is byte-identical to what CI would produce.
 
@@ -124,7 +148,7 @@ output is byte-identical to what CI would produce.
 1. `chrome://extensions` → **Developer mode** on (top right)
 2. **Pack extension**
 3. **Extension root directory**: the repo folder (`/path/to/adhan-ce`)
-4. **Private key file**: path to `adhan-caster-pro-private.pem`
+4. **Private key file**: path to `adhan-focus-private.pem`
 5. **Pack extension**
 
 Produces `adhan-ce.crx` next to the repo folder. **Do not** use the
@@ -158,21 +182,31 @@ no local signing key (AMO signs server-side), a separate `firefox-v*` tag, and a
 shorter listing name (AMO caps it at 45 chars — handled automatically by the XPI
 packer; the Chrome name is untouched).
 
-**First time only — create the AMO listing.** AMO won't auto-create a *listed*
-add-on from the API, so the very first submission is manual:
+> **The listing already exists — this step is done.** It was created manually on
+> 2026-08-13 with v2.0.3 (AMO won't auto-create a *listed* add-on from the API, so
+> the first submission had to be by hand). That upload permanently locked in the
+> add-on id `adhan-caster@bilalahamad.com`
+> (`browser_specific_settings.gecko.id`) and the slug
+> [`adhan-caster-prayer-times`](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/).
+> Nothing below needs repeating — it is kept only as the record of how the
+> listing came to exist, and as the recipe if the add-on is ever re-created from
+> scratch or forked:
+>
+> 1. Build the XPI locally: `npm run pack:xpi` → `adhan-focus-<version>.xpi`.
+>    Lint it first with `npm run lint:firefox` (0 errors required; warnings are OK).
+> 2. At [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) →
+>    **Submit a New Add-on** → choose **"On this site"** (the listed channel — the
+>    unlisted one would break `web-ext sign --channel listed` forever) → upload the
+>    XPI → fill in the listing (reuse the store description and `docs/store/`
+>    screenshots; privacy policy URL
+>    `https://adhan.bilalahamad.com/privacy-policy.html`).
+> 3. Answer **Yes** to "Do you need to submit source code?" — `stageExtension()`
+>    generates two of the files that ship (`lib/buildinfo.js` and the rewritten
+>    `manifest.json`), which is exactly what that question asks about.
 
-1. Build the XPI locally: `npm run pack:xpi` → `adhan-caster-pro-<version>.xpi`.
-   Lint it first with `npm run lint:firefox` (0 errors required; warnings are OK).
-2. At [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) →
-   **Submit a New Add-on** → upload the XPI → fill in the listing (reuse the
-   store description and `docs/store/` screenshots; privacy policy URL
-   `https://adhan.bilalahamad.com/privacy-policy.html`).
-3. This locks in the add-on id `adhan-caster@bilalahamad.com`
-   (`browser_specific_settings.gecko.id`) — **permanent**, can't be changed later.
-
-**Every version after that — tag it.** Once the listing exists and the AMO API
-secrets are configured (see [`RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) →
-"Automating AMO submission"):
+**Every version — just tag it.** The AMO API secrets are configured (see
+[`RELEASE_SETUP.md`](.github/RELEASE_SETUP.md) → "Automating AMO submission") and
+the listing exists, so a tag is all it takes:
 
 ```bash
 git tag firefox-v1.6.4 <merge-commit-sha>
@@ -182,17 +216,110 @@ git push origin firefox-v1.6.4
 The [`Release (Firefox)` workflow](.github/workflows/release-firefox.yml) tests,
 verifies the tag matches the version, lints + builds the XPI, **AMO-signs and
 submits it for review** via `web-ext sign`, and attaches the XPI to a draft
-GitHub Release. Without the AMO secrets the sign step no-ops and you upload the
-XPI from the draft release manually. AMO review is publish-first (often minutes);
+GitHub Release. Were the AMO secrets ever unset, the sign step no-ops instead and
+you upload the XPI from the draft release manually. AMO review is publish-first
+(often minutes);
 **AMO version numbers are immutable** — a botched upload burns that number, so
 bump and re-tag rather than re-pushing.
+
+### Firefox for Android (Mobile) Support
+Adhan Focus includes native **Firefox for Android** support enabled via AMO:
+- **Unified Package**: Mozilla AMO uses the exact same signed `.xpi` for both desktop and mobile.
+- **Android Compatibility Flag**: `manifest.json` declares `"gecko_android": { "strict_min_version": "142.0" }`. AMO reads this block and automatically unlocks mobile installation.
+- **Mobile Store URL**: [`addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/`](https://addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/)
+- **Mobile Testing**: Test on a physical Android device or emulator with USB debugging enabled:
+  ```bash
+  # Run directly on an attached Android device with Firefox Nightly/Beta
+  npx web-ext run --target=firefox-android --android-device <device-id>
+  ```
+  Or connect via desktop Firefox at `about:debugging` → **Connect to Android device** → **Load Temporary Add-on** pointing to `dist/firefox/manifest.json`.
+
+## 7. Edge Add-ons release
+
+Edge is Chromium, so the package is the Chrome one: same MV3 manifest, same
+`background.service_worker`, same runtime files. Two differences from Chrome:
+
+- **No signing key.** Edge takes a plain ZIP. There is nothing to sign locally
+  (no CRX key) and nothing signed server-side (unlike AMO).
+- **Two manifest keys are stripped.** `scripts/pack-edge.mjs` passes `stripGecko`
+  and `stripBackgroundScripts` to `stageExtension()`. The first removes
+  `browser_specific_settings` (cosmetic — Chromium ignores it). The second is
+  **required**: Edge validates MV3 strictly and rejects the upload with *"The
+  background.scripts field cannot be used with manifest version 3"* if `scripts`
+  rides along with `service_worker`. Chrome tolerates both keys and Firefox needs
+  `scripts`, so this is the exact mirror of the Firefox strip. Chrome's own build
+  keeps both.
+
+**Tag it.** The version-bump, test and merge steps are identical to Chrome
+(sections 1–3) — only the tag prefix differs:
+
+```bash
+git tag edge-v1.6.4 <merge-commit-sha>
+git push origin edge-v1.6.4
+```
+
+The [`Release (Edge)` workflow](.github/workflows/release-edge.yml) tests,
+verifies the tag matches the version, builds the ZIP, attaches it to a draft
+GitHub Release, and **submits it to Edge Add-ons for review** via
+`scripts/submit-edge.mjs`. Were the Edge secrets ever unset, the submit step
+no-ops instead and you upload the ZIP from the draft release manually at
+[Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/).
+
+Microsoft's review is slower than Google's for a new listing — hours to about a
+week. Unlike AMO, a rejected Edge submission does **not** burn the version
+number: you can fix and re-submit the same version.
+
+**First time only — create the listing.** Like AMO, Edge won't create a new
+product from the API. Register once at
+[Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/) (free —
+no developer fee, unlike Chrome's one-time $5), upload
+`npm run pack:edge`'s ZIP by hand to create the product, then copy its **product
+ID** (a GUID on the extension's Overview page — not the storefront URL slug) into
+the `EDGE_PRODUCT_ID` secret. After that every version is tag-driven.
+
+## 8. Opera Add-ons release
+
+Opera is Chromium-based (Blink), so the package is the clean Chromium package:
+same MV3 manifest, same `background.service_worker`, same runtime files. Like
+Edge, `scripts/pack-opera.mjs` strips `browser_specific_settings` and
+`background.scripts` so the manifest strictly conforms to Chromium MV3 standards.
+
+### Packaging locally
+
+```bash
+npm run pack:opera
+```
+
+Produces `adhan-focus-<version>-opera.zip` at the repo root and leaves the staged
+files in `dist/opera` for inspection.
+
+### Tag-driven release
+
+Tag the merge commit with the **`opera-v`** prefix:
+
+```bash
+git tag opera-v2.1.0 <merge-commit-sha>
+git push origin opera-v2.1.0
+```
+
+The [`Release (Opera)` workflow](.github/workflows/release-opera.yml) tests,
+verifies the tag matches the version in `manifest.json`, builds the ZIP, and
+attaches it to a draft GitHub Release.
+
+### Submitting to Opera Add-ons
+
+1. Sign in to the [Opera Developer Dashboard](https://addons.opera.com/developer/).
+2. Click **Upload an extension** (or select **Adhan Focus** if updating).
+3. Upload `adhan-focus-<version>-opera.zip` (from repo root or GitHub Release).
+4. Fill in / review extension metadata (reuse screenshots from `docs/store/`).
+5. Submit for moderation. Typical review turnaround is 1–3 business days.
 
 ## Common upload errors
 
 | Error | Cause | Fix |
 | --- | --- | --- |
 | "Invalid version number in manifest" | New version ≤ published version | Bump `manifest.json`, `package.json`, and `package-lock.json` higher |
-| "CRX signature doesn't match" | Packed with the wrong `.pem` | Re-pack with `adhan-caster-pro-private.pem` |
+| "CRX signature doesn't match" | Packed with the wrong `.pem` | Re-pack with `adhan-focus-private.pem` (or registered key) |
 | "Invalid CRX format" | Wrong packer / corrupted file | Re-pack via `npm run pack:crx` or Chrome's GUI |
 | Upload only accepts ZIP | Verified CRX uploads not opted in | Already opted in on this listing — should not happen |
 | CI: "Tag … does not match manifest.json version …" | Tag pushed before version bump landed on main | Delete the tag, land the bump, re-tag the merge commit |

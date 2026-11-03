@@ -1,21 +1,29 @@
-# Adhan Caster Pro — Chrome Extension
+# Adhan Focus — Browser Extension
+
+[![Featured on Product Hunt](https://img.shields.io/badge/Product%20Hunt-Adhan%20Focus-DA552F?style=flat&logo=producthunt&logoColor=white)](https://www.producthunt.com/products/adhan-focus?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-adhan-focus)
+[![AlternativeTo](https://img.shields.io/badge/AlternativeTo-Adhan%20Focus-2B96D7?style=flat&logo=alternative-to&logoColor=white)](https://alternativeto.net/software/adhan-focus/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-253%20passing-brightgreen.svg)](tests/)
 
 Upcoming Islamic prayer times with a live countdown, and **automatic pausing of
 media in every Chrome tab** at Adhan time — with an optional full-screen "prayer
 focus" screen.
 
-It's a standalone Chrome extension. It fetches prayer times directly from the
+It's a standalone browser extension — published on the Chrome Web Store,
+Firefox Add-ons, Microsoft Edge Add-ons, and Opera Add-ons from this one MV3 codebase. It
+fetches prayer times directly from the
 public [AlAdhan API](https://aladhan.com/prayer-times-api) (`api.aladhan.com`)
 and resolves locations via the free
 [Open-Meteo](https://open-meteo.com/) geocoding API.
 
-**[Install from the Chrome Web Store →](https://chromewebstore.google.com/detail/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
+**Install:** **[Chrome](https://chromewebstore.google.com/detail/adhan-caster-muslim-praye/jfjknglldcdminelckmmfdbnlikiogia?utm_source=readme)** &nbsp;·&nbsp; **[Firefox (Desktop)](https://addons.mozilla.org/en-US/firefox/addon/adhan-caster-prayer-times/?utm_source=readme)** &nbsp;·&nbsp; **[Firefox for Android](https://addons.mozilla.org/en-US/android/addon/adhan-caster-prayer-times/)** &nbsp;·&nbsp; **[Edge](https://microsoftedge.microsoft.com/addons/detail/adhan-caster-muslim-pray/kapmpaofgphfbkpkmhhiooafplhckblg)** &nbsp;·&nbsp; **[Opera](https://addons.opera.com/)** &nbsp;·&nbsp; **[🌐 Website &amp; FAQ](https://adhan.bilalahamad.com/)**
 
 ![Prayer focus flow — in-page countdown, cross-tab media pause, full-screen focus screen, and resume](docs/demo.gif)
 
 ## Features
 
 - **Next-prayer popup** — all five daily prayers with the next one highlighted and a live countdown.
+- **Per-prayer adjustment** — move any Adhan up to 5 minutes earlier or later (Settings → Adjust prayer times; **All prayers** sets the five at once) to match your local mosque; the time shown, the countdown, the notification and the auto-pause all follow, and an adjusted time is marked (e.g. `+2`) in the list.
 - **Prayer tracking** — check each prayer off as you pray (enabled only once its time has passed); a monthly calendar shows your history as a heat-map with a streak, navigable month to month. Stored on-device (`prayerLog`).
 - **In-page heads-up countdown** — a card pinned to the bottom-right of whatever tab you're looking at, appearing before the prayer (default **30s**, configurable 15/30/60). No Resume button here, so it never competes with the focus screen.
 - **Auto-pause across tabs** — at the exact prayer time, every playing `<video>`/`<audio>` (including same-/cross-origin iframes) is paused.
@@ -30,14 +38,15 @@ and resolves locations via the free
 npm install      # installs Jest + jsdom (dev only — the extension itself has no runtime deps)
 npm test         # full suite: pure-lib units, service-worker / content / popup integration, manifest
 npm run test:cov # same, with a coverage report + enforced thresholds (~96% statements)
-npm run pack     # runs the tests, then zips a clean build → adhan-caster-pro-<version>.zip
+npm run pack     # runs the tests, then zips a clean build → adhan-focus-<version>.zip
 ```
 
 Every push and pull request runs the suite on Linux, **Windows and macOS** (see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) so the timezone, DST and
 locale-formatting paths are verified on each OS the extension ships to.
 
-To publish a new version to the Chrome Web Store, see [RELEASING.md](RELEASING.md).
+To publish a new version to the Chrome Web Store, Firefox/AMO or Microsoft Edge
+Add-ons, see [RELEASING.md](RELEASING.md).
 
 ## Load it (unpacked)
 
@@ -76,7 +85,8 @@ See [docs/TESTING.md](docs/TESTING.md) for the full pre-publish QA checklist.
 
 ### Notes & assumptions
 
-- Prayer times come back as `"hh:mm a"` strings and are parsed in the **browser's local timezone**, which is correct when your machine's timezone matches the chosen location.
+- Prayer times are requested from Aladhan with `iso8601=true`, so each one carries the location's UTC offset (e.g. `2026-10-10T12:17:00+00:00`), and its exact moment comes from that offset — never from the browser's own tz database, which can lag the real rules by months (Morocco moved to permanent GMT+0 on 2026-09-20; British Columbia and Alberta stop falling back from 2026-11-01). The popup clock and "today" follow the browser's tz data only while it agrees with Aladhan's offsets. Times show as `"hh:mm a"`, in the chosen location's time, whatever your machine's timezone.
+- The place is asked for by its English name (`timingsByCity`). When Aladhan's own geocoder cannot take that name (it has answered 503 for every name it had not cached, and 400 for "Cairo, Cairo Governorate, Egypt"), the same day is asked for by the place's saved coordinates (`timings`), which gives the same times (to within a minute).
 - `chrome.alarms` isn't second-accurate when the service worker is asleep, so `content.js` self-triggers the pause when its own countdown hits zero. Both paths are idempotent.
 - Restricted pages (`chrome://`, the Web Store, the PDF viewer) can't host content scripts, so media there isn't paused — a Chrome platform limitation.
 

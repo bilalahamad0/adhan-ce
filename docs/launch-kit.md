@@ -1,4 +1,4 @@
-# Adhan Caster — Launch & Growth Kit
+# Adhan Focus — Launch & Growth Kit
 
 Everything you need to get the extension in front of as many people as possible.
 Copy/paste the posts, work the channel table top-to-bottom, and time a bigger push for Ramadan.
@@ -14,7 +14,7 @@ Copy/paste the posts, work the channel table top-to-bottom, and time a bigger pu
 
 ## The one-line positioning
 
-> **Adhan Caster pauses video & audio in every browser tab the moment the Adhan starts — so you never miss a prayer mid-scroll.** Free, open source, privacy-first.
+> **Adhan Focus pauses video & audio in every browser tab the moment the Adhan starts — so you never miss a prayer mid-scroll.** Free, open source, privacy-first.
 
 Three angles, pick per audience:
 - **Muslim audience:** "Never let YouTube/Netflix play through the Adhan again."
@@ -53,7 +53,7 @@ Three angles, pick per audience:
 
 **Body:**
 ```
-I kept getting caught mid-YouTube when the Adhan (call to prayer) started, so I built Adhan Caster.
+I kept getting caught mid-YouTube when the Adhan (call to prayer) started, so I built Adhan Focus.
 
 What it does:
 - Shows the five daily prayer times with a live countdown to the next one
@@ -76,11 +76,11 @@ Code: https://github.com/bilalahamad0/adhan-ce
 
 ### 2) Hacker News — Show HN
 
-**Title:** `Show HN: Adhan Caster – a Chrome extension that pauses all tabs at prayer time`
+**Title:** `Show HN: Adhan Focus – a Chrome extension that pauses all tabs at prayer time`
 
 **Body:**
 ```
-I'm Muslim and kept missing the Adhan because I was mid-video. Adhan Caster shows
+I'm Muslim and kept missing the Adhan because I was mid-video. Adhan Focus shows
 the five daily prayer times with a live countdown, and the instant the Adhan
 starts it pauses <video>/<audio> across every open tab — then resumes on click or
 after a delay.
@@ -102,19 +102,19 @@ https://github.com/bilalahamad0/adhan-ce
 
 ### 3) Product Hunt
 
-- **Name:** Adhan Caster
+- **Name:** Adhan Focus
 - **Tagline (≤60):** `Auto-pause every browser tab at Muslim prayer time`
 - **Topics:** Productivity, Chrome Extensions, Religion & Spirituality, Open Source
 - **Description:**
 ```
-Adhan Caster shows Muslim prayer times with a live countdown and automatically
+Adhan Focus shows Muslim prayer times with a live countdown and automatically
 pauses video & audio in every Chrome tab the moment the Adhan begins — then
 resumes with one click or after a delay. Optional full-screen prayer focus.
 Free, open source, no ads, no tracking. Everything stays on your device.
 ```
 - **Maker's first comment:**
 ```
-Hi PH 👋 I built Adhan Caster to solve my own problem: I'd be deep in a video and
+Hi PH 👋 I built Adhan Focus to solve my own problem: I'd be deep in a video and
 miss the Adhan. Now my browser pauses itself 5×/day and nudges me to pray.
 
 It's free and open source (MV3, zero runtime deps, no analytics). I'd love your
@@ -139,7 +139,7 @@ Would love your duas and feedback ❤️
 ### 5) X/Twitter thread (#buildinpublic + Muslim tech)
 
 ```
-1/ I kept missing the Adhan because I was mid-YouTube. So I built Adhan Caster — a
+1/ I kept missing the Adhan because I was mid-YouTube. So I built Adhan Focus — a
 free Chrome extension that pauses video & audio in EVERY tab the moment the Adhan
 starts. 🧵
 
@@ -161,7 +161,7 @@ Subject: A free tool to help students not miss salah while studying online
 
 Asalamu alaikum,
 
-I built a free, open-source Chrome extension called Adhan Caster. When the Adhan
+I built a free, open-source Chrome extension called Adhan Focus. When the Adhan
 starts, it automatically pauses any video or audio playing in the browser and
 shows the prayer times with a countdown — handy for anyone studying or working
 online. No ads, no sign-up, nothing leaves the device.

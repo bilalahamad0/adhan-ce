@@ -1,4 +1,4 @@
-// Adhan Caster Pro — content script (runs in every frame).
+// Adhan Focus — content script (runs in every frame).
 // Top visible frame: renders the bottom-right T-15s countdown overlay, the
 // "media paused" card, and (opt-in) the full-screen prayer focus overlay.
 // Every frame: pauses/resumes its own <video>/<audio> when prayer time hits.
@@ -9,6 +9,15 @@
   // has clearly passed (e.g. the device slept through it), so we don't pause on
   // wake. Mirrors STALE_FIRE_MS in lib/schedule.js — keep the two in sync.
   const STALE_FIRE_MS = 90 * 1000;
+  // Fallback auto-resume window (minutes) used ONLY when this tab never received
+  // the user's setting — e.g. a tab injected/primed before settings synced, or a
+  // pause broadcast that carried no `since`. Mirrors background
+  // DEFAULT_SETTINGS.autoResumeMinutes; keep the two in sync.
+  const DEFAULT_AUTO_RESUME_MIN = 5;
+  // Slack added past the auto-resume moment before the wall-clock backstop force-
+  // clears the overlay, so it only ever acts as a last resort behind the normal
+  // resume paths.
+  const RESUME_BACKSTOP_GRACE_MS = 5000;
   const isTop = window.top === window;
 
   // A previous instance of this script may have been orphaned (extension
@@ -38,6 +47,22 @@
   let currentPrayer = null;
   let lastHandledTs = 0;
   let tickHandle = null;
+  // When THIS tab first observed an active pause. Used as a fallback for the
+  // background-provided `paused.since` so the client-side auto-resume can fire —
+  // and the overlay can never stay pinned — even if `since` or settings never
+  // reached this tab.
+  let pauseObservedAt = 0;
+  // Wall-clock backstop: a one-shot timer that force-clears a pause even if the
+  // 1-second tick stops running (a frozen/discarded tab) or the extension context
+  // dies (disable/update) before the tick-driven teardown can react. It is armed
+  // off the same due time the tick uses, is independent of chrome.* and of the
+  // interval, and is the last-resort guarantee the overlay cannot stay pinned.
+  let resumeTimer = null;
+  let resumeTimerDue = 0;
+  // Hoisted so teardown() can detach the capture-phase input blockers (top frame),
+  // otherwise an orphaned instance keeps suppressing wheel/touch/keydown.
+  let blockScroll = null;
+  let onKeydownCapture = null;
 
   // ---- UI (shadow DOM, top frame only) ----
   let host = null;
@@ -51,7 +76,7 @@
   // fallback so overlays always have text even before the round-trip / if it fails,
   // i.e. English behavior is unchanged when no translation is loaded.
   const I18N_EN = {
-    app_name: 'Adhan Caster',
+    app_name: 'Adhan Focus',
     prayer_generic: 'Prayer',
     time_for_prayer: 'Time for prayer',
     media_paused_msg: 'Media is paused. Take a moment for your prayer.',
@@ -78,9 +103,9 @@
   function prayerLabel(name) {
     return name ? ti('prayer_' + name) : ti('prayer_generic');
   }
-  // Shadow DOM resets direction to LTR (:host { all: initial }) and RTL does not
-  // inherit across the boundary, so set dir explicitly on the overlay wrappers and
-  // flip the corner card to the opposite side for RTL.
+  // `all` deliberately leaves direction/unicode-bidi alone, so neither reset pins text
+  // direction and the page's own direction inherits straight through the host. Set dir
+  // explicitly on the overlay wrappers, and flip the corner card to the opposite side for RTL.
   function applyHostDir() {
     if (host) {
       host.style.setProperty(DIR === 'rtl' ? 'left' : 'right', '16px', 'important');
@@ -118,6 +143,14 @@
   function fmtMMSS(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  // Effective auto-resume window (minutes). Falls back to the default when this
+  // tab hasn't loaded settings yet, so the client-side safety net still fires
+  // instead of leaving the overlay pinned.
+  function effectiveResumeMins() {
+    const m = state.settings && state.settings.autoResumeMinutes;
+    return typeof m === 'number' && m >= 0 ? m : DEFAULT_AUTO_RESUME_MIN;
   }
 
   // Freeze page scrolling while the focus overlay is up.
@@ -163,10 +196,21 @@
     host.style.cssText =
       'position:fixed!important;right:16px!important;bottom:16px!important;top:auto!important;left:auto!important;z-index:2147483647!important;pointer-events:none!important;margin:0!important;padding:0!important;border:0!important;';
     const root = host.attachShadow({ mode: 'open' });
+    // A shadow root does not stop page CSS on its own. For NORMAL declarations the OUTER tree
+    // wins the cascade, so any page rule that matches the host element -- even a bare
+    // `* { line-height: 0 }` in a site reset -- beats `:host { all: initial }`, and inherited
+    // properties then cross the boundary and wreck the layout (collapsed line boxes
+    // overprinting each other, 3px text, `visibility: hidden`). The reset therefore has to sit
+    // on .card, the shadow tree's own child: nothing outside the shadow root can target it, so
+    // it cannot be outranked. content.css pins the host box itself, which does not inherit.
+    // Two notes: `all` skips direction/unicode-bidi, so applyHostDir() still drives RTL; and
+    // box-sizing must be restated because `.card` outranks `* { box-sizing }` on specificity,
+    // and content-box would silently widen the card past its min-width.
     const css = `
       :host { all: initial; }
       * { box-sizing: border-box; }
       .card {
+        all: initial; box-sizing: border-box;
         position: relative; display: flex; flex-direction: column; gap: 10px; overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         color: #fff; text-align: start;
@@ -185,7 +229,7 @@
       .cbname { font-size: 10px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; opacity: .72; }
       .title { font-weight: 800; font-size: 15px; letter-spacing: .2px; margin-top: 2px; }
       .sub { font-size: 12px; opacity: .9; margin-top: 1px; }
-      .resume { flex: 0 0 auto; align-self: center; font: 700 12px/1 inherit; color: #0a5240; background: #fff; border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+      .resume { flex: 0 0 auto; align-self: center; font-family: inherit; font-weight: 700; font-size: 12px; line-height: 1; color: #0a5240; background: #fff; border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
       .card.paused .resume { color: #7c3312; }
       .resume:hover { filter: brightness(.96); }
       .bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,.22); overflow: hidden; }
@@ -197,7 +241,7 @@
     const bar = mk('div', { class: 'bar' }, barfill);
     const title = mk('div', { class: 'title', text: 'Prayer' });
     const sub = mk('div', { class: 'sub' });
-    const cbname = mk('div', { class: 'cbname', text: 'Adhan Caster' });
+    const cbname = mk('div', { class: 'cbname', text: 'Adhan Focus' });
     const cbicon = mk('img', { class: 'cbicon', alt: '' });
     const resume = mk('button', { class: 'resume' }, 'Resume');
     resume.hidden = true;
@@ -228,10 +272,12 @@
     fhost.style.cssText =
       'position:fixed!important;inset:0!important;z-index:2147483646!important;pointer-events:none!important;margin:0!important;';
     const root = fhost.attachShadow({ mode: 'open' });
+    // `all: initial` on .scrim -- not on :host -- is what isolates us from page CSS; see the
+    // note in ensureUI() for why the host-level reset is not enough.
     const css = `
       :host { all: initial; }
       * { box-sizing: border-box; }
-      .scrim { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #062a20; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); opacity: 0; transition: opacity .35s ease; pointer-events: none; }
+      .scrim { all: initial; box-sizing: border-box; position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #062a20; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); opacity: 0; transition: opacity .35s ease; pointer-events: none; }
       .scrim.show { opacity: 1; pointer-events: auto; }
       .bg { position: absolute; inset: -25%; z-index: 0; pointer-events: none; background: radial-gradient(55% 55% at 50% 40%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); animation: ccpBg 12s ease-in-out infinite; }
       .stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
@@ -264,12 +310,12 @@
       .ftime { font-size: 18px; opacity: .9; margin-top: 2px; }
       .fmsg { font-size: 15px; opacity: .85; margin-top: 16px; }
       .fauto { font-size: 13px; opacity: .7; margin-top: 18px; font-variant-numeric: tabular-nums; }
-      .fresume { margin-top: 18px; border: 0; border-radius: 12px; cursor: pointer; font: 700 15px/1 inherit; color: #0a5c47; background: #fff; padding: 14px 30px; box-shadow: 0 8px 22px rgba(0,0,0,.22); }
+      .fresume { margin-top: 18px; border: 0; border-radius: 12px; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 15px; line-height: 1; color: #0a5c47; background: #fff; padding: 14px 30px; box-shadow: 0 8px 22px rgba(0,0,0,.22); }
       .fresume:hover { background: #eafaf2; }
       .fhint { font-size: 12px; opacity: .6; margin-top: 13px; }
     `;
     const fbicon = mk('img', { class: 'fbicon', alt: '' });
-    const fbname = mk('span', { class: 'fbname', text: 'Adhan Caster' });
+    const fbname = mk('span', { class: 'fbname', text: 'Adhan Focus' });
     const ftitle = mk('div', { class: 'ftitle', text: 'Time for prayer' });
     const fname = mk('div', { class: 'fname', text: 'Prayer' });
     const ftime = mk('div', { class: 'ftime', dir: 'ltr' });
@@ -317,6 +363,7 @@
   }
 
   function onFocusResume() {
+    if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
     resumeMedia();
     state.paused = { active: false };
     hideFocusUI();
@@ -350,11 +397,14 @@
     if (mode === 'focus' && !document.hidden) {
       hideUI();
       ensureFocusUI();
+      const isStrict = !!(state.settings && state.settings.strictFocus);
+      fels.fresume.style.display = isStrict ? 'none' : '';
+      fels.fhint.style.display = isStrict ? 'none' : '';
       fels.fname.textContent = prayerLabel((state.paused && state.paused.prayer) || (np && np.name));
       fels.ftime.textContent = (state.paused && state.paused.time) || '';
-      const mins = state.settings && state.settings.autoResumeMinutes;
-      const since = state.paused && state.paused.since;
-      const rem = mins != null && since ? since + mins * 60000 - now : -1;
+      const mins = effectiveResumeMins();
+      const since = (state.paused && state.paused.since) || pauseObservedAt;
+      const rem = since ? since + mins * 60000 - now : -1;
       fels.fauto.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : '';
       fels.scrim.classList.add('show');
       lockScroll(true);
@@ -370,9 +420,9 @@
 
     if (mode === 'paused') {
       const name = prayerLabel(currentPrayer || (state.paused && state.paused.prayer) || (np && np.name));
-      const mins = state.settings && state.settings.autoResumeMinutes;
-      const since = state.paused && state.paused.since;
-      const rem = mins && since ? since + mins * 60000 - now : -1;
+      const mins = effectiveResumeMins();
+      const since = (state.paused && state.paused.since) || pauseObservedAt;
+      const rem = since ? since + mins * 60000 - now : -1;
       els.card.classList.add('paused');
       els.title.textContent = name;
       els.sub.textContent = rem > 0 ? ti('auto_resumes_in', { time: fmtMMSS(rem) }) : ti('adhan_paused');
@@ -419,6 +469,7 @@
   }
 
   function onResumeClick() {
+    if (state.settings && state.settings.strictFocus) return; // Strict mode: manual resume disabled until timeout
     resumeMedia();
     state.paused = { active: false }; // optimistic; background confirms
     render();
@@ -438,10 +489,53 @@
     }
   }
 
+  // ---- wall-clock resume backstop ----
+  function armResumeBackstop(dueAt) {
+    if (resumeTimer && resumeTimerDue === dueAt) return; // already scheduled for this window
+    clearResumeBackstop();
+    resumeTimerDue = dueAt;
+    const delay = Math.max(0, dueAt - Date.now()) + RESUME_BACKSTOP_GRACE_MS;
+    try { resumeTimer = setTimeout(onResumeBackstop, delay); } catch (_) {}
+  }
+  function clearResumeBackstop() {
+    if (resumeTimer) { try { clearTimeout(resumeTimer); } catch (_) {} }
+    resumeTimer = null;
+    resumeTimerDue = 0;
+  }
+  // Force the pause off from the wall clock. Deliberately tolerant of a dead
+  // extension context: it only touches the DOM + local media and wraps the
+  // background ping in try/catch, so a disabled/updated extension can't leave the
+  // overlay pinned.
+  function onResumeBackstop() {
+    resumeTimer = null;
+    resumeTimerDue = 0;
+    resumeMedia();
+    const np = state.nextPrayer;
+    if (np && np.ts) lastHandledTs = Math.max(lastHandledTs, np.ts);
+    state.paused = { active: false };
+    pauseObservedAt = 0;
+    hideFocusUI();
+    if (isTop) hideUI();
+    lockScroll(false);
+    if (isTop) {
+      try { chrome.runtime.sendMessage({ type: 'RESUME_NOW' }).catch(() => {}); } catch (_) {}
+    }
+  }
+
   function teardown() {
     try { if (host) host.remove(); } catch (_) {}
     try { if (fhost) fhost.remove(); } catch (_) {}
     lockScroll(false);
+    clearResumeBackstop();
+    if (isTop) {
+      try {
+        if (blockScroll) {
+          window.removeEventListener('wheel', blockScroll, { capture: true });
+          window.removeEventListener('touchmove', blockScroll, { capture: true });
+        }
+        if (onKeydownCapture) window.removeEventListener('keydown', onKeydownCapture, { capture: true });
+      } catch (_) {}
+    }
     if (tickHandle) {
       clearInterval(tickHandle);
       tickHandle = null;
@@ -466,14 +560,29 @@
     // when the window has elapsed and notifies the background so the central
     // state + other tabs catch up via the RESUME broadcast.
     if (alreadyPaused) {
-      const mins = state.settings && state.settings.autoResumeMinutes;
-      const since = state.paused && state.paused.since;
-      if (mins != null && since && now >= since + mins * 60000) {
+      // Record when this tab first saw the pause so we can self-resume off a local
+      // clock. Previously this block also required `state.settings.autoResumeMinutes`
+      // and `state.paused.since` to be present; when either was missing on a tab
+      // (settings not yet synced, or a `since`-less pause broadcast) the only
+      // remaining resume path was the background alarm — which MV3 can drop —
+      // leaving the full-screen focus overlay pinned indefinitely (the stuck-after-
+      // Isha bug). Falling back to a default window measured from `pauseObservedAt`
+      // guarantees every tab eventually resumes on its own.
+      if (!pauseObservedAt) pauseObservedAt = now;
+      const mins = effectiveResumeMins();
+      const since = (state.paused && state.paused.since) || pauseObservedAt;
+      const dueAt = since + mins * 60000;
+      // Arm the wall-clock backstop so the pause still clears if this interval is
+      // later throttled/frozen or the context dies before teardown runs.
+      armResumeBackstop(dueAt);
+      if (now >= dueAt) {
         resumeMedia();
         // Pin lastHandledTs so the fallback block below can't re-pause for the
         // prayer we just timed out of.
         if (np && np.ts) lastHandledTs = Math.max(lastHandledTs, np.ts);
         state.paused = { active: false };
+        pauseObservedAt = 0;
+        clearResumeBackstop();
         hideFocusUI();
         render();
         if (isTop) {
@@ -481,6 +590,9 @@
         }
         return;
       }
+    } else {
+      if (pauseObservedAt) pauseObservedAt = 0;
+      clearResumeBackstop();
     }
 
     // Second-accurate fallback in case the background alarm/message is delayed.
@@ -575,27 +687,30 @@
     }
   });
 
-  document.addEventListener('visibilitychange', render);
+  // Run a full tick (not just render) on visibility change so a tab that becomes
+  // visible immediately re-evaluates the context/self-heal/teardown checks rather
+  // than waiting for the throttled interval to catch up.
+  document.addEventListener('visibilitychange', () => tick());
 
   if (isTop) {
-    const blockScroll = (e) => {
+    blockScroll = (e) => {
       if (focusLocked && !document.hidden) e.preventDefault();
     };
     window.addEventListener('wheel', blockScroll, { passive: false, capture: true });
     window.addEventListener('touchmove', blockScroll, { passive: false, capture: true });
-    window.addEventListener(
-      'keydown',
-      (e) => {
-        if (!focusLocked || document.hidden) return;
-        if (e.key === 'Escape') {
-          e.preventDefault();
+    onKeydownCapture = (e) => {
+      if (!focusLocked || document.hidden) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        const isStrict = !!(state.settings && state.settings.strictFocus);
+        if (!isStrict) {
           onFocusResume();
-        } else if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' ', 'Spacebar'].includes(e.key)) {
-          e.preventDefault();
         }
-      },
-      { capture: true }
-    );
+      } else if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' ', 'Spacebar'].includes(e.key)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', onKeydownCapture, { capture: true });
   }
 
   loadState();

@@ -146,6 +146,47 @@ describe('client-side auto-resume safety net', () => {
     expect(v.play).toHaveBeenCalled();
     expect(sent('RESUME_NOW')).toHaveLength(1);
   });
+
+  it('self-resumes off a local clock when settings never loaded and `since` is missing', async () => {
+    const v = addVideo();
+    // No `settings` in storage (never synced to this tab) and the pause broadcast
+    // carries no `since` — the exact state that used to pin the overlay forever.
+    await load({ storage: { nextPrayer: { name: 'Isha', ts: BASE + 3600e3 }, paused: { active: false } } });
+
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Isha', time: '10:02 PM', focus: true, since: undefined });
+    jest.advanceTimersByTime(1000); // first tick records the local observation time
+    expect(v.paused).toBe(true);
+    expect(focusHost()).toBeTruthy();
+
+    // Still paused before the default 5-minute fallback window elapses.
+    jest.advanceTimersByTime(4 * 60000);
+    expect(v.paused).toBe(true);
+
+    // Past the default window measured from when this tab first saw the pause.
+    jest.advanceTimersByTime(90 * 1000);
+    expect(v.play).toHaveBeenCalled();
+    expect(sent('RESUME_NOW').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('tears down the full-screen focus overlay and unlocks scroll when the extension context dies mid-pause', async () => {
+    await load({
+      storage: {
+        settings: settings({ focusMode: true }),
+        nextPrayer: { name: 'Isha', ts: BASE + 3600e3 },
+        paused: { active: true, prayer: 'Isha', time: '10:02 PM', focus: true, since: BASE },
+      },
+    });
+    jest.advanceTimersByTime(1000); // render the focus overlay + lock scroll
+    expect(focusHost()).toBeTruthy();
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    // Simulate Chrome disabling/updating the extension: the context is invalidated.
+    chrome.runtime.id = undefined;
+    jest.advanceTimersByTime(1000); // next tick detects the dead context and tears down
+
+    expect(focusHost()).toBeFalsy();
+    expect(document.documentElement.style.overflow).toBe('');
+  });
 });
 
 describe('overlay rendering (top frame, shadow DOM)', () => {
@@ -177,6 +218,32 @@ describe('overlay rendering (top frame, shadow DOM)', () => {
     expect(focusHost().shadowRoot.querySelectorAll('.star')).toHaveLength(36);
   });
 
+  // Regression: the overlay used to reset only on :host. For normal declarations the OUTER
+  // tree wins the cascade, so a page rule matching the host (a site reset's `* { line-height:
+  // 0 }`) beat it, and inherited properties crossed the shadow boundary — on such sites every
+  // text line collapsed to a zero-height box and the panel rendered as an overlapping pile.
+  // The reset has to sit on the shadow tree's own child, which page CSS can never target.
+  it('resets inherited page CSS on the shadow container, not just :host', async () => {
+    await load({ storage: { settings: settings({ focusMode: true, leadSeconds: 30 }), nextPrayer: { name: 'Asr', time: '4:56 PM', ts: BASE + 10000 }, paused: { active: false } } });
+    jest.advanceTimersByTime(1000); // brings up the corner card, so both hosts exist
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE });
+
+    const baseRule = (root, sel) => {
+      const css = root.querySelector('style').textContent;
+      const at = css.indexOf(sel + ' {'); // the bare rule, not .card.show / .scrim.show
+      expect(at).toBeGreaterThan(-1);
+      return css.slice(at, css.indexOf('}', at));
+    };
+
+    for (const [root, sel] of [[host().shadowRoot, '.card'], [focusHost().shadowRoot, '.scrim']]) {
+      const rule = baseRule(root, sel);
+      expect(rule).toContain('all: initial');
+      // `.card`/`.scrim` outrank `* { box-sizing: border-box }`, so it must be restated here —
+      // falling back to content-box silently widens the card past its min-width.
+      expect(rule).toContain('box-sizing: border-box');
+    }
+  });
+
   it('Esc resumes from the focus overlay', async () => {
     const v = addVideo();
     await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
@@ -185,6 +252,30 @@ describe('overlay rendering (top frame, shadow DOM)', () => {
     window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
     expect(v.play).toHaveBeenCalled();
     expect(sent('RESUME_NOW')).toHaveLength(1);
+  });
+
+  it('strictFocus mode hides Resume button and Esc hint, and blocks Escape key', async () => {
+    const v = addVideo();
+    await load({
+      storage: {
+        settings: settings({ focusMode: true, strictFocus: true }),
+        nextPrayer: { name: 'Asr', ts: BASE + 3600e3 },
+        paused: { active: false },
+      },
+    });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE });
+
+    const root = focusHost().shadowRoot;
+    const resume = root.querySelector('.fresume');
+    const hint = root.querySelector('.fhint');
+    expect(resume.style.display).toBe('none');
+    expect(hint.style.display).toBe('none');
+
+    // Pressing Escape does NOT dismiss focus overlay and does NOT resume media
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    expect(v.play).not.toHaveBeenCalled();
+    expect(sent('RESUME_NOW')).toHaveLength(0);
+    expect(root.querySelector('.scrim').classList.contains('show')).toBe(true);
   });
 });
 

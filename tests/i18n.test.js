@@ -66,4 +66,14 @@ describe('locale catalogs', () => {
       }
     }
   });
+
+  it('writes numbers in Latin digits, like the clock and prayer times beside them', () => {
+    // Arabic-Indic (U+0660–U+0669) and Extended Arabic-Indic (U+06F0–U+06F9) digits.
+    const nonLatin = /[٠-٩۰-۹]/;
+    for (const [code, cat] of Object.entries(cats)) {
+      for (const [k, v] of Object.entries(cat)) {
+        expect({ code, k, nonLatinDigits: nonLatin.test(v) }).toEqual({ code, k, nonLatinDigits: false });
+      }
+    }
+  });
 });

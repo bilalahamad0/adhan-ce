@@ -18,7 +18,7 @@ the `permissions` / `host_permissions` in `manifest.json` on every submission.
 
 ## Single purpose
 
-> Adhan Caster shows Muslim prayer times with a live countdown and automatically
+> Adhan Focus shows Muslim prayer times with a live countdown and automatically
 > pauses video and audio playback in every open browser tab when each prayer time
 > begins, then resumes playback afterward.
 
@@ -29,8 +29,8 @@ the `permissions` / `host_permissions` in `manifest.json` on every submission.
 | `storage` | Persists the user's settings (location, calculation method, heads-up lead time, auto-resume delay, focus mode) and the fetched prayer schedule locally via `chrome.storage.local`. Nothing is sent to a server. |
 | `alarms` | Fires the countdown and triggers the media-pause precisely at each of the five daily prayer times, even when the popup is closed. |
 | `notifications` | Shows a desktop notification at prayer time so the user knows the Adhan has begun. |
+| `offscreen` | Plays the subtle Adhan chime audio notification from the background service worker using the Chrome MV3 Offscreen API. No DOM or external content is loaded. |
 | `scripting` | Injects the pause/resume logic into tabs that are already open at install/update time (newly opened tabs are covered by the declared content script). |
-| `tabs` | Sends the pause/resume signal to the user's open tabs so media can be paused across all of them at prayer time. |
 | Host access (`http://*/*`, `https://*/*`) | Required so `<video>`/`<audio>` can be paused and resumed in **any** tab the user has open at prayer time — the cross-tab auto-pause that is the extension's single purpose. Page content is never read, stored, or transmitted. Also reaches `api.aladhan.com` (prayer times) and `geocoding-api.open-meteo.com` (place lookup). |
 | Remote code | **No.** The extension executes no remotely-hosted code; every script ships inside the package. |
 
@@ -52,17 +52,23 @@ Check **only** the data type that actually leaves the device:
 
 > The user chooses a location (city / region / country). That city/region/country
 > is sent to the public AlAdhan prayer-times API (`api.aladhan.com`) to retrieve
-> that location's daily prayer times, and the location-search text the user types
-> is sent to the Open-Meteo geocoding API (`geocoding-api.open-meteo.com`) to
-> resolve real places. The chosen location is stored only on the user's device
+> that location's daily prayer times; the place's coordinates are sent instead when
+> AlAdhan cannot look the place up by name, and for the welcome page's preview. The
+> location-search text the user types (with the extension's display language, and
+> the picked place's id when it was found in another language) is sent to the
+> Open-Meteo geocoding API (`geocoding-api.open-meteo.com`) to resolve real places.
+> Only when the user clicks "Detect location", a request goes to
+> `api.bigdatacloud.net` (or `ipapi.co`), which estimates the city from the IP
+> address. The chosen location is stored only on the user's device
 > (`chrome.storage.local`). It is never stored on any server we control, never
 > linked to an identity, and never used for any purpose other than fetching prayer
 > times. As with any web request, those third-party APIs automatically receive
 > standard technical metadata (e.g. IP address); the extension attaches no
 > identifier of its own.
 
-> *Note:* "Location" is the location the user **types/picks**, not device GPS or
-> automatic geolocation. We declare it because the city is transmitted off-device.
+> *Note:* "Location" is the location the user **types/picks**, or asks to have
+> estimated from the IP address with "Detect location"; never device GPS. We declare
+> it because the place is transmitted off-device.
 
 > *On-device usage counts are NOT declared.* The extension keeps a few activity
 > counts (media auto-paused, prayer alerts, active days) in `chrome.storage.local`,
@@ -93,8 +99,8 @@ Check **only** the data type that actually leaves the device:
 
 `https://adhan.bilalahamad.com/privacy-policy.html` (source: `docs/privacy-policy.html`).
 
-> **Naming:** aligned 2026-06-10 — the manifest/store listing use the full title
-> "Adhan Caster: Muslim Prayer Times & Auto-Pause"; the privacy policy and
-> landing page use the short name "Adhan Caster" and reference the full listing
-> title once. The old "Adhan Caster Pro" branding is retired from user-facing
-> docs (it survives only in internal artifact/package names).
+> **Naming:** the manifest/store listing use the full title
+> "Adhan Focus: Muslim Prayer Times & Auto-Pause"; the privacy policy and
+> landing page use the short name "Adhan Focus" and reference the full listing
+> title once. The legacy "Adhan Caster" branding is preserved only in internal IDs
+> where required for compatibility (such as Firefox's immutable gecko.id).

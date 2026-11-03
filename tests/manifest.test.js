@@ -2,8 +2,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { auditManifestPrivacy } from '../lib/privacy-guard.js';
 
 const EXT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
 const manifest = JSON.parse(readFileSync(join(EXT, 'manifest.json'), 'utf8'));
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 const exists = (p) => existsSync(join(EXT, p));
@@ -45,9 +47,28 @@ describe('manifest qualification', () => {
 
   it('requests only the expected permissions (no scope creep)', () => {
     expect(new Set(manifest.permissions)).toEqual(
-      new Set(['storage', 'alarms', 'notifications', 'scripting', 'tabs'])
+      new Set(['storage', 'alarms', 'notifications', 'scripting', 'offscreen'])
     );
   });
+
+  it('does not request the redundant "tabs" permission', () => {
+    // chrome.tabs.query({url})/sendMessage work without "tabs" because the broad
+    // host_permissions already grant tab-URL access; requesting it too would only
+    // widen the review surface. Keep it out unless host_permissions are narrowed.
+    expect(manifest.permissions).not.toContain('tabs');
+  });
+
+  it('passes privacy audit (no identity, cookies, webRequest, or externally_connectable)', () => {
+    const audit = auditManifestPrivacy(manifest);
+    expect(audit.valid).toBe(true);
+    expect(audit.errors).toEqual([]);
+    expect(manifest.permissions).not.toContain('identity');
+    expect(manifest.permissions).not.toContain('identity.email');
+    expect(manifest.permissions).not.toContain('cookies');
+    expect(manifest.permissions).not.toContain('webRequest');
+    expect(manifest.externally_connectable).toBeUndefined();
+  });
+
 
   it('host permissions cover the prayer-times API and all http/https sites', () => {
     expect(manifest.host_permissions).toEqual(
@@ -63,21 +84,27 @@ describe('manifest qualification', () => {
     expect(cmd.suggested_key.default).toBeTruthy();
   });
 
-  it('also loads on Firefox: event-page script + gecko settings (dual-browser)', () => {
-    // Chrome path preserved (Chrome 121+ uses service_worker, ignores scripts).
+  it('configures MV3 service worker without invalid MV2 background.scripts', () => {
+    // Chrome / MV3 service worker
     expect(manifest.background.service_worker).toBe('background.js');
     expect(manifest.background.type).toBe('module');
-    // Firefox 127+ has no MV3 service-worker background; it runs this as an event page.
-    expect(manifest.background.scripts).toEqual(['background.js']);
-    expect(exists(manifest.background.scripts[0])).toBe(true);
-    // Required so Chrome <121 (which rejects background.scripts) can't install it.
+    expect(manifest.background.scripts).toBeUndefined();
     expect(manifest.minimum_chrome_version).toBe('121');
     // AMO requirements: a stable add-on id, a min version that grants host
     // permissions at install, and the mandatory data-collection disclosure.
+    // We declare "locationInfo" because the chosen city (→ aladhan) and the
+    // typed location-search text (→ Open-Meteo geocoding) are transmitted
+    // off-device; declaring "none" would be inaccurate for that transmission.
     const gecko = manifest.browser_specific_settings.gecko;
     expect(gecko.id).toBe('adhan-caster@bilalahamad.com');
-    expect(gecko.strict_min_version).toBe('127.0');
-    expect(gecko.data_collection_permissions.required).toEqual(['none']);
+    expect(gecko.strict_min_version).toBe('140.0');
+    expect(gecko.data_collection_permissions.required).toEqual(['locationInfo']);
+  });
+
+  it('configures Firefox for Android compatibility (gecko_android)', () => {
+    const geckoAndroid = manifest.browser_specific_settings.gecko_android;
+    expect(geckoAndroid).toBeDefined();
+    expect(geckoAndroid.strict_min_version).toBe('142.0');
   });
 });
 

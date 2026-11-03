@@ -43,12 +43,20 @@ The page must actually be served from your domain before the property is useful.
 5. Open `https://adhan.bilalahamad.com/` and confirm HTTP 200 + valid cert.
 
 `docs/vercel.json` adds light security headers + asset caching; `docs/.vercelignore` keeps internal
-docs/scripts off the public domain.
+docs/scripts and the screenshot/demo/dashboard pages off the public domain. Those pages stay on the
+GitHub Pages mirror, where the generators need them, and carry `<meta name="robots" content="noindex">`.
 
-> **Duplicate-content note.** The old `bilalahamad0.github.io/adhan-ce/` mirror stays live (GitHub
-> Pages is untouched) so the CWS v1.7.4 privacy URL keeps working during review. Both copies now carry
-> `<link rel="canonical" href="https://adhan.bilalahamad.com/">`, so Google consolidates ranking
-> signals onto the new domain. No redirect needed; don't add one (both hosts serve the same file).
+> **Duplicate-content note.** The same `docs/` files are served on three hosts:
+> - `adhan.bilalahamad.com`: canonical.
+> - `bilalahamad0.github.io/adhan-ce/`: GitHub Pages mirror. It stays live because the store
+>   listings still link its privacy URL. GitHub Pages can't redirect, so each indexable page carries
+>   a canonical to the branded host: `index.html` → `https://adhan.bilalahamad.com/`,
+>   `privacy-policy.html` → `https://adhan.bilalahamad.com/privacy-policy.html`.
+> - `adhan-ce.vercel.app`: the Vercel production alias. It 308s to the branded host via a
+>   host-matched redirect in `docs/vercel.json`. Per-deployment preview URLs are unaffected.
+>
+> Any new indexable page needs its own canonical and a `sitemap.xml` entry. Bump `<lastmod>` only
+> for real content changes.
 
 ---
 
