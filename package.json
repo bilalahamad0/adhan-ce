@@ -38,6 +38,7 @@
     "submit:edge": "node scripts/submit-edge.mjs",
     "submit:opera": "node scripts/submit-opera.mjs",
     "publish:all": "node scripts/release-all.mjs",
+    "heartbeat:cws": "node scripts/heartbeat-cws.mjs",
     "icons": "node icons/generate-icons.cjs",
     "demo": "bash docs/make-demo.sh",
     "shots": "bash docs/make-store-shots.sh",

@@ -1,0 +1,84 @@
+name: CWS Heartbeat (Google Cloud Keepalive)
+
+# Periodically pings Google Cloud (OAuth 2.0 token refresh) and the Chrome Web Store API
+# to keep the `adhan-ce-cws` Google Cloud project and its OAuth refresh token active.
+#
+# Cadence (Twice a week):
+# - Primary ping:  Mondays at 09:00 UTC ('0 9 * * 1')
+# - Fallback ping: Thursdays at 09:00 UTC ('0 9 * * 4')
+#
+# Why two runs:
+# - Primary establishes regular weekly token freshness and active GCP API metrics.
+# - Fallback provides mid-week redundancy if GitHub runners experienced delay or
+#   intermittent network drops, ensuring Google Cloud project activity never lapses.
+#
+# Manual dispatch:
+# - Can also be triggered anytime via workflow_dispatch with a chosen mode.
+
+on:
+  schedule:
+    # Primary ping: Mondays at 09:00 UTC
+    - cron: '0 9 * * 1'
+    # Fallback ping: Thursdays at 09:00 UTC
+    - cron: '0 9 * * 4'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Heartbeat mode'
+        required: false
+        default: 'manual'
+        type: choice
+        options:
+          - primary
+          - fallback
+          - manual
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    name: Google Cloud & CWS Heartbeat
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Determine Heartbeat Mode
+        id: meta
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${{ github.event.schedule }}" = "0 9 * * 1" ]; then
+              echo "mode=primary" >> "$GITHUB_OUTPUT"
+              echo "label=Primary (Monday)" >> "$GITHUB_OUTPUT"
+            else
+              echo "mode=fallback" >> "$GITHUB_OUTPUT"
+              echo "label=Fallback (Thursday)" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            SELECTED="${{ inputs.mode || 'manual' }}"
+            echo "mode=$SELECTED" >> "$GITHUB_OUTPUT"
+            echo "label=Manual ($SELECTED)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Heartbeat
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          HEARTBEAT_MODE: ${{ steps.meta.outputs.mode }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CWS_CLIENT_ID:-}" ] || [ -z "${CWS_CLIENT_SECRET:-}" ] || [ -z "${CWS_REFRESH_TOKEN:-}" ]; then
+            echo "::notice::CWS OAuth secrets are not configured in repository secrets. Heartbeat (${HEARTBEAT_MODE}) skipped. See .github/RELEASE_SETUP.md to set them up."
+            exit 0
+          fi
+          node scripts/heartbeat-cws.mjs --mode="$HEARTBEAT_MODE"
