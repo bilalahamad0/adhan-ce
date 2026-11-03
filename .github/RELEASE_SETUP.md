@@ -135,6 +135,28 @@ Refresh tokens can be revoked or (for a test-mode consent screen) expire. The
 script fails with `OAuth token refresh failed (HTTP 401)`. Regenerate it
 (step 4) and update the `CWS_REFRESH_TOKEN` secret. No code change needed.
 
+### Keeping Google Cloud & OAuth credentials active (Heartbeat)
+
+Google Cloud projects and OAuth 2.0 refresh tokens risk becoming dormant or revoked if left unused:
+- Inactive Google OAuth refresh tokens expire after 6 months of non-use.
+- Testing-mode OAuth consent screens have short-lived tokens (7 days).
+- Free-tier or unbilled Google Cloud projects with zero API traffic over extended periods can trigger inactivity notices.
+
+The [`CWS Heartbeat` workflow](workflows/cws-heartbeat.yml) runs automatically **twice a week**:
+- **Primary ping**: Every **Monday at 09:00 UTC** (`0 9 * * 1`)
+- **Fallback ping**: Every **Thursday at 09:00 UTC** (`0 9 * * 4`)
+
+The primary ping performs the weekly scheduled refresh and generates API metrics on Google Cloud. The mid-week fallback ping provides redundancy to safeguard against runner delays, network interruptions, or transient errors so the project and refresh token never risk lapsing into inactivity.
+
+It can also be triggered manually via GitHub Actions **workflow_dispatch** (selecting `primary`, `fallback`, or `manual` mode).
+
+You can also run the heartbeat locally:
+```bash
+npm run heartbeat:cws -- --dry-run                 # validate config offline (no network)
+npm run heartbeat:cws                              # primary ping (live credentials)
+npm run heartbeat:cws -- --fallback                # fallback ping
+```
+
 ## Automating AMO submission (Firefox, optional)
 
 The [`Release (Firefox)` workflow](workflows/release-firefox.yml) fires on a
