@@ -270,19 +270,19 @@
     fhost = document.createElement('div');
     fhost.id = 'adhan-ccp-focus-host';
     fhost.style.cssText =
-      'position:fixed!important;inset:0!important;z-index:2147483646!important;pointer-events:none!important;margin:0!important;';
+      'position:fixed!important;inset:0!important;z-index:2147483646!important;pointer-events:none!important;margin:0!important;isolation:isolate!important;transform:translateZ(0)!important;backface-visibility:hidden!important;';
     const root = fhost.attachShadow({ mode: 'open' });
     // `all: initial` on .scrim -- not on :host -- is what isolates us from page CSS; see the
     // note in ensureUI() for why the host-level reset is not enough.
     const css = `
       :host { all: initial; }
       * { box-sizing: border-box; }
-      .scrim { all: initial; box-sizing: border-box; position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #062a20; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); opacity: 0; transition: opacity .35s ease; pointer-events: none; }
+      .scrim { all: initial; box-sizing: border-box; position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #062a20; opacity: 0; transition: opacity .35s ease; pointer-events: none; isolation: isolate; transform: translateZ(0); backface-visibility: hidden; contain: strict; }
       .scrim.show { opacity: 1; pointer-events: auto; }
-      .bg { position: absolute; inset: -25%; z-index: 0; pointer-events: none; background: radial-gradient(55% 55% at 50% 40%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); animation: ccpBg 12s ease-in-out infinite; }
-      .stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
-      .star { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.85); opacity: 0; animation-name: ccpFloat, ccpTwinkle; animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite, infinite; }
-      .fbrand { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 10px; color: #fff; padding: 9px 16px 9px 11px; border-radius: 999px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: ccpBrandRise .6s ease both; }
+      .bg { position: absolute; inset: -25%; z-index: 0; pointer-events: none; background: radial-gradient(55% 55% at 50% 40%, rgba(20,160,111,.98), rgba(11,94,67,.92) 55%, rgba(6,42,32,1) 100%); animation: ccpBg 12s ease-in-out infinite; will-change: transform, opacity; transform: translateZ(0); backface-visibility: hidden; }
+      .stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; contain: strict; }
+      .star { position: absolute; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.85); opacity: 0; animation-name: ccpFloat, ccpTwinkle; animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite, infinite; will-change: transform, opacity; backface-visibility: hidden; }
+      .fbrand { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 10px; color: #fff; padding: 9px 16px 9px 11px; border-radius: 999px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: ccpBrandRise .6s ease both; will-change: transform, opacity; backface-visibility: hidden; }
       .fbrand img { width: 24px; height: 24px; border-radius: 7px; display: block; }
       .fbrand .fbname { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
       .panel { position: relative; z-index: 2; text-align: center; color: #fff; padding: 28px; max-width: 480px; }
@@ -394,7 +394,11 @@
     }
 
     // Full-screen focus overlay (takes precedence over the corner card).
-    if (mode === 'focus' && !document.hidden) {
+    // Note: Do not gate the overlay on !document.hidden. Chrome (especially in
+    // macOS fullscreen) fires transient visibility/occlusion events during window
+    // focus, space transitions, or compositor updates. Gating on !document.hidden
+    // actively removes the overlay, causing violent flickering/glitching.
+    if (mode === 'focus') {
       hideUI();
       ensureFocusUI();
       const isStrict = !!(state.settings && state.settings.strictFocus);
@@ -412,7 +416,7 @@
     }
     hideFocusUI();
 
-    if (mode === 'hidden' || mode === 'focus' || document.hidden) {
+    if (mode === 'hidden' || mode === 'focus') {
       hideUI();
       return;
     }
@@ -694,12 +698,12 @@
 
   if (isTop) {
     blockScroll = (e) => {
-      if (focusLocked && !document.hidden) e.preventDefault();
+      if (focusLocked) e.preventDefault();
     };
     window.addEventListener('wheel', blockScroll, { passive: false, capture: true });
     window.addEventListener('touchmove', blockScroll, { passive: false, capture: true });
     onKeydownCapture = (e) => {
-      if (!focusLocked || document.hidden) return;
+      if (!focusLocked) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         const isStrict = !!(state.settings && state.settings.strictFocus);

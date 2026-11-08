@@ -44,10 +44,17 @@
   z-index: 2147483647 !important;
 }
 
-/* Focus overlay: covers the viewport, one layer below the corner card. */
+/* Focus overlay: covers the viewport, one layer below the corner card.
+   Promoted to its own isolated compositing plane so page-level layer invalidations,
+   fullscreen surface transitions, and hardware-accelerated transforms on the host page
+   cannot cause layer drops, flickering, or compositor desync. */
 #adhan-ccp-focus-host {
   inset: 0 !important;
-  width: auto !important;
-  height: auto !important;
+  width: 100% !important;
+  height: 100% !important;
   z-index: 2147483646 !important;
+  isolation: isolate !important;
+  transform: translateZ(0) !important;
+  will-change: transform !important;
+  backface-visibility: hidden !important;
 }
