@@ -277,6 +277,50 @@ describe('overlay rendering (top frame, shadow DOM)', () => {
     expect(sent('RESUME_NOW')).toHaveLength(0);
     expect(root.querySelector('.scrim').classList.contains('show')).toBe(true);
   });
+
+  it('focus overlay stays visible and does not hide or unlock scroll during document.hidden / visibility changes', async () => {
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE });
+
+    const root = focusHost().shadowRoot;
+    expect(root.querySelector('.scrim').classList.contains('show')).toBe(true);
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    // Simulate transient visibilityState/document.hidden change (common in Chrome fullscreen / macOS window occlusion)
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new window.Event('visibilitychange'));
+    jest.advanceTimersByTime(1000);
+
+    // Focus overlay must remain show=true, scroll must remain locked
+    expect(root.querySelector('.scrim').classList.contains('show')).toBe(true);
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    // Wheel event must still be intercepted
+    const wheel = new window.WheelEvent('wheel', { cancelable: true });
+    window.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(true);
+
+    // Reset document.hidden
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+  });
+
+  it('isolates the focus overlay with GPU layer promotion and avoids nested backdrop-filter on .scrim', async () => {
+    await load({ storage: { settings: settings({ focusMode: true }), nextPrayer: { name: 'Asr', ts: BASE + 3600e3 }, paused: { active: false } } });
+    dispatch({ type: 'PRAYER_NOW', prayer: 'Asr', time: '4:56 PM', focus: true, since: BASE });
+
+    // Host style checks
+    const fhostEl = focusHost();
+    expect(fhostEl.style.isolation).toBe('isolate');
+    expect(fhostEl.style.transform).toContain('translateZ(0)');
+
+    // Scrim style checks (must have isolation, hardware acceleration, and NO backdrop-filter on .scrim)
+    const css = fhostEl.shadowRoot.querySelector('style').textContent;
+    expect(css).toContain('.scrim { all: initial;');
+    expect(css).toContain('isolation: isolate;');
+    expect(css).toContain('transform: translateZ(0);');
+    expect(css).toContain('contain: strict;');
+    expect(css).not.toMatch(/\.scrim\s*\{[^}]*backdrop-filter/);
+  });
 });
 
 describe('corner card + focus toggles', () => {
