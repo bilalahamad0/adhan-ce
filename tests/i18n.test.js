@@ -67,6 +67,16 @@ describe('locale catalogs', () => {
     }
   });
 
+  it('names a path in words in the right-to-left catalogs, not with an angle quote', () => {
+    // Chromium draws "›" unmirrored in Arabic and Urdu text: "Settings › Location"
+    // then points back at Settings.
+    for (const code of ['ar', 'ur']) {
+      for (const [k, v] of Object.entries(cats[code])) {
+        expect({ code, k, angle: /[‹›]/.test(v) }).toEqual({ code, k, angle: false });
+      }
+    }
+  });
+
   it('writes numbers in Latin digits, like the clock and prayer times beside them', () => {
     // Arabic-Indic (U+0660–U+0669) and Extended Arabic-Indic (U+06F0–U+06F9) digits.
     const nonLatin = /[٠-٩۰-۹]/;

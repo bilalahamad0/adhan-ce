@@ -70,12 +70,36 @@ describe('manifest qualification', () => {
   });
 
 
-  it('host permissions cover the prayer-times API and all http/https sites', () => {
-    expect(manifest.host_permissions).toEqual(
-      expect.arrayContaining(['https://api.aladhan.com/*', 'http://*/*', 'https://*/*'])
-    );
+  it('host permissions are all http/https sites, and nothing they already cover', () => {
+    // All sites, for pausing media in any tab; that covers the prayer-times API
+    // (api.aladhan.com) too. Opera's review rejects a host listed beside a pattern
+    // that already grants it, as "https://api.aladhan.com/*" was.
+    expect(manifest.host_permissions).toEqual(['http://*/*', 'https://*/*']);
+    // No entry is granted by another (scheme, host with "*." wildcard, path "/*").
+    const parts = (p) => p.match(/^(\*|https?):\/\/([^/]+)(\/.*)$/).slice(1);
+    const covers = (a, b) => {
+      const [sa, ha, pa] = parts(a);
+      const [sb, hb, pb] = parts(b);
+      return (sa === '*' || sa === sb) && (ha === '*' || ha === hb || (ha.startsWith('*.') && hb.endsWith(ha.slice(1)))) && (pa === '/*' || pa === pb);
+    };
+    for (const p of manifest.host_permissions) {
+      expect(manifest.host_permissions.filter((q) => q !== p && covers(q, p))).toEqual([]);
+    }
     // The retired companion proxy host must no longer be requested.
     expect(manifest.host_permissions).not.toContain('https://adhan-api-mauve.vercel.app/*');
+  });
+
+  it('exposes to web pages only what the content script loads in them', () => {
+    // content.js shows the toolbar icon (48 px) in its overlays; nothing else of the
+    // package is loaded from a page (the chime plays in the worker's offscreen
+    // document or the popup, the 16/128 px icons only in the browser's own UI).
+    expect(manifest.web_accessible_resources).toEqual([
+      { resources: ['icons/icon48.png'], matches: ['http://*/*', 'https://*/*'], use_dynamic_url: true },
+    ]);
+    const content = readFileSync(join(EXT, 'content.js'), 'utf8');
+    const loaded = new Set([...content.matchAll(/getURL\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]));
+    expect([...loaded]).toEqual(manifest.web_accessible_resources[0].resources);
+    for (const r of loaded) expect(exists(r)).toBe(true);
   });
 
   it('defines the toggle-focus command with a suggested key', () => {

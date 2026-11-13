@@ -243,6 +243,22 @@ body {
 .focus-btn { background: var(--accent); color: var(--accent-ink); }
 .chip-btn:hover { filter: brightness(1.07); }
 
+/* ------------------------------------------- alerts off (no place yet) --- */
+.alerts-off {
+  flex: 0 0 auto; margin: 4px 0 0; padding-block: 5px; padding-inline: 11px 7px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--amber-text); font-size: 11.5px; font-weight: 650; line-height: 1.3;
+  background: var(--amber-bg); border: 1px solid var(--amber-line);
+  border-radius: var(--radius-sm);
+}
+.alerts-off #alertsOffText { flex: 1; min-width: 0; }
+.choose-city-btn { flex: 0 0 auto; background: var(--amber-solid); color: #fff; }
+/* Home does not scroll: the rows close up under the notice, so Isha stays clear of
+   the tab bar in every language; should a wider font still overflow, it scrolls
+   rather than hide Isha. */
+.alerts-off:not([hidden]) + .list .row { padding-block: 5px; }
+#view-home .scroll:has(> .alerts-off:not([hidden])) { overflow-y: auto; }
+
 /* --------------------------------------------------------------- views ---- */
 .views { position: relative; flex: 1 1 auto; overflow: hidden; }
 .view { position: absolute; inset: 0; display: none; }

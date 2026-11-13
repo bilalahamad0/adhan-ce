@@ -481,6 +481,20 @@ function choosePlace(p) {
   showPlace(p.label);
   $('cityResults').hidden = true;
 }
+// The saved place into the header and the search, as `selectedPlace`. Until a place
+// is chosen the stored one is the install default's: the header names it, as the
+// times shown are its, but the search starts empty, so a Save (of any setting) asks
+// for a pick rather than send that place, which the worker would take as chosen.
+function showSavedPlace(settings) {
+  const place = savedPlace(settings);
+  showPlace(place ? place.label : '');
+  if (!place) $('locLabel').textContent = '—';
+  selectedPlace = st.locationConfirmed === false ? null : place;
+  if (!selectedPlace) {
+    $('city').value = '';
+    $('city').dir = 'auto';
+  }
+}
 async function doCitySearch() {
   const q = $('city').value;
   selectedPlace = null;
@@ -506,16 +520,18 @@ async function load() {
 }
 
 // State the worker changes on its own — the pause at a prayer and its resume, the
-// next prayer, a new day's times, the activity counts — with GET_STATE's value for
-// a key that is gone. A popup left open across a prayer kept its countdown until
-// reopened. Taken from the change itself: GET_STATE stores nextPrayer, which can
-// wake this listener again.
-const LIVE_STATE = { paused: { active: false }, nextPrayer: null, schedule: null, usage: null };
+// next prayer, a new day's times, the activity counts, a place chosen (here or on
+// the welcome page) — with GET_STATE's value for a key that is gone. A popup left
+// open across a prayer kept its countdown until reopened. Taken from the change
+// itself: GET_STATE stores nextPrayer, which can wake this listener again.
+const LIVE_STATE = { paused: { active: false }, nextPrayer: null, schedule: null, usage: null, locationConfirmed: true };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function onStorageChange(changes, area) {
   if (area !== 'local' || !st) return;
   let live = false;
   let usage = false;
+  // A place shows in the search once chosen (see showSavedPlace).
+  let place = false;
   for (const k of Object.keys(LIVE_STATE)) {
     if (!(k in changes)) continue;
     const value = changes[k].newValue !== undefined ? changes[k].newValue : LIVE_STATE[k];
@@ -523,22 +539,21 @@ function onStorageChange(changes, area) {
     st[k] = value;
     if (k === 'usage') usage = true;
     else live = true;
+    if (k === 'locationConfirmed') place = true;
   }
   // Saved settings (a toggle here, the worker's strict-focus hold): what renderLive
   // reads of them stays current — never the Settings fields being edited.
   const settings = changes.settings && changes.settings.newValue;
   if (settings && !same(settings, st.settings)) {
-    // A place saved elsewhere (the welcome page, another popup) shows here too,
-    // unless the field holds a search or a pick not yet saved (which any toggle's
-    // autosave would otherwise throw away, two places sharing a label unseen).
-    const untouched = selectedPlace ? selectedPlace.saved === true && $('city').value.trim() === selectedPlace.label : !$('city').value.trim();
     st.settings = { ...st.settings, ...settings };
-    if (untouched) {
-      selectedPlace = savedPlace(st.settings);
-      showPlace(selectedPlace ? selectedPlace.label : '');
-      if (!selectedPlace) $('locLabel').textContent = '—';
-    }
-    live = true;
+    live = place = true;
+  }
+  // A place saved elsewhere (the welcome page, another popup) shows here too, unless
+  // the field holds a search or a pick not yet saved (which any toggle's autosave
+  // would otherwise throw away, two places sharing a label unseen).
+  if (place) {
+    const untouched = selectedPlace ? selectedPlace.saved === true && $('city').value.trim() === selectedPlace.label : !$('city').value.trim();
+    if (untouched) showSavedPlace(st.settings);
   }
   if (live) renderLive(); // rebuilds the prayer list: only for a real change
   if (usage) renderUsage();
@@ -577,10 +592,7 @@ function renderAll() {
   syncBadgeSettings();
   syncFocusSettings();
 
-  const place = savedPlace(settings);
-  selectedPlace = place;
-  showPlace(place ? place.label : '');
-  if (!place) $('locLabel').textContent = '—';
+  showSavedPlace(settings);
   $('resumeMin').value = settings.autoResumeMinutes != null ? settings.autoResumeMinutes : 5;
   $('leadSeconds').value = String(settings.leadSeconds || 30);
   renderLive();
@@ -613,6 +625,10 @@ function renderLive() {
   } else {
     $('pausedBanner').hidden = true;
   }
+
+  // No place chosen yet (setup skipped, or closed before one was picked): the times
+  // shown are the install default's, and none of them is alerted.
+  $('alertsOff').hidden = st.locationConfirmed !== false;
 
   renderNext();
   renderList();
@@ -1022,6 +1038,11 @@ $('refresh').addEventListener('click', async (e) => {
 
 // Tabs
 document.querySelectorAll('.tab').forEach((tb) => tb.addEventListener('click', () => showView(tb.dataset.tab)));
+// The alerts-off notice's way to choose: Settings, at the location search.
+$('chooseCityBtn').addEventListener('click', () => {
+  showView('settings');
+  $('city').focus();
+});
 
 // Click (or Enter/Space on) the clock to flip analog ↔ digital — routed through
 // the Settings control so the two stay in sync and the choice is persisted.
@@ -1158,8 +1179,10 @@ function showOnboardingModal(force = false) {
   obStep = 1;
   updateObSlides();
   if ($('obCurrentLoc')) {
-    const loc = $('locLabel') ? $('locLabel').textContent : (st?.settings?.city || 'Makkah');
-    $('obCurrentLoc').textContent = loc !== '—' ? loc : 'Makkah, Saudi Arabia';
+    // Until a place is chosen the stored one is the install default, not the user's.
+    const loc = $('locLabel') ? $('locLabel').textContent : '—';
+    const chosen = !(st && st.locationConfirmed === false) && loc !== '—';
+    $('obCurrentLoc').textContent = chosen ? loc : t('location_not_chosen');
   }
 }
 
@@ -1210,15 +1233,32 @@ function wireOnboarding() {
     playChime().catch(() => {});
   });
 
-  $('obSimBtn')?.addEventListener('click', () => {
+  // The welcome page's real demo: the worker pauses media in every tab for 10 s,
+  // labelled with the next prayer, and plays the chime itself (as saved). During a
+  // real prayer pause it refuses, which is said here instead.
+  $('obSimBtn')?.addEventListener('click', async () => {
     const status = $('obSimStatus');
     if (!status) return;
-    status.hidden = false;
-    if (obSimTimer) clearTimeout(obSimTimer);
-    playChime().catch(() => {});
-    obSimTimer = setTimeout(() => {
-      status.hidden = true;
-    }, 4000);
+    // `refusal`: the key of why the worker would not run it, shown for 4 s.
+    const show = (refusal) => {
+      if ($('obSimRunning')) $('obSimRunning').hidden = !!refusal;
+      const why = $('obSimBusy');
+      if (why) {
+        why.hidden = !refusal;
+        if (refusal) {
+          why.setAttribute('data-i18n', refusal);
+          why.textContent = t(refusal);
+        }
+      }
+      status.hidden = false;
+      if (obSimTimer) clearTimeout(obSimTimer);
+      obSimTimer = setTimeout(() => {
+        status.hidden = true;
+      }, refusal ? 4000 : 10000);
+    };
+    show(null);
+    const res = await send({ type: 'TEST_PAUSE_DEMO', seconds: 10 }).catch(() => null);
+    if (res && res.ok === false) show(res.error === 'no_place' ? 'sim_choose_city_first' : 'sim_prayer_in_progress');
   });
 
   $('obDetectBtn')?.addEventListener('click', async () => {

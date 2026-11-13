@@ -282,8 +282,8 @@
         <h3><span class="ic">📦</span> Manifest &amp; permissions</h3>
         <div class="kv">
           <span class="k">manifest</span><span class="v">v3 · background <code style="all:unset;color:#9be9c8">type:module</code></span>
-          <span class="k">permissions</span><span class="v">storage · alarms · notifications · scripting · tabs</span>
-          <span class="k">host</span><span class="v">api.aladhan.com · <code style="all:unset;color:#9be9c8">http/https://*</code></span>
+          <span class="k">permissions</span><span class="v">storage · alarms · notifications · scripting · offscreen</span>
+          <span class="k">host</span><span class="v"><code style="all:unset;color:#9be9c8">http/https://*</code> (pause media in any tab; the API calls)</span>
           <span class="k">content</span><span class="v">all frames · <code style="all:unset;color:#9be9c8">document_idle</code></span>
           <span class="k">command</span><span class="v">toggle-focus → <b>Ctrl/⌘+Shift+Y</b></span>
         </div>
@@ -324,7 +324,11 @@
 { <span class="key">name</span>, <span class="key">time</span>, <span class="key">ts</span> }
 
 <span class="cm">// paused — central cross-tab pause state</span>
-{ <span class="key">active</span>, <span class="key">prayer</span>, <span class="key">time</span>, <span class="key">since</span>, <span class="key">focus</span> }</pre>
+{ <span class="key">active</span>, <span class="key">prayer</span>, <span class="key">time</span>, <span class="key">since</span>, <span class="key">focus</span> }
+
+<span class="cm">// locationConfirmed — the user chose the place; until then no prayer alarm,</span>
+<span class="cm">// pause, notification or chime (false on a new install; missing = chosen)</span>
+<span class="key">locationConfirmed</span>: true</pre>
       </div>
 
       <div class="dcard span2" style="animation-delay:.18s">

@@ -12,7 +12,6 @@
     "offscreen"
   ],
   "host_permissions": [
-    "https://api.aladhan.com/*",
     "http://*/*",
     "https://*/*"
   ],
@@ -53,10 +52,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "icons/icon16.png",
-        "icons/icon48.png",
-        "icons/icon128.png",
-        "audio/chime.mp3"
+        "icons/icon48.png"
       ],
       "matches": [
         "http://*/*",
